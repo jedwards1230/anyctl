@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 
 	"github.com/jedwards1230/labctl/internal/command"
 	"github.com/jedwards1230/labctl/internal/engine"
@@ -64,6 +65,10 @@ func Run(args []string, stdout, stderr io.Writer) int {
 	root.SetOut(stdout)
 	root.SetErr(stderr)
 	if err := root.Execute(); err != nil {
+		// Cobra's "unknown command" / "unknown flag" errors are usage errors (exit 2).
+		if isUnknownCommandError(err) {
+			err = &usageError{err.Error()}
+		}
 		return reportError(stderr, err, r.flags.jsonErrors, r.curService, r.curCommand)
 	}
 	return exitOK
@@ -255,6 +260,18 @@ func (r *runner) secretRunner() func(argv []string) (string, error) {
 		return nil
 	}
 	return r.runner.(func(argv []string) (string, error))
+}
+
+// isUnknownCommandError reports whether the cobra error is an "unknown command"
+// or "unknown flag" message. These are usage errors (exit 2), not general errors (exit 1).
+func isUnknownCommandError(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := err.Error()
+	return strings.Contains(msg, "unknown command") ||
+		strings.Contains(msg, "unknown flag") ||
+		strings.Contains(msg, "unknown shorthand flag")
 }
 
 // configDirFromArgs peeks at --config-dir before full parse so dynamic

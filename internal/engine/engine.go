@@ -176,7 +176,14 @@ func executeHTTP(ctx context.Context, req Request, svc *manifest.Service, cmd *c
 	}
 
 	pg := cmd.Pagination
-	respBody, err := executePaginated(ctx, httpReq, url, query, pg, req.Flags)
+	// Pass the bare URL (without query) as baseURL; executePaginated reconstructs
+	// the full URL for each page so cursor/page-number styles don't double the query.
+	baseURLForPaging := url
+	if query != "" {
+		// url was built as baseURL+"?"+query; strip the query back off.
+		baseURLForPaging = url[:len(url)-len(query)-1]
+	}
+	respBody, err := executePaginated(ctx, httpReq, baseURLForPaging, query, pg, req.Flags)
 	if err != nil {
 		return nil, err
 	}
@@ -282,8 +289,8 @@ func executePaginated(
 
 	switch pg.Style {
 	case "", "none", "fixed-query":
-		// Single call — URL already built with any fixed-query appended.
-		base.URL = baseURL
+		// Single call — reconstruct the full URL from bare baseURL + baseQuery.
+		base.URL = buildPageURL(baseURL, baseQuery, "", "")
 		return transport.DoHTTP(base)
 
 	case "cursor":
@@ -497,6 +504,13 @@ func extractData(body []byte, dataPath string) ([]any, error) {
 	case []any:
 		return tv, nil
 	case nil:
+		// Path matched but value is JSON null.  When a non-trivial dataPath is
+		// configured and the value is explicitly null (e.g. {"data":null}), that
+		// is almost certainly a server bug — returning empty would silently stop
+		// pagination instead of surfacing the problem.
+		if filter != "." {
+			return nil, fmt.Errorf("data path %q: value is null (expected array)", filter)
+		}
 		return nil, nil
 	default:
 		return nil, fmt.Errorf("data path %q: expected array, got %T", filter, v)

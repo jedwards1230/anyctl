@@ -250,3 +250,27 @@ func TestDoJSONRPCWSNetworkError(t *testing.T) {
 		t.Fatalf("want *NetworkError, got %T: %v", err, err)
 	}
 }
+
+// TestReadResponseWrongIDThenClose verifies Fix 3: when the server only sends
+// frames with the wrong ID and then closes, readResponse must return a
+// NetworkError rather than looping forever (deadline terminates the loop).
+func TestReadResponseWrongIDThenClose(t *testing.T) {
+	srv := wsTestServer(t, func(conn *websocket.Conn) {
+		defer conn.Close(websocket.StatusNormalClosure, "") //nolint:errcheck
+		// Send a notification with a mismatched id (not 2), then close.
+		sendRPC(t, conn, rpcResponse{ID: 99, Result: json.RawMessage(`"notification"`)})
+		// Server closes — client must get a NetworkError, not hang.
+	})
+
+	_, err := DoJSONRPCWS(JSONRPCWSRequest{
+		Ctx:     context.Background(),
+		URL:     wsURL(srv),
+		Timeout: 2 * time.Second,
+		NoAuth:  true,
+		Method:  "core.ping",
+	})
+	var ne *NetworkError
+	if !errors.As(err, &ne) {
+		t.Fatalf("want *NetworkError, got %T: %v", err, err)
+	}
+}

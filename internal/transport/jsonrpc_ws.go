@@ -99,7 +99,15 @@ func DoJSONRPCWS(r JSONRPCWSRequest) ([]byte, error) {
 	if err != nil {
 		return nil, &NetworkError{fmt.Errorf("websocket dial %s: %w", r.URL, err)}
 	}
+	conn.SetReadLimit(16 << 20) // allow up to 16 MiB per frame (TrueNAS dataset responses can be large)
 	defer func() { _ = conn.Close(websocket.StatusNormalClosure, "") }()
+
+	// Derive a wall-clock deadline for the full read loop.
+	// Use the context's deadline if present; otherwise fall back to now+timeout.
+	loopDeadline, ok := ctx.Deadline()
+	if !ok {
+		loopDeadline = time.Now().Add(timeout)
+	}
 
 	// Step 1: authenticate (unless NoAuth).
 	if !r.NoAuth {
@@ -121,7 +129,7 @@ func DoJSONRPCWS(r JSONRPCWSRequest) ([]byte, error) {
 			return nil, &NetworkError{fmt.Errorf("send auth: %w", err)}
 		}
 
-		resp, err := readResponse(ctx, conn, 1, timeout, r.Verbose)
+		resp, err := readResponse(ctx, conn, 1, timeout, loopDeadline, r.Verbose)
 		if err != nil {
 			return nil, err
 		}
@@ -152,7 +160,7 @@ func DoJSONRPCWS(r JSONRPCWSRequest) ([]byte, error) {
 		return nil, &NetworkError{fmt.Errorf("send method %s: %w", r.Method, err)}
 	}
 
-	resp, err := readResponse(ctx, conn, 2, timeout, r.Verbose)
+	resp, err := readResponse(ctx, conn, 2, timeout, loopDeadline, r.Verbose)
 	if err != nil {
 		return nil, err
 	}
@@ -190,9 +198,14 @@ func writeMessage(ctx context.Context, conn *websocket.Conn, msg rpcMessage, tim
 }
 
 // readResponse reads frames from the WebSocket until it sees a response with
-// the expected id. Other frames (e.g. notifications) are skipped.
-func readResponse(ctx context.Context, conn *websocket.Conn, id int, timeout time.Duration, verbose io.Writer) (*rpcResponse, error) {
+// the expected id. Other frames (e.g. server-push notifications) are skipped.
+// deadline bounds the entire loop so we cannot spin indefinitely waiting for
+// an id that never arrives.
+func readResponse(ctx context.Context, conn *websocket.Conn, id int, timeout time.Duration, deadline time.Time, verbose io.Writer) (*rpcResponse, error) {
 	for {
+		if time.Now().After(deadline) {
+			return nil, &NetworkError{fmt.Errorf("read response: deadline exceeded waiting for id=%d", id)}
+		}
 		rctx, cancel := context.WithTimeout(ctx, timeout)
 		_, frame, err := conn.Read(rctx)
 		cancel()

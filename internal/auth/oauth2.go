@@ -36,11 +36,11 @@ func cacheDir() string {
 }
 
 // cacheFileName returns the cache file path for the given client ID.
-// Keyed by the first 16 hex chars of SHA-256(clientID) so the file name
-// does not expose the client ID itself.
+// Keyed by the full 64 hex chars of SHA-256(clientID) so the file name
+// does not expose the client ID itself and has negligible collision probability.
 func cacheFileName(dir, clientID string) string {
 	sum := sha256.Sum256([]byte(clientID))
-	key := fmt.Sprintf("%x", sum[:8]) // 16 hex chars
+	key := fmt.Sprintf("%x", sum[:]) // full 32 bytes = 64 hex chars
 	return filepath.Join(dir, key+".token")
 }
 
