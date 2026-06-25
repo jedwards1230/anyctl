@@ -38,7 +38,7 @@ func Render(body []byte, out manifest.Output, opts Options, w io.Writer) error {
 	var input any
 	var decodeErr error
 	if opts.ResponseCodec == "xml" {
-		input, decodeErr = decodeXML(body)
+		input, decodeErr = DecodeXML(body)
 	} else {
 		decodeErr = json.Unmarshal(body, &input)
 	}
@@ -76,7 +76,7 @@ func Render(body []byte, out manifest.Output, opts Options, w io.Writer) error {
 	return nil
 }
 
-// decodeXML parses XML into a map[string]any tree that gojq filters can
+// DecodeXML parses XML into a map[string]any tree that gojq filters can
 // consume. The convention is:
 //
 //   - Each XML element becomes a key in the parent map. Its value is either a
@@ -91,7 +91,7 @@ func Render(body []byte, out manifest.Output, opts Options, w io.Writer) error {
 //
 // This convention is intentionally simple: one level of element → map
 // substitution, no namespace handling, text content trimmed of whitespace.
-func decodeXML(data []byte) (any, error) {
+func DecodeXML(data []byte) (any, error) {
 	dec := xml.NewDecoder(strings.NewReader(string(data)))
 	// Skip over the XML declaration / processing instructions.
 	for {

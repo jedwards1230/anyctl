@@ -36,6 +36,7 @@ type Flags struct {
 	Endpoint string
 	DryRun   bool
 	Verbose  bool
+	Yes      bool // skip confirm gates on pipeline steps
 }
 
 // Request bundles everything needed to execute one command.
@@ -85,6 +86,11 @@ func Execute(ctx context.Context, req Request, stderr io.Writer) (*Result, error
 	vars := envOverrideVars(svc, getenv)
 	res := secret.New(req.Config.Secret, svc.Secrets, svc.EnvPrefix, req.Runner)
 	tmplEnv := template.Env{Vars: vars, Args: req.Args, Secrets: res, Getenv: getenv}
+
+	// Composed pipeline takes precedence over the transport switch.
+	if len(cmd.Steps) > 0 {
+		return executePipeline(ctx, req, svc, cmd, vars, tmplEnv, stderr)
+	}
 
 	// Dispatch based on transport kind.
 	switch transportKind {

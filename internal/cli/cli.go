@@ -157,9 +157,6 @@ func (r *runner) newServiceCmd(svc *manifest.Service) *cobra.Command {
 
 func (r *runner) execNamed(svc *manifest.Service, c *command.Command, args []string) error {
 	r.curService, r.curCommand = svc.Name, c.ID
-	if len(c.Steps) > 0 {
-		return fmt.Errorf("composed commands are not yet implemented (planned for a later phase)")
-	}
 	return r.dispatch(svc, c, args)
 }
 
@@ -192,6 +189,7 @@ func (r *runner) dispatch(svc *manifest.Service, c *command.Command, args []stri
 			Endpoint: r.flags.endpoint,
 			DryRun:   r.flags.dryRun,
 			Verbose:  r.flags.verbose,
+			Yes:      r.flags.yes,
 		},
 		Runner: r.secretRunner(),
 	}, r.stderr)
