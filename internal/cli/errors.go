@@ -70,7 +70,7 @@ type errorEnvelope struct {
 func reportError(w io.Writer, err error, jsonErrors bool, service, cmd string) int {
 	code := classify(err)
 	if !jsonErrors {
-		fmt.Fprintln(w, "Error:", err.Error())
+		_, _ = fmt.Fprintln(w, "Error:", err.Error())
 		return code
 	}
 	env := errorEnvelope{Error: err.Error(), Service: service, Command: cmd}
@@ -80,6 +80,6 @@ func reportError(w io.Writer, err error, jsonErrors bool, service, cmd string) i
 		env.Detail = httpErr.Detail
 	}
 	b, _ := json.Marshal(env)
-	fmt.Fprintln(w, string(b))
+	_, _ = fmt.Fprintln(w, string(b))
 	return code
 }

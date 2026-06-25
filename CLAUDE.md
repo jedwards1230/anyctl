@@ -48,8 +48,14 @@ internal/
   transport/  http (curl-equivalent, error extraction, typed errors→exit codes)
   output/     gojq filter + render modes (json/raw/scalar)
   engine/     resolve template→endpoint→auth→transport; pagination (none/fixed-query)
+  telemetry/  optional OpenTelemetry tracing (no-op unless OTEL_* env configures it)
   cli/        cobra tree, dynamic per-service registration, builtins, exit-code mapping
 ```
+
+**Telemetry**: off by default; one span per invocation when `OTEL_*` is set.
+Fail-open, time-bounded flush — never blocks a command. The CLI is the first
+consumer; the long-running MCP server (a later phase) reuses the same provider
+and is where span-per-tool-call + metrics earn their keep.
 
 **Two faces, one executor** (planned): the CLI and a stdio MCP server will both
 drive `engine.Execute`, so behavior is identical.

@@ -5,6 +5,7 @@ package transport
 
 import (
 	"bytes"
+	"context"
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
@@ -18,6 +19,7 @@ import (
 
 // HTTPRequest is a fully-resolved HTTP call (no templates remain).
 type HTTPRequest struct {
+	Ctx         context.Context // nil → context.Background()
 	Method      string
 	URL         string // includes any query string
 	Headers     map[string]string
@@ -58,7 +60,11 @@ func DoHTTP(r HTTPRequest) ([]byte, error) {
 	if r.Body != nil {
 		bodyReader = bytes.NewReader(r.Body)
 	}
-	req, err := http.NewRequest(strings.ToUpper(r.Method), r.URL, bodyReader)
+	ctx := r.Ctx
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	req, err := http.NewRequestWithContext(ctx, strings.ToUpper(r.Method), r.URL, bodyReader)
 	if err != nil {
 		return nil, fmt.Errorf("build request: %w", err)
 	}
@@ -90,14 +96,14 @@ func DoHTTP(r HTTPRequest) ([]byte, error) {
 	if err != nil {
 		return nil, &NetworkError{err}
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, &NetworkError{err}
 	}
 
 	if r.Verbose != nil {
-		fmt.Fprintf(r.Verbose, "< %s\n", resp.Status)
+		_, _ = fmt.Fprintf(r.Verbose, "< %s\n", resp.Status)
 	}
 
 	if resp.StatusCode >= 400 {
@@ -143,14 +149,14 @@ func extractError(body []byte) string {
 }
 
 func writeVerboseRequest(w io.Writer, req *http.Request, body []byte) {
-	fmt.Fprintf(w, "> %s %s\n", req.Method, req.URL.String())
+	_, _ = fmt.Fprintf(w, "> %s %s\n", req.Method, req.URL.String())
 	for k, vals := range req.Header {
 		for _, v := range vals {
-			fmt.Fprintf(w, "> %s: %s\n", k, RedactHeader(k, v))
+			_, _ = fmt.Fprintf(w, "> %s: %s\n", k, RedactHeader(k, v))
 		}
 	}
 	if len(body) > 0 {
-		fmt.Fprintf(w, "> (body %d bytes)\n", len(body))
+		_, _ = fmt.Fprintf(w, "> (body %d bytes)\n", len(body))
 	}
 }
 

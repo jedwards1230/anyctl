@@ -5,6 +5,7 @@
 package engine
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -49,8 +50,12 @@ type Result struct {
 	DryRunMsg string          // populated when Flags.DryRun
 }
 
-// Execute runs the command. stderr receives verbose diagnostics.
-func Execute(req Request, stderr io.Writer) (*Result, error) {
+// Execute runs the command. ctx carries cancellation/trace context; stderr
+// receives verbose diagnostics.
+func Execute(ctx context.Context, req Request, stderr io.Writer) (*Result, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	getenv := req.Getenv
 	if getenv == nil {
 		getenv = os.Getenv
@@ -123,6 +128,7 @@ func Execute(req Request, stderr io.Writer) (*Result, error) {
 	}
 
 	respBody, err := transport.DoHTTP(transport.HTTPRequest{
+		Ctx:         ctx,
 		Method:      cmd.Method,
 		URL:         url,
 		Headers:     headers,
