@@ -29,15 +29,15 @@ func (r *runner) cmdList(loaded *manifest.Loaded, loadErr error) *cobra.Command 
 				return loadErr
 			}
 			if loaded == nil || len(loaded.Services) == 0 {
-				fmt.Fprintf(r.stdout, "No services configured. Add manifests under %s/services/\n", manifest.ConfigDir())
+				_, _ = fmt.Fprintf(r.stdout, "No services configured. Add manifests under %s/services/\n", manifest.ConfigDir())
 				return nil
 			}
 			for _, name := range loaded.SortedServiceNames() {
 				svc := loaded.Services[name]
 				if svc.Description != "" {
-					fmt.Fprintf(r.stdout, "%-14s %s\n", name, svc.Description)
+					_, _ = fmt.Fprintf(r.stdout, "%-14s %s\n", name, svc.Description)
 				} else {
-					fmt.Fprintln(r.stdout, name)
+					_, _ = fmt.Fprintln(r.stdout, name)
 				}
 			}
 			return nil
@@ -60,7 +60,7 @@ func (r *runner) cmdLint(loaded *manifest.Loaded) *cobra.Command {
 				if _, err := manifest.LoadService(args[0], cfg); err != nil {
 					return err
 				}
-				fmt.Fprintf(r.stdout, "ok %s\n", args[0])
+				_, _ = fmt.Fprintf(r.stdout, "ok %s\n", args[0])
 				return nil
 			}
 			if loaded == nil {
@@ -77,7 +77,7 @@ func (r *runner) cmdLint(loaded *manifest.Loaded) *cobra.Command {
 				if err := manifest.Validate(loaded.Services[name]); err != nil {
 					return fmt.Errorf("%s: %w", name, err)
 				}
-				fmt.Fprintf(r.stdout, "ok %s\n", name)
+				_, _ = fmt.Fprintf(r.stdout, "ok %s\n", name)
 			}
 			return nil
 		},
@@ -103,7 +103,7 @@ func (r *runner) cmdDoctor(loaded *manifest.Loaded) *cobra.Command {
 			client := &http.Client{Timeout: 5 * time.Second}
 			for _, name := range names {
 				svc := loaded.Services[name]
-				fmt.Fprintf(r.stdout, "%-14s %s\n", name, probe(client, svc))
+				_, _ = fmt.Fprintf(r.stdout, "%-14s %s\n", name, probe(client, svc))
 			}
 			return nil
 		},
@@ -121,7 +121,7 @@ func probe(client *http.Client, svc *manifest.Service) string {
 	if err != nil {
 		return "unreachable: " + err.Error()
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	return fmt.Sprintf("reachable (HTTP %d)", resp.StatusCode)
 }
 
@@ -141,7 +141,7 @@ func (r *runner) cmdVersion() *cobra.Command {
 		Use:   "version",
 		Short: "print the labctl version",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			fmt.Fprintln(r.stdout, "labctl", Version)
+			_, _ = fmt.Fprintln(r.stdout, "labctl", Version)
 			return nil
 		},
 	}

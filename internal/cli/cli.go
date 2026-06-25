@@ -25,12 +25,6 @@ import (
 // Version is set at build time via -ldflags.
 var Version = "dev"
 
-// reserved builtin subcommand names a service manifest may not shadow.
-var reserved = map[string]bool{
-	"mcp": true, "doctor": true, "lint": true, "list": true, "ops": true,
-	"completion": true, "help": true, "version": true,
-}
-
 type globalFlags struct {
 	configDir  string
 	filter     string
@@ -206,7 +200,7 @@ func (r *runner) dispatch(svc *manifest.Service, c *command.Command, args []stri
 		return err
 	}
 	if res.DryRunMsg != "" {
-		fmt.Fprint(r.stdout, res.DryRunMsg)
+		_, _ = fmt.Fprint(r.stdout, res.DryRunMsg)
 		span.SetStatus(codes.Ok, "")
 		return nil
 	}
