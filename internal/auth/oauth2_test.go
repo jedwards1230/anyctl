@@ -187,6 +187,35 @@ func TestFetchOAuth2Token401(t *testing.T) {
 	}
 }
 
+func TestFetchOAuth2TokenCacheDirSymlink(t *testing.T) {
+	var calls atomic.Int32
+	srv := fakeTokenServer(t, 200,
+		`{"access_token":"test-tok","token_type":"Bearer","expires_in":3600}`,
+		&calls,
+	)
+	defer srv.Close()
+
+	// Create a real directory and a symlink pointing at it.
+	base := t.TempDir()
+	realDir := filepath.Join(base, "real")
+	if err := os.Mkdir(realDir, 0700); err != nil {
+		t.Fatalf("Mkdir: %v", err)
+	}
+	symlinkDir := filepath.Join(base, "symlink")
+	if err := os.Symlink(realDir, symlinkDir); err != nil {
+		t.Fatalf("Symlink: %v", err)
+	}
+
+	a := authSpec(srv.URL)
+	_, err := fetchOAuth2Token(context.Background(), a, plainEnv, symlinkDir)
+	if err == nil {
+		t.Fatal("expected error when cache dir is a symlink, got nil")
+	}
+	if calls.Load() != 0 {
+		t.Fatalf("token endpoint called %d times, want 0 (should have failed before network call)", calls.Load())
+	}
+}
+
 func TestApplyOAuth2ClientCredentials(t *testing.T) {
 	var calls atomic.Int32
 	srv := fakeTokenServer(t, 200,
