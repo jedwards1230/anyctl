@@ -235,13 +235,17 @@ func (r *runner) startSpan(svc *manifest.Service, c *command.Command) (context.C
 	return ctx, span
 }
 
-// recordSpanError marks the span failed and attaches an HTTP status when known.
+// recordSpanError marks the span failed and attaches an HTTP/RPC status when known.
 func recordSpanError(span trace.Span, err error) {
 	span.RecordError(err)
 	span.SetStatus(codes.Error, err.Error())
 	var he *transport.HTTPError
 	if errors.As(err, &he) {
 		span.SetAttributes(attribute.Int("http.response.status_code", he.Status))
+	}
+	var re *transport.RPCError
+	if errors.As(err, &re) {
+		span.SetAttributes(attribute.Int("rpc.grpc_status_code", re.Code))
 	}
 }
 

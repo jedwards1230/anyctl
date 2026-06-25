@@ -74,9 +74,6 @@ func Execute(ctx context.Context, req Request, stderr io.Writer) (*Result, error
 	if transportKind == "" {
 		transportKind = "http"
 	}
-	if transportKind != "http" {
-		return nil, fmt.Errorf("transport %q is not yet implemented (planned for a later phase)", transportKind)
-	}
 
 	// Resolve the target endpoint (default or named).
 	ep, err := resolveEndpoint(svc, cmd, req.Flags.Endpoint)
@@ -89,7 +86,20 @@ func Execute(ctx context.Context, req Request, stderr io.Writer) (*Result, error
 	res := secret.New(req.Config.Secret, svc.Secrets, svc.EnvPrefix, req.Runner)
 	tmplEnv := template.Env{Vars: vars, Args: req.Args, Secrets: res, Getenv: getenv}
 
-	base, err := resolveBaseURL(ep.BaseURL, svc, vars, tmplEnv, getenv)
+	// Dispatch based on transport kind.
+	switch transportKind {
+	case "", "http":
+		return executeHTTP(ctx, req, svc, cmd, ep, tmplEnv, stderr)
+	case "jsonrpc-ws":
+		return executeJSONRPCWS(ctx, req, svc, cmd, ep, tmplEnv, stderr)
+	default:
+		return nil, fmt.Errorf("transport %q is not yet implemented", transportKind)
+	}
+}
+
+// executeHTTP handles the http transport path.
+func executeHTTP(ctx context.Context, req Request, svc *manifest.Service, cmd *command.Command, ep resolvedEndpoint, tmplEnv template.Env, stderr io.Writer) (*Result, error) {
+	base, err := resolveBaseURL(ep.BaseURL, svc, tmplEnv.Vars, tmplEnv, tmplEnv.Getenv)
 	if err != nil {
 		return nil, err
 	}
@@ -166,6 +176,80 @@ func Execute(ctx context.Context, req Request, stderr io.Writer) (*Result, error
 	}
 
 	return &Result{Body: respBody, Output: cmd.Output, ResponseCodec: responseCodec}, nil
+}
+
+// executeJSONRPCWS handles the jsonrpc-ws transport path.
+func executeJSONRPCWS(ctx context.Context, req Request, svc *manifest.Service, cmd *command.Command, ep resolvedEndpoint, tmplEnv template.Env, stderr io.Writer) (*Result, error) {
+	authSpec := svc.Auth
+	if ep.Auth != nil {
+		authSpec = *ep.Auth
+	}
+
+	// Resolve auth params by expanding each template in the auth spec.
+	var resolvedAuthParams []string
+	if !cmd.NoAuth {
+		for _, p := range authSpec.Params {
+			val, err := tmplEnv.Expand(p)
+			if err != nil {
+				return nil, fmt.Errorf("expand auth param: %w", err)
+			}
+			resolvedAuthParams = append(resolvedAuthParams, val)
+		}
+	}
+
+	// Resolve command params (must be a valid JSON array or empty → default []).
+	var resolvedParams []byte
+	if cmd.Params != "" {
+		expanded, err := tmplEnv.Expand(cmd.Params)
+		if err != nil {
+			return nil, fmt.Errorf("expand params: %w", err)
+		}
+		resolvedParams = []byte(expanded)
+	}
+
+	wsURL, err := resolveBaseURL(ep.BaseURL, svc, tmplEnv.Vars, tmplEnv, tmplEnv.Getenv)
+	if err != nil {
+		return nil, err
+	}
+
+	if req.Flags.DryRun {
+		params := string(resolvedParams)
+		if params == "" {
+			params = "[]"
+		}
+		var b strings.Builder
+		fmt.Fprintf(&b, "WS %s\n", wsURL)
+		if !cmd.NoAuth {
+			fmt.Fprintf(&b, "auth: %s [\"<redacted>\"]\n", authSpec.Method)
+		}
+		fmt.Fprintf(&b, "call: %s %s\n", cmd.Method, params)
+		return &Result{DryRunMsg: b.String(), Output: cmd.Output}, nil
+	}
+
+	var verbose io.Writer
+	if req.Flags.Verbose {
+		verbose = stderr
+	}
+
+	wsReq := transport.JSONRPCWSRequest{
+		Ctx:         ctx,
+		URL:         wsURL,
+		TLSInsecure: ep.TLSInsecure || svc.TLSInsecure,
+		Timeout:     svc.TimeoutDuration(),
+		AuthMethod:  authSpec.Method,
+		AuthParams:  resolvedAuthParams,
+		NoAuth:      cmd.NoAuth,
+		Method:      cmd.Method,
+		Params:      resolvedParams,
+		Verbose:     verbose,
+	}
+
+	result, err := transport.DoJSONRPCWS(wsReq)
+	if err != nil {
+		return nil, err
+	}
+
+	return &Result{Body: result, Output: cmd.Output}, nil
 }
 
 // resolveResponseCodec returns the effective response codec: command wins, then

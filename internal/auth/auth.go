@@ -62,7 +62,10 @@ func (a Applier) Apply(req *http.Request, noAuth bool) error {
 		}
 		req.SetBasicAuth(user, pass)
 		return nil
-	case "oauth2-client-credentials", "login-flow", "ws-login", "external-tool":
+	case "ws-login":
+		// Auth is connection-scoped; wired in transport.DoJSONRPCWS — no per-request header to set.
+		return nil
+	case "oauth2-client-credentials", "login-flow", "external-tool":
 		return fmt.Errorf("auth strategy %q is not yet implemented (planned for a later phase)", a.auth.Strategy)
 	default:
 		return fmt.Errorf("unknown auth strategy %q", a.auth.Strategy)
