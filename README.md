@@ -64,12 +64,28 @@ named commands; pagination; multi-endpoint).
 - **Unix-native.** stdout is data, stderr is diagnostics, exit codes are real,
   secrets never appear in argv, manifests are re-read just-in-time per call.
 
+## Observability (OpenTelemetry)
+
+Tracing is **off by default** and adds zero cost unless the standard `OTEL_*`
+env configures an OTLP endpoint. When set, each invocation emits one span
+(`<service> <command>` with service/command/method/status/duration attributes),
+so back-to-back and parallel-agent calls are traceable in Tempo/Jaeger:
+
+```sh
+export OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318
+export OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf   # or grpc (default per spec: http/protobuf)
+labctl radarr list
+```
+
+Export is fail-open and flush is time-bounded — a slow or down collector never
+hangs or breaks a command. stdout stays clean (diagnostics go to stderr).
+
 ## Status
 
 Phase 1: `http` transport; `none`/`header-key`/`bearer`/`basic` auth; the `op`
 external-tool secret resolver with env override; generic verbs; gojq filtering
-(json/raw/scalar). Roadmap: OpenAPI inference, `jsonrpc-ws`, composed pipelines,
-and a stdio MCP server.
+(json/raw/scalar); optional OpenTelemetry tracing. Roadmap: OpenAPI inference,
+`jsonrpc-ws`, composed pipelines, and a stdio MCP server.
 
 ## License
 

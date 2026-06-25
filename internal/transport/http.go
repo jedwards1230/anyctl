@@ -5,6 +5,7 @@ package transport
 
 import (
 	"bytes"
+	"context"
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
@@ -18,6 +19,7 @@ import (
 
 // HTTPRequest is a fully-resolved HTTP call (no templates remain).
 type HTTPRequest struct {
+	Ctx         context.Context // nil → context.Background()
 	Method      string
 	URL         string // includes any query string
 	Headers     map[string]string
@@ -58,7 +60,11 @@ func DoHTTP(r HTTPRequest) ([]byte, error) {
 	if r.Body != nil {
 		bodyReader = bytes.NewReader(r.Body)
 	}
-	req, err := http.NewRequest(strings.ToUpper(r.Method), r.URL, bodyReader)
+	ctx := r.Ctx
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	req, err := http.NewRequestWithContext(ctx, strings.ToUpper(r.Method), r.URL, bodyReader)
 	if err != nil {
 		return nil, fmt.Errorf("build request: %w", err)
 	}

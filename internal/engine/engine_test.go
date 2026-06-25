@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -42,7 +43,7 @@ func TestExecuteEndToEnd(t *testing.T) {
 
 	svc := newService(srv.URL)
 	cmds := command.FromManifest(svc)
-	res, err := Execute(Request{
+	res, err := Execute(context.Background(), Request{
 		Config:  manifest.Config{Secret: manifest.SecretResolver{Command: []string{"op", "read", "{ref}"}}},
 		Service: svc,
 		Command: cmds["list"],
@@ -65,7 +66,7 @@ func TestExecuteDryRunNoNetwork(t *testing.T) {
 	cmds := command.FromManifest(svc)
 	// A resolver that fails loudly — dry-run must not call it.
 	failOp := func([]string) (string, error) { return "", errBoom }
-	res, err := Execute(Request{
+	res, err := Execute(context.Background(), Request{
 		Config:  manifest.Config{},
 		Service: svc,
 		Command: cmds["list"],
@@ -92,7 +93,7 @@ func TestExecuteEnvURLOverride(t *testing.T) {
 
 	svc := newService("https://wrong.example.com")
 	cmds := command.FromManifest(svc)
-	_, err := Execute(Request{
+	_, err := Execute(context.Background(), Request{
 		Config:  manifest.Config{},
 		Service: svc,
 		Command: cmds["list"],

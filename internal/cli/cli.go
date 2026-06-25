@@ -4,6 +4,8 @@
 package cli
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -12,7 +14,12 @@ import (
 	"github.com/jedwards1230/labctl/internal/engine"
 	"github.com/jedwards1230/labctl/internal/manifest"
 	"github.com/jedwards1230/labctl/internal/output"
+	"github.com/jedwards1230/labctl/internal/telemetry"
+	"github.com/jedwards1230/labctl/internal/transport"
 	"github.com/spf13/cobra"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
 )
 
 // Version is set at build time via -ldflags.
@@ -43,6 +50,7 @@ type runner struct {
 	stdout io.Writer
 	stderr io.Writer
 	config manifest.Config
+	tracer trace.Tracer
 
 	curService string
 	curCommand string
@@ -51,7 +59,11 @@ type runner struct {
 
 // Run builds the command tree and executes it, returning a process exit code.
 func Run(args []string, stdout, stderr io.Writer) int {
-	r := &runner{stdout: stdout, stderr: stderr}
+	// Optional OpenTelemetry — no-op unless OTEL_* env configures an endpoint.
+	tracer, shutdown := telemetry.Start(context.Background(), Version)
+	defer shutdown()
+
+	r := &runner{stdout: stdout, stderr: stderr, tracer: tracer}
 	root := r.newRoot()
 	root.SetArgs(args)
 	root.SetOut(stdout)
@@ -169,7 +181,10 @@ func (r *runner) execVerb(svc *manifest.Service, verb string, args []string) err
 }
 
 func (r *runner) dispatch(svc *manifest.Service, c *command.Command, args []string) error {
-	res, err := engine.Execute(engine.Request{
+	ctx, span := r.startSpan(svc, c)
+	defer span.End()
+
+	res, err := engine.Execute(ctx, engine.Request{
 		Config:  r.config,
 		Service: svc,
 		Command: c,
@@ -187,8 +202,10 @@ func (r *runner) dispatch(svc *manifest.Service, c *command.Command, args []stri
 		Runner: r.secretRunner(),
 	}, r.stderr)
 	if err != nil {
+		recordSpanError(span, err)
 		return err
 	}
+	span.SetStatus(codes.Ok, "")
 	if res.DryRunMsg != "" {
 		fmt.Fprint(r.stdout, res.DryRunMsg)
 		return nil
@@ -201,6 +218,34 @@ func (r *runner) dispatch(svc *manifest.Service, c *command.Command, args []stri
 		return &decodeError{err}
 	}
 	return nil
+}
+
+// startSpan opens a span for one command execution. With tracing disabled the
+// tracer is a no-op, so this is free.
+func (r *runner) startSpan(svc *manifest.Service, c *command.Command) (context.Context, trace.Span) {
+	ctx, span := r.tracer.Start(context.Background(), svc.Name+" "+c.ID)
+	attrs := []attribute.KeyValue{
+		attribute.String("labctl.service", svc.Name),
+		attribute.String("labctl.command", c.ID),
+		attribute.Bool("labctl.write", c.Write),
+	}
+	if svc.Transport == "jsonrpc-ws" {
+		attrs = append(attrs, attribute.String("rpc.method", c.Method))
+	} else if c.Method != "" {
+		attrs = append(attrs, attribute.String("http.request.method", c.Method))
+	}
+	span.SetAttributes(attrs...)
+	return ctx, span
+}
+
+// recordSpanError marks the span failed and attaches an HTTP status when known.
+func recordSpanError(span trace.Span, err error) {
+	span.RecordError(err)
+	span.SetStatus(codes.Error, err.Error())
+	var he *transport.HTTPError
+	if errors.As(err, &he) {
+		span.SetAttributes(attribute.Int("http.response.status_code", he.Status))
+	}
 }
 
 // secretRunner returns nil (real op) unless a test injected one.
