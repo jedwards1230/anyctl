@@ -43,9 +43,16 @@ var validPaginationStyles = map[string]bool{
 
 // Validate checks a service manifest for internal consistency. It does not touch
 // the network or resolve secrets — purely structural (used by `labctl lint`).
+//
+// Note: when spec: is set, this function validates the field value's syntax but
+// does NOT load the document (that happens at load time via InferredCommands). A
+// manifest with an unreachable spec: passes lint but fails at load/use time.
 func Validate(s *Service) error {
 	if s.BaseURL == "" && len(s.Endpoints) == 0 {
 		return fmt.Errorf("service must set base_url or at least one endpoint")
+	}
+	if err := validateSpec(s); err != nil {
+		return err
 	}
 	if !validTransports[transportOf(s.Transport)] {
 		return fmt.Errorf("unknown transport %q (want http|jsonrpc-ws)", s.Transport)
@@ -135,6 +142,32 @@ func validateAuth(a Auth, secrets map[string]Secret) error {
 			if _, ok := secrets[ref]; !ok {
 				return fmt.Errorf("auth references undeclared secret %q", ref)
 			}
+		}
+	}
+	return nil
+}
+
+// validateSpec checks that spec: (if set) is a non-empty string and that any
+// SpecFilter patterns are non-empty strings. It does NOT load the document.
+func validateSpec(s *Service) error {
+	if s.Spec == "" {
+		if len(s.SpecFilter.Include) > 0 || len(s.SpecFilter.Exclude) > 0 {
+			return fmt.Errorf("spec_filter requires spec to be set")
+		}
+		return nil
+	}
+	// Must be either an http(s):// URL or a relative/absolute file path (non-empty).
+	if strings.TrimSpace(s.Spec) == "" {
+		return fmt.Errorf("spec must be a non-empty file path or http(s):// URL")
+	}
+	for i, p := range s.SpecFilter.Include {
+		if strings.TrimSpace(p) == "" {
+			return fmt.Errorf("spec_filter.include[%d] must be a non-empty string", i)
+		}
+	}
+	for i, p := range s.SpecFilter.Exclude {
+		if strings.TrimSpace(p) == "" {
+			return fmt.Errorf("spec_filter.exclude[%d] must be a non-empty string", i)
 		}
 	}
 	return nil
