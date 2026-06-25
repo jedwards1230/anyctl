@@ -30,6 +30,17 @@ var validOutputModes = map[string]bool{
 	"table":  true, // accepted in schema; render deferred
 }
 
+// validPaginationStyles is the exhaustive set of styles the engine can execute.
+// Any other value is a typo that would silently return only page 1.
+var validPaginationStyles = map[string]bool{
+	"":                 true, // same as none
+	"none":             true,
+	"cursor":           true,
+	"page-number":      true,
+	"page-until-short": true,
+	"fixed-query":      true,
+}
+
 // Validate checks a service manifest for internal consistency. It does not touch
 // the network or resolve secrets — purely structural (used by `labctl lint`).
 func Validate(s *Service) error {
@@ -47,6 +58,9 @@ func Validate(s *Service) error {
 	}
 	if !validOutputModes[s.Output.Mode] {
 		return fmt.Errorf("unknown output mode %q (want json|raw|scalar)", s.Output.Mode)
+	}
+	if !validPaginationStyles[s.Pagination.Style] {
+		return fmt.Errorf("unknown pagination style %q (want none|cursor|page-number|page-until-short|fixed-query)", s.Pagination.Style)
 	}
 	for name, sec := range s.Secrets {
 		if sec.Ref == "" && sec.Env == "" {
@@ -83,6 +97,9 @@ func validateCommand(id string, c Command, s *Service) error {
 		if _, ok := s.Endpoints[c.Endpoint]; !ok {
 			return fmt.Errorf("command %q references unknown endpoint %q", id, c.Endpoint)
 		}
+	}
+	if !validPaginationStyles[c.Pagination.Style] {
+		return fmt.Errorf("command %q: unknown pagination style %q (want none|cursor|page-number|page-until-short|fixed-query)", id, c.Pagination.Style)
 	}
 	return nil
 }

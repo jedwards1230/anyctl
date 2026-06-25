@@ -59,6 +59,18 @@ func TestValidateRejectsBad(t *testing.T) {
 		"bad strategy":         {Name: "x", BaseURL: "http://h", Auth: Auth{Strategy: "telepathy"}},
 		"undeclared secret":    {Name: "x", BaseURL: "http://h", Auth: Auth{Strategy: "header-key", Header: "X", Value: "{secret.missing}"}},
 		"header-key no header": {Name: "x", BaseURL: "http://h", Auth: Auth{Strategy: "header-key", Value: "v"}},
+		"bad svc pagination style": {
+			Name:       "x",
+			BaseURL:    "http://h",
+			Pagination: Pagination{Style: "infinite-scroll"},
+		},
+		"bad cmd pagination style": {
+			Name:    "x",
+			BaseURL: "http://h",
+			Commands: map[string]Command{
+				"list": {Method: "GET", Path: "/", Pagination: Pagination{Style: "magic"}},
+			},
+		},
 	}
 	for name, svc := range cases {
 		if err := Validate(svc); err == nil {

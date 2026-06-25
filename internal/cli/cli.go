@@ -205,9 +205,10 @@ func (r *runner) dispatch(svc *manifest.Service, c *command.Command, args []stri
 		return nil
 	}
 	if err := output.Render(res.Body, res.Output, output.Options{
-		Filter: r.flags.filter,
-		Raw:    r.flags.raw,
-		Mode:   r.flags.output,
+		Filter:        r.flags.filter,
+		Raw:           r.flags.raw,
+		Mode:          r.flags.output,
+		ResponseCodec: res.ResponseCodec,
 	}, r.stdout); err != nil {
 		recordSpanError(span, err)
 		return &decodeError{err}
