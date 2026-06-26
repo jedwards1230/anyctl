@@ -459,6 +459,105 @@ func TestExecuteDryRun_DoesNotReadSecretToken(t *testing.T) {
 	}
 }
 
+// TestExecuteDryRunWS_DoesNotResolveSecrets proves a jsonrpc-ws dry-run never
+// resolves secrets: the failing resolver is never invoked, and the preview shows
+// the raw templated command params with a redacted auth line.
+func TestExecuteDryRunWS_DoesNotResolveSecrets(t *testing.T) {
+	svc := &manifest.Service{
+		Name:      "truenas",
+		BaseURL:   "wss://nas.lilbro.cloud/api/current",
+		Transport: "jsonrpc-ws",
+		Auth: manifest.Auth{
+			Strategy: "ws-login",
+			Method:   "auth.login_with_api_key",
+			Params:   []string{"{secret.api_key}"},
+		},
+		Secrets: map[string]manifest.Secret{"api_key": {Ref: "op://homelab/TrueNAS/api_key"}},
+		Commands: map[string]manifest.Command{
+			"info": {Method: "system.info", Params: `["{secret.api_key}"]`},
+		},
+	}
+	cmds := command.FromManifest(svc)
+	// Resolver that errors if called — dry-run must not invoke it.
+	failOp := func([]string) (string, error) { return "", errBoom }
+	res, err := Execute(context.Background(), Request{
+		Config:  manifest.Config{},
+		Service: svc,
+		Command: cmds["info"],
+		Runner:  failOp,
+		Flags:   Flags{DryRun: true},
+		Getenv:  func(string) string { return "" },
+	}, nil)
+	if err != nil {
+		t.Fatalf("ws dry-run should not error: %v", err)
+	}
+	if !strings.Contains(res.DryRunMsg, "WS wss://nas.lilbro.cloud/api/current") {
+		t.Fatalf("missing WS target: %q", res.DryRunMsg)
+	}
+	if !strings.Contains(res.DryRunMsg, `auth: auth.login_with_api_key ["<redacted>"]`) {
+		t.Fatalf("auth line not redacted: %q", res.DryRunMsg)
+	}
+	if !strings.Contains(res.DryRunMsg, "call: system.info") {
+		t.Fatalf("missing call line: %q", res.DryRunMsg)
+	}
+	// The call params carry {secret.api_key}; the preview redacts the token
+	// (it is never resolved — failOp would have errored) rather than echoing it.
+	if !strings.Contains(res.DryRunMsg, `call: system.info ["<redacted>"]`) {
+		t.Fatalf("ws dry-run should redact secret tokens in params: %q", res.DryRunMsg)
+	}
+	if strings.Contains(res.DryRunMsg, "{secret.") {
+		t.Fatalf("ws dry-run leaked a secret template: %q", res.DryRunMsg)
+	}
+}
+
+// TestExecuteDryRunHTTP_DoesNotResolveBodySecret proves an http dry-run with a
+// {secret.X} in a command header/body never invokes the resolver and redacts the
+// secret token in the preview.
+func TestExecuteDryRunHTTP_DoesNotResolveBodySecret(t *testing.T) {
+	svc := &manifest.Service{
+		Name:      "svc",
+		BaseURL:   "https://api.example.com",
+		EnvPrefix: "SVC",
+		Auth:      manifest.Auth{Strategy: "none"},
+		Secrets:   map[string]manifest.Secret{"token": {Ref: "op://homelab/Svc/token"}},
+		Commands: map[string]manifest.Command{
+			"push": {
+				Method:  "POST",
+				Path:    "/v1/push",
+				Headers: map[string]string{"X-Token": "{secret.token}"},
+				Body:    `{"token":"{secret.token}"}`,
+			},
+		},
+	}
+	cmds := command.FromManifest(svc)
+	failOp := func([]string) (string, error) { return "", errBoom }
+	res, err := Execute(context.Background(), Request{
+		Config:  manifest.Config{},
+		Service: svc,
+		Command: cmds["push"],
+		Runner:  failOp,
+		Flags:   Flags{DryRun: true},
+		Getenv:  func(string) string { return "" },
+	}, nil)
+	if err != nil {
+		t.Fatalf("http dry-run should not error: %v", err)
+	}
+	if !strings.Contains(res.DryRunMsg, "POST https://api.example.com/v1/push") {
+		t.Fatalf("missing request line: %q", res.DryRunMsg)
+	}
+	// Header and body carry {secret.token}; the preview redacts the token (never
+	// resolved — failOp would have errored) rather than echoing it.
+	if !strings.Contains(res.DryRunMsg, "X-Token: <redacted>") {
+		t.Fatalf("http dry-run should redact the secret-bearing header: %q", res.DryRunMsg)
+	}
+	if !strings.Contains(res.DryRunMsg, `{"token":"<redacted>"}`) {
+		t.Fatalf("http dry-run should redact the secret token in the body: %q", res.DryRunMsg)
+	}
+	if strings.Contains(res.DryRunMsg, "{secret.") {
+		t.Fatalf("http dry-run leaked a secret template: %q", res.DryRunMsg)
+	}
+}
+
 type boom struct{}
 
 func (boom) Error() string { return "boom" }

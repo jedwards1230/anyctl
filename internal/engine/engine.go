@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -84,7 +85,7 @@ func Execute(ctx context.Context, req Request, stderr io.Writer) (*Result, error
 
 	// Template env: vars (env-overridable) + args + secret resolver.
 	vars := envOverrideVars(svc, getenv)
-	res := secret.New(req.Config, svc.Secrets, svc.EnvPrefix, req.Runner)
+	res := secret.New(ctx, req.Config, svc.Secrets, svc.EnvPrefix, req.Runner)
 	tmplEnv := template.Env{Vars: vars, Args: req.Args, Secrets: res, Getenv: getenv}
 
 	// Composed pipeline takes precedence over the transport switch.
@@ -132,6 +133,22 @@ func executeHTTP(ctx context.Context, req Request, svc *manifest.Service, cmd *c
 		url += "?" + query
 	}
 
+	authSpec := svc.Auth
+	if ep.Auth != nil {
+		authSpec = *ep.Auth
+	}
+
+	// Resolve the response codec: command-level overrides endpoint-level.
+	responseCodec := resolveResponseCodec(cmd, ep)
+
+	// Dry-run must resolve NO secrets: return before expandHeaders/resolveBody
+	// (which run template expansion over header/body values). The preview shows
+	// the pre-expansion templated header/body; auth stays redacted.
+	if req.Flags.DryRun {
+		preview := mergeAuthPreview(cmd.Headers, authSpec, cmd.NoAuth)
+		return &Result{DryRunMsg: dryRun(cmd.Method, url, preview, []byte(cmd.Body)), Output: cmd.Output, ResponseCodec: responseCodec}, nil
+	}
+
 	headers, err := expandHeaders(cmd.Headers, tmplEnv)
 	if err != nil {
 		return nil, err
@@ -142,19 +159,7 @@ func executeHTTP(ctx context.Context, req Request, svc *manifest.Service, cmd *c
 		return nil, err
 	}
 
-	authSpec := svc.Auth
-	if ep.Auth != nil {
-		authSpec = *ep.Auth
-	}
 	applier := auth.New(authSpec, tmplEnv)
-
-	// Resolve the response codec: command-level overrides endpoint-level.
-	responseCodec := resolveResponseCodec(cmd, ep)
-
-	if req.Flags.DryRun {
-		preview := mergeAuthPreview(headers, authSpec, cmd.NoAuth)
-		return &Result{DryRunMsg: dryRun(cmd.Method, url, preview, body), Output: cmd.Output, ResponseCodec: responseCodec}, nil
-	}
 
 	var verbose io.Writer
 	if req.Flags.Verbose {
@@ -198,6 +203,30 @@ func executeJSONRPCWS(ctx context.Context, req Request, svc *manifest.Service, c
 		authSpec = *ep.Auth
 	}
 
+	// Resolve the base URL (secret-free) so dry-run can preview the target
+	// without resolving any auth/command params.
+	wsURL, err := resolveBaseURL(ep.BaseURL, svc, tmplEnv.Vars, tmplEnv, tmplEnv.Getenv)
+	if err != nil {
+		return nil, err
+	}
+
+	// Dry-run must resolve NO secrets: return before expanding the auth params
+	// (which carry {secret.X}) and the command params. The preview shows the raw
+	// templated command params; auth stays redacted.
+	if req.Flags.DryRun {
+		params := cmd.Params
+		if params == "" {
+			params = "[]"
+		}
+		var b strings.Builder
+		fmt.Fprintf(&b, "WS %s\n", wsURL)
+		if !cmd.NoAuth {
+			fmt.Fprintf(&b, "auth: %s [\"<redacted>\"]\n", authSpec.Method)
+		}
+		fmt.Fprintf(&b, "call: %s %s\n", cmd.Method, redactSecretTokens(params))
+		return &Result{DryRunMsg: b.String(), Output: cmd.Output}, nil
+	}
+
 	// Resolve auth params by expanding each template in the auth spec.
 	var resolvedAuthParams []string
 	if !cmd.NoAuth {
@@ -218,25 +247,6 @@ func executeJSONRPCWS(ctx context.Context, req Request, svc *manifest.Service, c
 			return nil, fmt.Errorf("expand params: %w", err)
 		}
 		resolvedParams = []byte(expanded)
-	}
-
-	wsURL, err := resolveBaseURL(ep.BaseURL, svc, tmplEnv.Vars, tmplEnv, tmplEnv.Getenv)
-	if err != nil {
-		return nil, err
-	}
-
-	if req.Flags.DryRun {
-		params := string(resolvedParams)
-		if params == "" {
-			params = "[]"
-		}
-		var b strings.Builder
-		fmt.Fprintf(&b, "WS %s\n", wsURL)
-		if !cmd.NoAuth {
-			fmt.Fprintf(&b, "auth: %s [\"<redacted>\"]\n", authSpec.Method)
-		}
-		fmt.Fprintf(&b, "call: %s %s\n", cmd.Method, params)
-		return &Result{DryRunMsg: b.String(), Output: cmd.Output}, nil
 	}
 
 	var verbose io.Writer
@@ -726,14 +736,25 @@ func mergeAuthPreview(headers map[string]string, a manifest.Auth, noAuth bool) m
 	return out
 }
 
+// secretToken matches a {secret.X} template reference. Dry-run shows pre-expansion
+// templates (it resolves no secrets), so a {secret.X} carries no credential value
+// — but we still redact it in the preview so a secret-bearing custom header/body
+// reads as <redacted>, consistently with the auth header, and never invites
+// confusion about what a real request would carry.
+var secretToken = regexp.MustCompile(`\{secret\.[^}]*\}`)
+
+func redactSecretTokens(s string) string {
+	return secretToken.ReplaceAllString(s, "<redacted>")
+}
+
 func dryRun(method, url string, headers map[string]string, body []byte) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "%s %s\n", strings.ToUpper(method), url)
 	for k, v := range headers {
-		fmt.Fprintf(&b, "%s: %s\n", k, transport.RedactHeader(k, v))
+		fmt.Fprintf(&b, "%s: %s\n", k, transport.RedactHeader(k, redactSecretTokens(v)))
 	}
 	if len(body) > 0 {
-		fmt.Fprintf(&b, "\n%s\n", string(body))
+		fmt.Fprintf(&b, "\n%s\n", redactSecretTokens(string(body)))
 	}
 	return b.String()
 }
