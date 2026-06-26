@@ -4,6 +4,7 @@
 package output
 
 import (
+	"bytes"
 	"encoding/json"
 	"encoding/xml"
 	"fmt"
@@ -206,6 +207,10 @@ func renderValue(v any, mode string, w io.Writer) error {
 		return renderScalar(v, w)
 	default: // json
 		enc := json.NewEncoder(w)
+		// Match jq: emit <, >, & literally rather than < etc. The default
+		// encoder HTML-escapes, which diverges from the jq mental model the tool
+		// sells.
+		enc.SetEscapeHTML(false)
 		enc.SetIndent("", "  ")
 		return enc.Encode(v)
 	}
@@ -220,13 +225,26 @@ func renderScalar(v any, w io.Writer) error {
 		_, err := io.WriteString(w, t+"\n")
 		return err
 	default:
-		b, err := json.Marshal(v)
+		b, err := marshalNoHTMLEscape(v)
 		if err != nil {
 			return err
 		}
 		_, err = io.WriteString(w, string(b)+"\n")
 		return err
 	}
+}
+
+// marshalNoHTMLEscape marshals v to compact JSON without HTML-escaping <, >, &,
+// matching jq (and the indented json render mode). encoder.Encode appends a
+// newline, which we trim so callers control line endings.
+func marshalNoHTMLEscape(v any) ([]byte, error) {
+	var buf bytes.Buffer
+	enc := json.NewEncoder(&buf)
+	enc.SetEscapeHTML(false)
+	if err := enc.Encode(v); err != nil {
+		return nil, err
+	}
+	return bytes.TrimRight(buf.Bytes(), "\n"), nil
 }
 
 func ensureTrailingNewline(b []byte) []byte {

@@ -23,6 +23,26 @@ func TestRenderDefaultFilter(t *testing.T) {
 	}
 }
 
+// TestRenderJSONNoHTMLEscape proves json mode emits <, >, & literally (matching
+// jq) rather than the default encoder's < / & escapes.
+func TestRenderJSONNoHTMLEscape(t *testing.T) {
+	got := render(t, `{"s":"a?b&c<d>"}`, manifest.Output{DefaultFilter: ".s"}, Options{})
+	// The literal substring only appears verbatim when HTML escaping is OFF; with
+	// escaping ON the encoder would emit a?b&c<d> instead.
+	if !strings.Contains(got, "a?b&c<d>") {
+		t.Fatalf("json render = %q, want literal a?b&c<d> (no HTML escaping)", got)
+	}
+}
+
+// TestRenderScalarNoHTMLEscape proves scalar mode also emits non-scalar JSON
+// without HTML escaping.
+func TestRenderScalarNoHTMLEscape(t *testing.T) {
+	got := render(t, `{"v":["x&y","p<q"]}`, manifest.Output{DefaultFilter: ".v", Mode: "scalar"}, Options{})
+	if !strings.Contains(got, "x&y") || !strings.Contains(got, "p<q") {
+		t.Fatalf("scalar render = %q, want literal x&y and p<q (no HTML escaping)", got)
+	}
+}
+
 func TestRenderFilterOverride(t *testing.T) {
 	got := render(t, `{"a":1,"b":2}`, manifest.Output{DefaultFilter: ".a"}, Options{Filter: ".b"})
 	if strings.TrimSpace(got) != "2" {
