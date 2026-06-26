@@ -26,17 +26,33 @@ import (
 // argRe finds {arg.N} and {argN} placeholders in a template string.
 var argRe = regexp.MustCompile(`\{arg\.?(\d+)\}`)
 
-// maxArgIndex returns the highest arg index referenced in all template fields
-// of a command, or -1 if none exist.
+// scanArgIndices returns the larger of max and the highest arg index referenced
+// in s. Reused across every templated field so the schema and call-time arg
+// extraction agree on the arg count.
+func scanArgIndices(s string, max int) int {
+	for _, m := range argRe.FindAllStringSubmatch(s, -1) {
+		n, err := strconv.Atoi(m[1])
+		if err == nil && n > max {
+			max = n
+		}
+	}
+	return max
+}
+
+// maxArgIndex returns the highest arg index referenced in all template fields of
+// a command, or -1 if none exist. It covers the http fields (Path/Query/Body),
+// the jsonrpc-ws Params, and each pipeline step's templated Path/Query/Body —
+// but NOT the jq fields (extract/when/body_transform), which are jq, not
+// templates. Without Params/Steps coverage a ws `call` or a pipeline command
+// would expose no argN in its MCP inputSchema and silently run with empty args.
 func maxArgIndex(c *command.Command) int {
 	max := -1
-	fields := []string{c.Path, c.Query, c.Body}
-	for _, f := range fields {
-		for _, m := range argRe.FindAllStringSubmatch(f, -1) {
-			n, err := strconv.Atoi(m[1])
-			if err == nil && n > max {
-				max = n
-			}
+	for _, f := range []string{c.Path, c.Query, c.Body, c.Params} {
+		max = scanArgIndices(f, max)
+	}
+	for _, step := range c.Steps {
+		for _, f := range []string{step.Path, step.Query, step.Body} {
+			max = scanArgIndices(f, max)
 		}
 	}
 	return max
