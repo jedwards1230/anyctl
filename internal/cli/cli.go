@@ -232,6 +232,7 @@ func (r *runner) dispatch(svc *manifest.Service, c *command.Command, args []stri
 		Filter:        r.flags.filter,
 		Raw:           r.flags.raw,
 		Mode:          r.flags.output,
+		DefaultMode:   r.config.Defaults.Output,
 		ResponseCodec: res.ResponseCodec,
 	}, r.stdout); err != nil {
 		recordSpanError(span, err)

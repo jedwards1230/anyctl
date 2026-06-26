@@ -352,6 +352,9 @@ func fetchCursor(
 ) ([]byte, error) {
 	var allItems []any
 	cursor := ""
+	// Track cursors already requested so a server that repeats a cursor (or never
+	// advances it) terminates the loop instead of spinning to maxPages.
+	seen := map[string]bool{}
 
 	for page := 0; page < maxPages; page++ {
 		url := buildPageURL(baseURL, baseQuery, pg.Param, cursor)
@@ -377,9 +380,12 @@ func fetchCursor(
 		if err != nil {
 			return nil, fmt.Errorf("cursor page %d: extract next cursor: %w", page+1, err)
 		}
-		if next == "" {
+		// Stop on end-of-cursors, no advance (next == current), or a repeat
+		// (cursor cycle / no progress).
+		if next == "" || next == cursor || seen[next] {
 			break
 		}
+		seen[next] = true
 		cursor = next
 	}
 

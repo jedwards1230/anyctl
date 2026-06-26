@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"crypto/tls"
 	"fmt"
 	"net/http"
 	"sort"
@@ -106,10 +107,9 @@ func (r *runner) cmdDoctor(loaded *manifest.Loaded) *cobra.Command {
 				}
 				names = []string{args[0]}
 			}
-			client := &http.Client{Timeout: 5 * time.Second}
 			for _, name := range names {
 				svc := loaded.Services[name]
-				_, _ = fmt.Fprintf(r.stdout, "%-14s %s\n", name, probe(client, svc))
+				_, _ = fmt.Fprintf(r.stdout, "%-14s %s\n", name, probe(svc))
 			}
 			return nil
 		},
@@ -117,18 +117,34 @@ func (r *runner) cmdDoctor(loaded *manifest.Loaded) *cobra.Command {
 }
 
 // probe does a cheap, unauthenticated reachability check of base_url. It reports
-// reachability only — auth is not exercised (that needs a real command).
-func probe(client *http.Client, svc *manifest.Service) string {
-	base := svc.BaseURL
-	if base == "" || strings.Contains(base, "{") || strings.HasPrefix(base, "wss") || svc.Transport == "jsonrpc-ws" {
-		return "skipped (no probeable http base_url)"
+// reachability only — auth is not exercised (that needs a real command). It
+// builds a per-service client honoring tls_insecure so a self-signed service
+// does not always report "unreachable: x509".
+func probe(svc *manifest.Service) string {
+	if reason, skip := probeSkip(svc); skip {
+		return reason
 	}
-	resp, err := client.Get(base)
+	client := &http.Client{Timeout: 5 * time.Second}
+	if svc.TLSInsecure {
+		client.Transport = &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}} //nolint:gosec // opt-in per manifest tls_insecure
+	}
+	resp, err := client.Get(svc.BaseURL)
 	if err != nil {
 		return "unreachable: " + err.Error()
 	}
 	defer func() { _ = resp.Body.Close() }()
 	return fmt.Sprintf("reachable (HTTP %d)", resp.StatusCode)
+}
+
+// probeSkip classifies whether a service can be reachability-probed over plain
+// HTTP, returning a reason and skip=true when not (empty/templated base, a
+// websocket/jsonrpc-ws endpoint). Pure and unit-testable — no network.
+func probeSkip(svc *manifest.Service) (string, bool) {
+	base := svc.BaseURL
+	if base == "" || strings.Contains(base, "{") || strings.HasPrefix(base, "wss") || svc.Transport == "jsonrpc-ws" {
+		return "skipped (no probeable http base_url)", true
+	}
+	return "", false
 }
 
 func (r *runner) cmdMCP() *cobra.Command {
@@ -139,7 +155,7 @@ func (r *runner) cmdMCP() *cobra.Command {
 			if r.loaded == nil || len(r.loaded.Services) == 0 {
 				return fmt.Errorf("no services configured; add manifests under %s/services/", manifest.ConfigDir())
 			}
-			return mcpserver.Serve(cmd.Context(), r.loaded, r.config, r.tracer, r.stderr)
+			return mcpserver.Serve(cmd.Context(), r.loaded, r.config, Version, r.tracer, r.stderr)
 		},
 	}
 }

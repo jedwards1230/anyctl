@@ -117,10 +117,14 @@ func toolDesc(c *command.Command) string {
 func BuildServer(
 	loaded *manifest.Loaded,
 	cfg manifest.Config,
+	version string,
 	tracer trace.Tracer,
 	stderr io.Writer,
 ) *mcp.Server {
-	srv := mcp.NewServer(&mcp.Implementation{Name: "labctl", Version: "dev"}, nil)
+	if version == "" {
+		version = "dev"
+	}
+	srv := mcp.NewServer(&mcp.Implementation{Name: "labctl", Version: version}, nil)
 
 	for _, svcName := range loaded.SortedServiceNames() {
 		svc := loaded.Services[svcName]
@@ -221,6 +225,7 @@ func handleCall(
 	if renderErr := output.Render(res.Body, res.Output, output.Options{
 		Filter:        filter,
 		Raw:           rawFlag,
+		DefaultMode:   cfg.Defaults.Output,
 		ResponseCodec: res.ResponseCodec,
 	}, &sb); renderErr != nil {
 		span.RecordError(renderErr)
@@ -253,9 +258,10 @@ func Serve(
 	ctx context.Context,
 	loaded *manifest.Loaded,
 	cfg manifest.Config,
+	version string,
 	tracer trace.Tracer,
 	stderr io.Writer,
 ) error {
-	srv := BuildServer(loaded, cfg, tracer, stderr)
+	srv := BuildServer(loaded, cfg, version, tracer, stderr)
 	return srv.Run(ctx, &mcp.StdioTransport{})
 }

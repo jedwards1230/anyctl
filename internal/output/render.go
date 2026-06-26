@@ -20,13 +20,16 @@ type Options struct {
 	Filter        string // explicit --filter; overrides the command default
 	Raw           bool   // --raw; bypass jq entirely
 	Mode          string // json|raw|scalar; overrides the command/service default
+	DefaultMode   string // config defaults.output; used when Mode and out.Mode are empty
 	ResponseCodec string // "xml", "json", or "" (empty = json default)
 }
 
 // Render filters body and writes the result to w. defaultFilter/defaultMode come
 // from the command's resolved Output; opts (CLI flags) override them.
 func Render(body []byte, out manifest.Output, opts Options, w io.Writer) error {
-	mode := firstNonEmpty(opts.Mode, out.Mode, "json")
+	// Precedence: --output flag > command/service mode > config defaults.output >
+	// the built-in "json" ultimate fallback.
+	mode := firstNonEmpty(opts.Mode, out.Mode, opts.DefaultMode, "json")
 	if opts.Raw || mode == "raw" {
 		_, err := w.Write(ensureTrailingNewline(body))
 		return err
@@ -93,22 +96,9 @@ func Render(body []byte, out manifest.Output, opts Options, w io.Writer) error {
 // This convention is intentionally simple: one level of element → map
 // substitution, no namespace handling, text content trimmed of whitespace.
 func DecodeXML(data []byte) (any, error) {
+	// xmlNodeToMap already skips the XML declaration / PIs / whitespace and
+	// returns an error if there is no start element, so no pre-scan is needed.
 	dec := xml.NewDecoder(strings.NewReader(string(data)))
-	// Skip over the XML declaration / processing instructions.
-	for {
-		tok, err := dec.Token()
-		if err != nil {
-			return nil, fmt.Errorf("xml: %w", err)
-		}
-		if _, ok := tok.(xml.StartElement); ok {
-			// Put the start element back by re-creating a decoder from the full input.
-			break
-		}
-	}
-
-	// Re-decode from scratch for simplicity — the above loop just confirmed
-	// there is at least one start element.
-	dec = xml.NewDecoder(strings.NewReader(string(data)))
 	node, err := xmlNodeToMap(dec)
 	if err != nil {
 		return nil, err
@@ -192,7 +182,16 @@ func xmlElementToMap(dec *xml.Decoder, start xml.StartElement) (map[string]any, 
 		case xml.EndElement:
 			txt := strings.TrimSpace(textBuf.String())
 			if txt != "" {
-				elem["text"] = txt
+				// AMBIGUITY: an element's own text content is surfaced under the
+				// "text" key, which collides with a real child element named
+				// <text>. A literal <text> child wins (it was set in the
+				// StartElement case above); the synthesized text content is only
+				// written when "text" is not already present, so we don't clobber
+				// a real child — but a leaf with both text and a <text> child is
+				// inherently ambiguous in this simple convention.
+				if _, taken := elem["text"]; !taken {
+					elem["text"] = txt
+				}
 			}
 			return elem, nil
 		case xml.CharData:

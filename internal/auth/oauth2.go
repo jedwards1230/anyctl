@@ -183,13 +183,9 @@ func fetchOAuth2Token(ctx context.Context, a manifest.Auth, env template.Env, di
 		return "", fmt.Errorf("oauth2: read token response: %w", err)
 	}
 
-	if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
-		// Extract a human-readable error from the OAuth2 error response without
-		// echoing back the client credentials.
-		detail := extractOAuthError(body)
-		return "", fmt.Errorf("oauth2: token endpoint %d: %s", resp.StatusCode, detail)
-	}
 	if resp.StatusCode != http.StatusOK {
+		// Any non-200 (incl. 401/403) → the same error, with a human-readable
+		// detail extracted without echoing back the client credentials.
 		detail := extractOAuthError(body)
 		return "", fmt.Errorf("oauth2: token endpoint %d: %s", resp.StatusCode, detail)
 	}

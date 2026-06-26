@@ -50,6 +50,37 @@ func TestRenderFilterOverride(t *testing.T) {
 	}
 }
 
+// TestRenderModePrecedence proves output-mode resolution: flag > command/service
+// out.Mode > defaults.output (Options.DefaultMode) > "json".
+func TestRenderModePrecedence(t *testing.T) {
+	body := `{"s":"hello"}`
+	out := manifest.Output{DefaultFilter: ".s"}
+
+	// defaults.output=scalar, no command mode, no flag → scalar (bare string).
+	got := render(t, body, out, Options{DefaultMode: "scalar"})
+	if strings.TrimSpace(got) != "hello" {
+		t.Fatalf("defaults.output=scalar → %q, want bare 'hello'", got)
+	}
+
+	// command mode beats defaults.output.
+	got = render(t, body, manifest.Output{DefaultFilter: ".s", Mode: "json"}, Options{DefaultMode: "scalar"})
+	if !strings.Contains(got, `"hello"`) {
+		t.Fatalf("command mode=json should win over defaults.output=scalar; got %q", got)
+	}
+
+	// flag (Options.Mode) beats everything.
+	got = render(t, body, manifest.Output{DefaultFilter: ".s", Mode: "json"}, Options{Mode: "scalar", DefaultMode: "json"})
+	if strings.TrimSpace(got) != "hello" {
+		t.Fatalf("flag mode=scalar should win; got %q", got)
+	}
+
+	// nothing set → json ultimate fallback.
+	got = render(t, body, out, Options{})
+	if !strings.Contains(got, `"hello"`) {
+		t.Fatalf("no mode anywhere → json fallback; got %q", got)
+	}
+}
+
 func TestRenderRaw(t *testing.T) {
 	body := `{"a":  1}`
 	got := render(t, body, manifest.Output{DefaultFilter: ".a"}, Options{Raw: true})

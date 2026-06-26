@@ -105,7 +105,7 @@ func TestToolListGeneration(t *testing.T) {
 	}
 
 	tracer := noop.NewTracerProvider().Tracer("test")
-	srv := mcpserver.BuildServer(loaded, loaded.Config, tracer, nil)
+	srv := mcpserver.BuildServer(loaded, loaded.Config, "v9.9.9", tracer, nil)
 
 	session := connectClientServer(t, srv)
 	ctx := context.Background()
@@ -159,7 +159,7 @@ func TestToolCallDispatch(t *testing.T) {
 
 	loaded := buildTestLoaded(ts.URL)
 	tracer := noop.NewTracerProvider().Tracer("test")
-	srv := mcpserver.BuildServer(loaded, loaded.Config, tracer, nil)
+	srv := mcpserver.BuildServer(loaded, loaded.Config, "v9.9.9", tracer, nil)
 	session := connectClientServer(t, srv)
 
 	ctx := context.Background()
@@ -195,7 +195,7 @@ func TestToolCallError(t *testing.T) {
 
 	loaded := buildTestLoaded(ts.URL)
 	tracer := noop.NewTracerProvider().Tracer("test")
-	srv := mcpserver.BuildServer(loaded, loaded.Config, tracer, nil)
+	srv := mcpserver.BuildServer(loaded, loaded.Config, "v9.9.9", tracer, nil)
 	session := connectClientServer(t, srv)
 
 	ctx := context.Background()
@@ -222,7 +222,7 @@ func TestInitializeToolsListCallHandshake(t *testing.T) {
 
 	loaded := buildTestLoaded(ts.URL)
 	tracer := noop.NewTracerProvider().Tracer("test")
-	srv := mcpserver.BuildServer(loaded, loaded.Config, tracer, nil)
+	srv := mcpserver.BuildServer(loaded, loaded.Config, "v9.9.9", tracer, nil)
 	session := connectClientServer(t, srv)
 
 	ctx := context.Background()
