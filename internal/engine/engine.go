@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -222,7 +223,7 @@ func executeJSONRPCWS(ctx context.Context, req Request, svc *manifest.Service, c
 		if !cmd.NoAuth {
 			fmt.Fprintf(&b, "auth: %s [\"<redacted>\"]\n", authSpec.Method)
 		}
-		fmt.Fprintf(&b, "call: %s %s\n", cmd.Method, params)
+		fmt.Fprintf(&b, "call: %s %s\n", cmd.Method, redactSecretTokens(params))
 		return &Result{DryRunMsg: b.String(), Output: cmd.Output}, nil
 	}
 
@@ -735,14 +736,25 @@ func mergeAuthPreview(headers map[string]string, a manifest.Auth, noAuth bool) m
 	return out
 }
 
+// secretToken matches a {secret.X} template reference. Dry-run shows pre-expansion
+// templates (it resolves no secrets), so a {secret.X} carries no credential value
+// — but we still redact it in the preview so a secret-bearing custom header/body
+// reads as <redacted>, consistently with the auth header, and never invites
+// confusion about what a real request would carry.
+var secretToken = regexp.MustCompile(`\{secret\.[^}]*\}`)
+
+func redactSecretTokens(s string) string {
+	return secretToken.ReplaceAllString(s, "<redacted>")
+}
+
 func dryRun(method, url string, headers map[string]string, body []byte) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "%s %s\n", strings.ToUpper(method), url)
 	for k, v := range headers {
-		fmt.Fprintf(&b, "%s: %s\n", k, transport.RedactHeader(k, v))
+		fmt.Fprintf(&b, "%s: %s\n", k, transport.RedactHeader(k, redactSecretTokens(v)))
 	}
 	if len(body) > 0 {
-		fmt.Fprintf(&b, "\n%s\n", string(body))
+		fmt.Fprintf(&b, "\n%s\n", redactSecretTokens(string(body)))
 	}
 	return b.String()
 }

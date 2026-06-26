@@ -500,15 +500,19 @@ func TestExecuteDryRunWS_DoesNotResolveSecrets(t *testing.T) {
 	if !strings.Contains(res.DryRunMsg, "call: system.info") {
 		t.Fatalf("missing call line: %q", res.DryRunMsg)
 	}
-	// The preview shows the raw template, never the resolved secret.
-	if !strings.Contains(res.DryRunMsg, `["{secret.api_key}"]`) {
-		t.Fatalf("ws dry-run should print raw templated params: %q", res.DryRunMsg)
+	// The call params carry {secret.api_key}; the preview redacts the token
+	// (it is never resolved — failOp would have errored) rather than echoing it.
+	if !strings.Contains(res.DryRunMsg, `call: system.info ["<redacted>"]`) {
+		t.Fatalf("ws dry-run should redact secret tokens in params: %q", res.DryRunMsg)
+	}
+	if strings.Contains(res.DryRunMsg, "{secret.") {
+		t.Fatalf("ws dry-run leaked a secret template: %q", res.DryRunMsg)
 	}
 }
 
 // TestExecuteDryRunHTTP_DoesNotResolveBodySecret proves an http dry-run with a
-// {secret.X} in a command header/body never invokes the resolver and previews
-// the pre-expansion templated values.
+// {secret.X} in a command header/body never invokes the resolver and redacts the
+// secret token in the preview.
 func TestExecuteDryRunHTTP_DoesNotResolveBodySecret(t *testing.T) {
 	svc := &manifest.Service{
 		Name:      "svc",
@@ -541,12 +545,16 @@ func TestExecuteDryRunHTTP_DoesNotResolveBodySecret(t *testing.T) {
 	if !strings.Contains(res.DryRunMsg, "POST https://api.example.com/v1/push") {
 		t.Fatalf("missing request line: %q", res.DryRunMsg)
 	}
-	// Header and body show the raw template, never the resolved secret.
-	if !strings.Contains(res.DryRunMsg, "X-Token: {secret.token}") {
-		t.Fatalf("http dry-run should print the templated header: %q", res.DryRunMsg)
+	// Header and body carry {secret.token}; the preview redacts the token (never
+	// resolved — failOp would have errored) rather than echoing it.
+	if !strings.Contains(res.DryRunMsg, "X-Token: <redacted>") {
+		t.Fatalf("http dry-run should redact the secret-bearing header: %q", res.DryRunMsg)
 	}
-	if !strings.Contains(res.DryRunMsg, `{"token":"{secret.token}"}`) {
-		t.Fatalf("http dry-run should print the templated body: %q", res.DryRunMsg)
+	if !strings.Contains(res.DryRunMsg, `{"token":"<redacted>"}`) {
+		t.Fatalf("http dry-run should redact the secret token in the body: %q", res.DryRunMsg)
+	}
+	if strings.Contains(res.DryRunMsg, "{secret.") {
+		t.Fatalf("http dry-run leaked a secret template: %q", res.DryRunMsg)
 	}
 }
 
