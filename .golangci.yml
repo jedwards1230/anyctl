@@ -1,0 +1,17 @@
+# golangci-lint configuration for labctl (schema v2).
+#
+# Conservative by design: it enables the linters the codebase already passes
+# cleanly under the default "standard" set (errcheck, govet, ineffassign,
+# staticcheck, unused) plus a gofmt formatter check, mirroring the gates CI
+# already runs. Keep this in step with the installed golangci-lint v2 line.
+version: "2"
+
+linters:
+  # "standard" = errcheck + govet + ineffassign + staticcheck + unused.
+  default: standard
+
+formatters:
+  # gofmt is also gated as a standalone CI step; running it here keeps a single
+  # `golangci-lint run` self-sufficient for local pre-PR checks.
+  enable:
+    - gofmt
