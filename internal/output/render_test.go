@@ -23,10 +23,61 @@ func TestRenderDefaultFilter(t *testing.T) {
 	}
 }
 
+// TestRenderJSONNoHTMLEscape proves json mode emits <, >, & literally (matching
+// jq) rather than the default encoder's < / & escapes.
+func TestRenderJSONNoHTMLEscape(t *testing.T) {
+	got := render(t, `{"s":"a?b&c<d>"}`, manifest.Output{DefaultFilter: ".s"}, Options{})
+	// The literal substring only appears verbatim when HTML escaping is OFF; with
+	// escaping ON the encoder would emit a?b&c<d> instead.
+	if !strings.Contains(got, "a?b&c<d>") {
+		t.Fatalf("json render = %q, want literal a?b&c<d> (no HTML escaping)", got)
+	}
+}
+
+// TestRenderScalarNoHTMLEscape proves scalar mode also emits non-scalar JSON
+// without HTML escaping.
+func TestRenderScalarNoHTMLEscape(t *testing.T) {
+	got := render(t, `{"v":["x&y","p<q"]}`, manifest.Output{DefaultFilter: ".v", Mode: "scalar"}, Options{})
+	if !strings.Contains(got, "x&y") || !strings.Contains(got, "p<q") {
+		t.Fatalf("scalar render = %q, want literal x&y and p<q (no HTML escaping)", got)
+	}
+}
+
 func TestRenderFilterOverride(t *testing.T) {
 	got := render(t, `{"a":1,"b":2}`, manifest.Output{DefaultFilter: ".a"}, Options{Filter: ".b"})
 	if strings.TrimSpace(got) != "2" {
 		t.Fatalf("got %q", got)
+	}
+}
+
+// TestRenderModePrecedence proves output-mode resolution: flag > command/service
+// out.Mode > defaults.output (Options.DefaultMode) > "json".
+func TestRenderModePrecedence(t *testing.T) {
+	body := `{"s":"hello"}`
+	out := manifest.Output{DefaultFilter: ".s"}
+
+	// defaults.output=scalar, no command mode, no flag → scalar (bare string).
+	got := render(t, body, out, Options{DefaultMode: "scalar"})
+	if strings.TrimSpace(got) != "hello" {
+		t.Fatalf("defaults.output=scalar → %q, want bare 'hello'", got)
+	}
+
+	// command mode beats defaults.output.
+	got = render(t, body, manifest.Output{DefaultFilter: ".s", Mode: "json"}, Options{DefaultMode: "scalar"})
+	if !strings.Contains(got, `"hello"`) {
+		t.Fatalf("command mode=json should win over defaults.output=scalar; got %q", got)
+	}
+
+	// flag (Options.Mode) beats everything.
+	got = render(t, body, manifest.Output{DefaultFilter: ".s", Mode: "json"}, Options{Mode: "scalar", DefaultMode: "json"})
+	if strings.TrimSpace(got) != "hello" {
+		t.Fatalf("flag mode=scalar should win; got %q", got)
+	}
+
+	// nothing set → json ultimate fallback.
+	got = render(t, body, out, Options{})
+	if !strings.Contains(got, `"hello"`) {
+		t.Fatalf("no mode anywhere → json fallback; got %q", got)
 	}
 }
 

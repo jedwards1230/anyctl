@@ -36,12 +36,19 @@ func cacheDir() string {
 	return filepath.Join(home, ".cache", "labctl")
 }
 
-// cacheFileName returns the cache file path for the given client ID.
-// Keyed by the full 64 hex chars of SHA-256(clientID) so the file name
-// does not expose the client ID itself and has negligible collision probability.
-func cacheFileName(dir, clientID string) string {
-	sum := sha256.Sum256([]byte(clientID))
-	key := fmt.Sprintf("%x", sum[:]) // full 32 bytes = 64 hex chars
+// cacheFileName returns the cache file path keyed by SHA-256 of the client ID,
+// token URL, and scope. Including the token URL and scope means two endpoints
+// that share a client_id but differ in token URL or scope get distinct cache
+// files and never reuse each other's token. Fields are NUL-separated so no
+// concatenation of one set can collide with another. The full 64 hex chars keep
+// the filename opaque (no client ID leak) with negligible collision probability.
+func cacheFileName(dir, clientID, tokenURL, scope string) string {
+	h := sha256.New()
+	for _, part := range []string{clientID, tokenURL, scope} {
+		_, _ = h.Write([]byte(part))
+		_, _ = h.Write([]byte{0})
+	}
+	key := fmt.Sprintf("%x", h.Sum(nil)) // full 32 bytes = 64 hex chars
 	return filepath.Join(dir, key+".token")
 }
 
@@ -80,10 +87,27 @@ func writeCache(path, token string, expiresIn int) error {
 	if err != nil {
 		return fmt.Errorf("marshal token cache: %w", err)
 	}
-	// Write to a temp file and rename for atomicity.
-	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, data, 0600); err != nil {
+	// Write to a UNIQUE temp file then rename for atomicity. A unique name (not a
+	// shared "<path>.tmp") is required so concurrent cold-cache writers for the
+	// same key never clobber each other's in-progress temp file.
+	f, err := os.CreateTemp(filepath.Dir(path), ".token-*.tmp")
+	if err != nil {
+		return fmt.Errorf("create token cache temp: %w", err)
+	}
+	tmp := f.Name()
+	if err := f.Chmod(0600); err != nil {
+		_ = f.Close()
+		_ = os.Remove(tmp)
+		return fmt.Errorf("chmod token cache temp: %w", err)
+	}
+	if _, err := f.Write(data); err != nil {
+		_ = f.Close()
+		_ = os.Remove(tmp)
 		return fmt.Errorf("write token cache: %w", err)
+	}
+	if err := f.Close(); err != nil {
+		_ = os.Remove(tmp)
+		return fmt.Errorf("close token cache temp: %w", err)
 	}
 	if err := os.Rename(tmp, path); err != nil {
 		_ = os.Remove(tmp) // best-effort cleanup
@@ -97,8 +121,7 @@ func writeCache(path, token string, expiresIn int) error {
 // and client_secret (Password field); the token URL is the Value field.
 // An optional scope may be provided in Params[0].
 //
-// Cache location: <dir>/<sha256(clientID)>.token (0600), where the filename
-// is the full 64 hex chars of SHA-256(clientID).
+// Cache location: <dir>/<sha256(clientID,tokenURL,scope)>.token (0600).
 // Tokens are reused while valid with a 60-second safety margin.
 func fetchOAuth2Token(ctx context.Context, a manifest.Auth, env template.Env, dir string) (string, error) {
 	tokenURL, err := env.Expand(a.Value)
@@ -146,7 +169,7 @@ func fetchOAuth2Token(ctx context.Context, a manifest.Auth, env template.Env, di
 	if stat, ok := dirInfo.Sys().(*syscall.Stat_t); ok && stat.Uid != uint32(os.Getuid()) {
 		return "", fmt.Errorf("oauth2: cache dir not owned by current user")
 	}
-	cachePath := cacheFileName(dir, clientID)
+	cachePath := cacheFileName(dir, clientID, tokenURL, scope)
 	if tok := readCache(cachePath); tok != "" {
 		return tok, nil
 	}
@@ -177,13 +200,9 @@ func fetchOAuth2Token(ctx context.Context, a manifest.Auth, env template.Env, di
 		return "", fmt.Errorf("oauth2: read token response: %w", err)
 	}
 
-	if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
-		// Extract a human-readable error from the OAuth2 error response without
-		// echoing back the client credentials.
-		detail := extractOAuthError(body)
-		return "", fmt.Errorf("oauth2: token endpoint %d: %s", resp.StatusCode, detail)
-	}
 	if resp.StatusCode != http.StatusOK {
+		// Any non-200 (incl. 401/403) → the same error, with a human-readable
+		// detail extracted without echoing back the client credentials.
 		detail := extractOAuthError(body)
 		return "", fmt.Errorf("oauth2: token endpoint %d: %s", resp.StatusCode, detail)
 	}

@@ -34,6 +34,11 @@ type Env struct {
 // body passes through untouched without escaping.
 var tokenRe = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_.-]*$`)
 
+// argTokenRe matches exactly a positional-arg token: arg<digits> or arg.<digits>
+// (e.g. arg0, arg.12). A var named "args", "argument", or "arg_region" does NOT
+// match, so it resolves as a service var instead of erroring as a bad arg index.
+var argTokenRe = regexp.MustCompile(`^arg\.?(\d+)$`)
+
 // Expand replaces every {token} in s where the content is a well-formed token.
 // A "{" that does not open a valid token (e.g. a JSON brace) is emitted
 // literally. It returns an error on an unknown well-formed token or a failed
@@ -85,11 +90,12 @@ func (e Env) resolveToken(token string, getenv func(string) string) (string, err
 		return e.Secrets.Secret(name)
 	case strings.HasPrefix(token, "env."):
 		return getenv(token[len("env."):]), nil
-	case strings.HasPrefix(token, "arg."):
-		return e.arg(token[len("arg."):])
-	case strings.HasPrefix(token, "arg"):
-		return e.arg(token[len("arg"):])
 	default:
+		// Positional arg: arg<digits> or arg.<digits> only. Anything else with an
+		// "arg" prefix (args, argument, arg_region) falls through to var lookup.
+		if m := argTokenRe.FindStringSubmatch(token); m != nil {
+			return e.arg(m[1])
+		}
 		if v, ok := e.Vars[token]; ok {
 			return v, nil
 		}

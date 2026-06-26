@@ -83,7 +83,7 @@ func Load(dir string) (*Loaded, error) {
 			continue
 		}
 		path := filepath.Join(svcDir, e.Name())
-		svc, err := loadService(path, dir) // dir = config root; spec: paths resolve relative to it
+		svc, err := loadService(path, dir, os.Stderr) // dir = config root; spec: paths resolve relative to it
 		if err != nil {
 			return nil, err
 		}
@@ -103,7 +103,7 @@ func Load(dir string) (*Loaded, error) {
 // applying global config defaults. Relative spec: paths resolve from the same
 // directory as the manifest file (since there is no separate config root here).
 func LoadService(path string, cfg Config) (*Service, error) {
-	svc, err := loadService(path, filepath.Dir(path))
+	svc, err := loadService(path, filepath.Dir(path), os.Stderr)
 	if err != nil {
 		return nil, err
 	}
@@ -141,7 +141,7 @@ func mergeSpecCommands(svc *Service, configDir string) error {
 // root config directory used to resolve relative spec: file paths. When called
 // from Load, configDir == l.Dir; when called from LoadService (lint), it
 // defaults to the directory containing the manifest file.
-func loadService(path, configDir string) (*Service, error) {
+func loadService(path, configDir string, warn io.Writer) (*Service, error) {
 	b, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("read %s: %w", path, err)
@@ -154,8 +154,15 @@ func loadService(path, configDir string) (*Service, error) {
 		return nil, fmt.Errorf("%s: %w", path, err)
 	}
 	// Inject spec-derived commands (Phase 2). Explicit commands: entries win.
+	// A spec fetch/parse failure degrades ONLY this service: warn and keep its
+	// statically-declared commands, rather than aborting the whole load and
+	// taking down unrelated services.
 	if err := mergeSpecCommands(&svc, configDir); err != nil {
-		return nil, fmt.Errorf("%s: spec: %w", path, err)
+		label := svc.Name
+		if label == "" {
+			label = path
+		}
+		_, _ = fmt.Fprintf(warn, "labctl: service %q: spec inference failed: %v (using static commands only)\n", label, err)
 	}
 	return &svc, nil
 }
@@ -169,6 +176,9 @@ func applyConfigDefaults(c *Config) {
 	}
 	if c.Defaults.Output == "" {
 		c.Defaults.Output = "json"
+	}
+	if c.Defaults.MaxResponseBytes == 0 {
+		c.Defaults.MaxResponseBytes = 64 << 20 // 64 MiB
 	}
 	if len(c.Secret.Command) == 0 {
 		c.Secret.Command = append([]string(nil), DefaultResolverCommand...)

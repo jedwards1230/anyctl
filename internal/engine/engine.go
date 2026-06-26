@@ -168,16 +168,18 @@ func executeHTTP(ctx context.Context, req Request, svc *manifest.Service, cmd *c
 
 	// Build the per-page HTTP request template (captures all resolved fields).
 	httpReq := transport.HTTPRequest{
-		Ctx:         ctx,
-		Method:      cmd.Method,
-		Headers:     headers,
-		Body:        body,
-		ContentType: contentType,
-		TLSInsecure: ep.TLSInsecure || svc.TLSInsecure,
-		Timeout:     svc.TimeoutDuration(),
-		Auth:        applier,
-		NoAuth:      cmd.NoAuth,
-		Verbose:     verbose,
+		Ctx:              ctx,
+		Method:           cmd.Method,
+		Headers:          headers,
+		Body:             body,
+		ContentType:      contentType,
+		TLSInsecure:      ep.TLSInsecure || svc.TLSInsecure,
+		Timeout:          svc.TimeoutDuration(),
+		Auth:             applier,
+		NoAuth:           cmd.NoAuth,
+		Verbose:          verbose,
+		Redact:           scrubFromEnv(tmplEnv),
+		MaxResponseBytes: req.Config.Defaults.MaxResponseBytes,
 	}
 
 	pg := cmd.Pagination
@@ -265,6 +267,7 @@ func executeJSONRPCWS(ctx context.Context, req Request, svc *manifest.Service, c
 		Method:      cmd.Method,
 		Params:      resolvedParams,
 		Verbose:     verbose,
+		Redact:      scrubFromEnv(tmplEnv),
 	}
 
 	result, err := transport.DoJSONRPCWS(wsReq)
@@ -273,6 +276,24 @@ func executeJSONRPCWS(ctx context.Context, req Request, svc *manifest.Service, c
 	}
 
 	return &Result{Body: result, Output: cmd.Output}, nil
+}
+
+// scrubFromEnv builds a live secret-value redactor from a template env's
+// resolver, or nil if the env carries no *secret.Resolver. It is threaded into
+// the transport so resolved secret values are stripped from verbose output and
+// error strings (and, transitively, span errors) — covering secrets that land
+// in the URL/query, not just redactable headers. The closure reads the
+// resolver's cache on each call, so a credential resolved later in the request
+// (e.g. an auth value applied inside the transport) is covered too, and across
+// pipeline steps the shared resolver's accumulated values are all redacted.
+func scrubFromEnv(env template.Env) func(string) string {
+	r, ok := env.Secrets.(*secret.Resolver)
+	if !ok || r == nil {
+		return nil
+	}
+	return func(s string) string {
+		return secret.NewScrubber(r.ResolvedValues()).Scrub(s)
+	}
 }
 
 // resolveResponseCodec returns the effective response codec: command wins, then
@@ -331,6 +352,9 @@ func fetchCursor(
 ) ([]byte, error) {
 	var allItems []any
 	cursor := ""
+	// Track cursors already requested so a server that repeats a cursor (or never
+	// advances it) terminates the loop instead of spinning to maxPages.
+	seen := map[string]bool{}
 
 	for page := 0; page < maxPages; page++ {
 		url := buildPageURL(baseURL, baseQuery, pg.Param, cursor)
@@ -356,9 +380,12 @@ func fetchCursor(
 		if err != nil {
 			return nil, fmt.Errorf("cursor page %d: extract next cursor: %w", page+1, err)
 		}
-		if next == "" {
+		// Stop on end-of-cursors, no advance (next == current), or a repeat
+		// (cursor cycle / no progress).
+		if next == "" || next == cursor || seen[next] {
 			break
 		}
+		seen[next] = true
 		cursor = next
 	}
 

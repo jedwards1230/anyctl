@@ -62,3 +62,29 @@ func TestExpandNoSecretResolver(t *testing.T) {
 		t.Error("expected error when no resolver configured")
 	}
 }
+
+// TestArgPrefixedVarsResolve proves a var whose name merely starts with "arg"
+// (args, argument, arg_region) resolves as a var, while genuine positional-arg
+// tokens (arg0, arg.1) still resolve as args.
+func TestArgPrefixedVarsResolve(t *testing.T) {
+	env := Env{
+		Vars: map[string]string{"args": "A", "argument": "B", "arg_region": "us"},
+		Args: []string{"zero", "one"},
+	}
+	cases := map[string]string{
+		"{args}":       "A",
+		"{argument}":   "B",
+		"{arg_region}": "us",
+		"{arg0}":       "zero", // genuine arg tokens still work
+		"{arg.1}":      "one",
+	}
+	for in, want := range cases {
+		got, err := env.Expand(in)
+		if err != nil {
+			t.Fatalf("Expand(%q) error: %v", in, err)
+		}
+		if got != want {
+			t.Errorf("Expand(%q) = %q, want %q", in, got, want)
+		}
+	}
+}

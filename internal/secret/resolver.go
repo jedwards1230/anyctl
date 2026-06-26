@@ -67,7 +67,9 @@ func (r *Resolver) Secret(name string) (string, error) {
 	}
 	spec, ok := r.secrets[name]
 	if !ok {
-		return "", fmt.Errorf("secret %q is not declared in this manifest", name)
+		// An undeclared-secret reference is a config mistake (the manifest names a
+		// secret it never declares) → ConfigError → exit 2.
+		return "", &ConfigError{Err: fmt.Errorf("secret %q is not declared in this manifest", name)}
 	}
 
 	// 1. Env override (explicit per-secret env, then <PREFIX>_<NAME>).
@@ -87,13 +89,31 @@ func (r *Resolver) Secret(name string) (string, error) {
 	ref := Ref{URI: spec.Ref, Fields: spec.Fields, Idiom: spec.Idiom}
 	v, err := provider.Resolve(r.ctx, ref)
 	if err != nil {
-		return "", fmt.Errorf("resolve secret %q: %w", name, err)
+		// A provider/`op` failure (notably an expired op session) is a credential
+		// failure → AuthError → exit 3, matching the auth-strategy path. Without
+		// this, the same failure routed through body/query/path/header/params
+		// would exit 1 instead of 3.
+		return "", &AuthError{Err: fmt.Errorf("resolve secret %q: %w", name, err)}
 	}
 	if v == "" {
-		return "", fmt.Errorf("secret %q resolved empty (ref %q)", name, spec.Ref)
+		return "", &AuthError{Err: fmt.Errorf("secret %q resolved empty (ref %q)", name, spec.Ref)}
 	}
 	r.cache[name] = v
 	return v, nil
+}
+
+// ResolvedValues returns a snapshot of the non-empty secret values currently in
+// the resolver's cache. Order is unspecified — a caller that needs determinism
+// (e.g. NewScrubber) sorts the result. Used to build a value-based scrubber so
+// resolved credentials are stripped from diagnostics at the transport layer.
+func (r *Resolver) ResolvedValues() []string {
+	out := make([]string, 0, len(r.cache))
+	for _, v := range r.cache {
+		if v != "" {
+			out = append(out, v)
+		}
+	}
+	return out
 }
 
 func (r *Resolver) lookupEnv(name string, spec manifest.Secret) string {

@@ -47,7 +47,7 @@ func TestResolveItemGet(t *testing.T) {
 	if v != "item-value" {
 		t.Fatalf("got %q", v)
 	}
-	want := []string{"op", "item", "get", "Forgejo", "--vault", "homelab", "--field", "token", "--reveal"}
+	want := []string{"op", "item", "get", "--vault", "homelab", "--field", "token", "--reveal", "--", "Forgejo"}
 	if !reflect.DeepEqual(gotArgv, want) {
 		t.Fatalf("argv = %v, want %v", gotArgv, want)
 	}
@@ -62,7 +62,7 @@ func TestResolveItemJSON(t *testing.T) {
 	if _, err := resolveWith(t, p, Ref{URI: "op://homelab/Forgejo/token", Idiom: "item-json"}); err != nil {
 		t.Fatal(err)
 	}
-	want := []string{"op", "item", "get", "Forgejo", "--vault", "homelab", "--format", "json", "--reveal"}
+	want := []string{"op", "item", "get", "--vault", "homelab", "--format", "json", "--reveal", "--", "Forgejo"}
 	if !reflect.DeepEqual(gotArgv, want) {
 		t.Fatalf("argv = %v, want %v", gotArgv, want)
 	}

@@ -92,13 +92,15 @@ func (p *OnePassword) resolveItem(ctx context.Context, ref Ref, idiom string) (s
 	if err != nil {
 		return "", err
 	}
+	// Pass the item after a "--" end-of-flags guard so an item title/id beginning
+	// with "-" can never be misread as a flag (hardening; inputs are trusted today).
 	var argv []string
 	switch idiom {
 	case "item-get":
-		argv = []string{"op", "item", "get", item, "--vault", vault, "--field", field, "--reveal"}
+		argv = []string{"op", "item", "get", "--vault", vault, "--field", field, "--reveal", "--", item}
 	case "item-json":
 		// Resolve the whole item; field selection is left to the caller's filter.
-		argv = []string{"op", "item", "get", item, "--vault", vault, "--format", "json", "--reveal"}
+		argv = []string{"op", "item", "get", "--vault", vault, "--format", "json", "--reveal", "--", item}
 		_ = field
 	}
 	return p.exec(ctx, argv)

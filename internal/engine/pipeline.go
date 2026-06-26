@@ -225,16 +225,18 @@ func runStep(
 	}
 
 	httpReq := transport.HTTPRequest{
-		Ctx:         ctx,
-		Method:      method,
-		URL:         url,
-		Headers:     headers,
-		Body:        body,
-		ContentType: contentType,
-		TLSInsecure: ep.TLSInsecure || svc.TLSInsecure,
-		Timeout:     svc.TimeoutDuration(),
-		Auth:        applier,
-		Verbose:     verbose,
+		Ctx:              ctx,
+		Method:           method,
+		URL:              url,
+		Headers:          headers,
+		Body:             body,
+		ContentType:      contentType,
+		TLSInsecure:      ep.TLSInsecure || svc.TLSInsecure,
+		Timeout:          svc.TimeoutDuration(),
+		Auth:             applier,
+		Verbose:          verbose,
+		Redact:           scrubFromEnv(stepEnv),
+		MaxResponseBytes: req.Config.Defaults.MaxResponseBytes,
 	}
 
 	respBody, respHeaders, err := transport.DoHTTPWithHeaders(httpReq)
@@ -352,14 +354,29 @@ func accVarsToStrings(base map[string]string, accVars map[string]any) map[string
 		out[k] = v
 	}
 	for k, v := range accVars {
-		switch s := v.(type) {
-		case string:
-			out[k] = s
-		default:
-			out[k] = fmt.Sprintf("%v", v)
-		}
+		out[k] = accVarToString(v)
 	}
 	return out
+}
+
+// accVarToString renders a pipeline var for {var} template substitution. Scalars
+// stringify naturally; a map/slice is JSON-encoded so {var} of an object yields
+// valid JSON instead of Go's map[...] syntax.
+func accVarToString(v any) string {
+	switch s := v.(type) {
+	case string:
+		return s
+	case nil:
+		return ""
+	case bool, int, int64, float64, json.Number:
+		return fmt.Sprintf("%v", s)
+	default:
+		b, err := json.Marshal(v)
+		if err != nil {
+			return fmt.Sprintf("%v", v)
+		}
+		return string(b)
+	}
 }
 
 // pipelineJQFirst parses and runs a jq expression, returning the first result.
