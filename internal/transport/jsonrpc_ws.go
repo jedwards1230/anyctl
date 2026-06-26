@@ -31,6 +31,7 @@ type JSONRPCWSRequest struct {
 	Method  string // jsonrpc method name
 	Params  []byte // resolved params as raw JSON (nil = [])
 	Verbose io.Writer
+	Redact  func(string) string // nil = identity; strips resolved secret values from diagnostics
 }
 
 // rpcMessage is a JSON-RPC 2.0 request frame.
@@ -92,12 +93,12 @@ func DoJSONRPCWS(r JSONRPCWSRequest) ([]byte, error) {
 	}
 
 	if r.Verbose != nil {
-		_, _ = fmt.Fprintf(r.Verbose, "> WS CONNECT %s\n", r.URL)
+		_, _ = fmt.Fprintf(r.Verbose, "> WS CONNECT %s\n", applyRedact(r.Redact, r.URL))
 	}
 
 	conn, _, err := websocket.Dial(ctx, r.URL, dialOpts)
 	if err != nil {
-		return nil, &NetworkError{fmt.Errorf("websocket dial %s: %w", r.URL, err)}
+		return nil, &NetworkError{fmt.Errorf("websocket dial %s: %w", applyRedact(r.Redact, r.URL), err)}
 	}
 	conn.SetReadLimit(16 << 20) // allow up to 16 MiB per frame (TrueNAS dataset responses can be large)
 	defer func() { _ = conn.Close(websocket.StatusNormalClosure, "") }()
@@ -154,7 +155,7 @@ func DoJSONRPCWS(r JSONRPCWSRequest) ([]byte, error) {
 		Params:  params,
 	}
 	if r.Verbose != nil {
-		_, _ = fmt.Fprintf(r.Verbose, "> WS SEND id=2 method=%s params=%s\n", r.Method, string(params))
+		_, _ = fmt.Fprintf(r.Verbose, "> WS SEND id=2 method=%s params=%s\n", r.Method, applyRedact(r.Redact, string(params)))
 	}
 	if err := writeMessage(ctx, conn, cmdMsg, timeout); err != nil {
 		return nil, &NetworkError{fmt.Errorf("send method %s: %w", r.Method, err)}

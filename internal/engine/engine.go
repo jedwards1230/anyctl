@@ -178,6 +178,7 @@ func executeHTTP(ctx context.Context, req Request, svc *manifest.Service, cmd *c
 		Auth:        applier,
 		NoAuth:      cmd.NoAuth,
 		Verbose:     verbose,
+		Redact:      scrubFromEnv(tmplEnv),
 	}
 
 	pg := cmd.Pagination
@@ -265,6 +266,7 @@ func executeJSONRPCWS(ctx context.Context, req Request, svc *manifest.Service, c
 		Method:      cmd.Method,
 		Params:      resolvedParams,
 		Verbose:     verbose,
+		Redact:      scrubFromEnv(tmplEnv),
 	}
 
 	result, err := transport.DoJSONRPCWS(wsReq)
@@ -273,6 +275,24 @@ func executeJSONRPCWS(ctx context.Context, req Request, svc *manifest.Service, c
 	}
 
 	return &Result{Body: result, Output: cmd.Output}, nil
+}
+
+// scrubFromEnv builds a live secret-value redactor from a template env's
+// resolver, or nil if the env carries no *secret.Resolver. It is threaded into
+// the transport so resolved secret values are stripped from verbose output and
+// error strings (and, transitively, span errors) — covering secrets that land
+// in the URL/query, not just redactable headers. The closure reads the
+// resolver's cache on each call, so a credential resolved later in the request
+// (e.g. an auth value applied inside the transport) is covered too, and across
+// pipeline steps the shared resolver's accumulated values are all redacted.
+func scrubFromEnv(env template.Env) func(string) string {
+	r, ok := env.Secrets.(*secret.Resolver)
+	if !ok || r == nil {
+		return nil
+	}
+	return func(s string) string {
+		return secret.NewScrubber(r.ResolvedValues()).Scrub(s)
+	}
 }
 
 // resolveResponseCodec returns the effective response codec: command wins, then

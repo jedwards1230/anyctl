@@ -96,6 +96,20 @@ func (r *Resolver) Secret(name string) (string, error) {
 	return v, nil
 }
 
+// ResolvedValues returns a snapshot of the non-empty secret values currently in
+// the resolver's cache. Order is unspecified — a caller that needs determinism
+// (e.g. NewScrubber) sorts the result. Used to build a value-based scrubber so
+// resolved credentials are stripped from diagnostics at the transport layer.
+func (r *Resolver) ResolvedValues() []string {
+	out := make([]string, 0, len(r.cache))
+	for _, v := range r.cache {
+		if v != "" {
+			out = append(out, v)
+		}
+	}
+	return out
+}
+
 func (r *Resolver) lookupEnv(name string, spec manifest.Secret) string {
 	if spec.Env != "" {
 		if v := r.getenv(spec.Env); v != "" {

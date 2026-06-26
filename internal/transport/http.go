@@ -30,7 +30,18 @@ type HTTPRequest struct {
 	Timeout     time.Duration
 	Auth        auth.Applier
 	NoAuth      bool
-	Verbose     io.Writer // non-nil → write request/response diagnostics (secrets redacted)
+	Verbose     io.Writer           // non-nil → write request/response diagnostics (secrets redacted)
+	Redact      func(string) string // nil = identity; strips resolved secret values from diagnostics
+}
+
+// applyRedact runs f over s when f is non-nil, else returns s unchanged. It lets
+// the transport scrub resolved secret values out of any diagnostic string (URL,
+// error detail) without each call site nil-checking the redactor.
+func applyRedact(f func(string) string, s string) string {
+	if f == nil {
+		return s
+	}
+	return f(s)
 }
 
 // HTTPError is a ≥400 response; Detail is the extracted server message.
@@ -66,7 +77,10 @@ func DoHTTPWithHeaders(r HTTPRequest) ([]byte, http.Header, error) {
 	}
 	req, err := http.NewRequestWithContext(ctx, strings.ToUpper(r.Method), r.URL, bodyReader)
 	if err != nil {
-		return nil, nil, fmt.Errorf("build request: %w", err)
+		// err embeds the URL, which may carry a query-param secret; scrub the
+		// whole message. Keep it a plain error (exit 1) — a malformed request is
+		// neither auth nor a live-network failure.
+		return nil, nil, fmt.Errorf("build request: %s", applyRedact(r.Redact, err.Error()))
 	}
 	req.Header.Set("Accept", accept)
 	if r.Body != nil {
@@ -90,7 +104,7 @@ func DoHTTPWithHeaders(r HTTPRequest) ([]byte, http.Header, error) {
 		if !r.NoAuth {
 			secretHeader = r.Auth.CredentialHeader()
 		}
-		writeVerboseRequest(r.Verbose, req, r.Body, secretHeader)
+		writeVerboseRequest(r.Verbose, req, r.Body, secretHeader, r.Redact)
 	}
 
 	client := &http.Client{Timeout: r.Timeout}
@@ -115,9 +129,9 @@ func DoHTTPWithHeaders(r HTTPRequest) ([]byte, http.Header, error) {
 	if resp.StatusCode >= 400 {
 		return nil, nil, &HTTPError{
 			Status: resp.StatusCode,
-			Detail: extractError(body),
+			Detail: applyRedact(r.Redact, extractError(body)),
 			Method: strings.ToUpper(r.Method),
-			URL:    r.URL,
+			URL:    applyRedact(r.Redact, r.URL),
 		}
 	}
 	return body, resp.Header, nil
@@ -161,8 +175,8 @@ func extractError(body []byte) string {
 	return string(trimmed)
 }
 
-func writeVerboseRequest(w io.Writer, req *http.Request, body []byte, secretHeader string) {
-	_, _ = fmt.Fprintf(w, "> %s %s\n", req.Method, req.URL.String())
+func writeVerboseRequest(w io.Writer, req *http.Request, body []byte, secretHeader string, redact func(string) string) {
+	_, _ = fmt.Fprintf(w, "> %s %s\n", req.Method, applyRedact(redact, req.URL.String()))
 	for k, vals := range req.Header {
 		for _, v := range vals {
 			_, _ = fmt.Fprintf(w, "> %s: %s\n", k, RedactHeader(k, v, secretHeader))

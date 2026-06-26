@@ -235,6 +235,7 @@ func runStep(
 		Timeout:     svc.TimeoutDuration(),
 		Auth:        applier,
 		Verbose:     verbose,
+		Redact:      scrubFromEnv(stepEnv),
 	}
 
 	respBody, respHeaders, err := transport.DoHTTPWithHeaders(httpReq)
