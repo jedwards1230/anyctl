@@ -187,6 +187,62 @@ commands:
 	}
 }
 
+// TestDispatchHTTPErrorExit4 asserts a ≥400 response maps to exit 4.
+func TestDispatchHTTPErrorExit4(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(404)
+		_, _ = w.Write([]byte(`{"message":"not found"}`))
+	}))
+	defer srv.Close()
+
+	dir := t.TempDir()
+	writeService(t, dir, "radarr", `
+name: radarr
+base_url: `+srv.URL+`
+auth:
+  strategy: none
+commands:
+  list:
+    method: GET
+    path: /api/v3/movie
+`)
+	t.Setenv("LABCTL_CONFIG_DIR", dir)
+
+	var out, errb bytes.Buffer
+	if code := Run([]string{"radarr", "list"}, &out, &errb); code != exitHTTP {
+		t.Fatalf("exit = %d, want %d (HTTP) (stderr: %s)", code, exitHTTP, errb.String())
+	}
+}
+
+// TestDispatchDecodeErrorExit6 asserts a body that cannot be decoded for the
+// configured json filter maps to exit 6.
+func TestDispatchDecodeErrorExit6(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`this is not json`))
+	}))
+	defer srv.Close()
+
+	dir := t.TempDir()
+	writeService(t, dir, "radarr", `
+name: radarr
+base_url: `+srv.URL+`
+auth:
+  strategy: none
+commands:
+  list:
+    method: GET
+    path: /api/v3/movie
+    output:
+      filter: map(.id)
+`)
+	t.Setenv("LABCTL_CONFIG_DIR", dir)
+
+	var out, errb bytes.Buffer
+	if code := Run([]string{"radarr", "list"}, &out, &errb); code != exitDecode {
+		t.Fatalf("exit = %d, want %d (decode) (stderr: %s)", code, exitDecode, errb.String())
+	}
+}
+
 // TestDispatchDryRunNoNetwork asserts --dry-run resolves and prints the request
 // without sending it: the server must never be hit, stdout shows the request
 // line, and exit is 0.

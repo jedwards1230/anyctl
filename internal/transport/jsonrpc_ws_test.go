@@ -1,6 +1,7 @@
 package transport
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -13,6 +14,33 @@ import (
 	"github.com/coder/websocket"
 	"github.com/coder/websocket/wsjson"
 )
+
+// TestDoJSONRPCWSReadLimit pins the documented 16 MiB per-frame read cap: a
+// server frame larger than the limit must fail with a *NetworkError rather than
+// being buffered without bound.
+func TestDoJSONRPCWSReadLimit(t *testing.T) {
+	// One byte over the 16 MiB read limit.
+	big := bytes.Repeat([]byte("x"), 16<<20+1)
+	srv := wsTestServer(t, func(conn *websocket.Conn) {
+		defer conn.Close(websocket.StatusInternalError, "") //nolint:errcheck
+		_ = readRPC(t, conn)                                // id=2 (NoAuth path)
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		_ = conn.Write(ctx, websocket.MessageText, big) //nolint:errcheck // client closes on limit
+	})
+
+	_, err := DoJSONRPCWS(JSONRPCWSRequest{
+		Ctx:     context.Background(),
+		URL:     wsURL(srv),
+		Timeout: 10 * time.Second,
+		NoAuth:  true,
+		Method:  "system.info",
+	})
+	var ne *NetworkError
+	if !errors.As(err, &ne) {
+		t.Fatalf("want *NetworkError for an oversized frame, got %T: %v", err, err)
+	}
+}
 
 // wsTestServer starts an httptest server that upgrades to WebSocket and runs
 // handler for each connection. Returns the server and a wss:// URL (test
