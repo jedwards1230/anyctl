@@ -363,6 +363,7 @@ func TestRelativeSpecPath(t *testing.T) {
 // HTTP URL fetch
 
 func TestInferredCommandsFromURL(t *testing.T) {
+	t.Setenv("XDG_CACHE_HOME", t.TempDir()) // hermetic cache, no ~/.cache pollution
 	b, err := os.ReadFile("testdata/petstore.yaml")
 	if err != nil {
 		t.Fatal(err)
@@ -429,6 +430,76 @@ func TestFetchURLGarbageBody(t *testing.T) {
 	var decErr *DecodeError
 	if !errors.As(err, &decErr) {
 		t.Fatalf("garbage spec body should be a *DecodeError, got %T: %v", err, err)
+	}
+}
+
+// TestSpecCacheHit proves the disk cache prevents a second fetch of the same
+// spec URL within the freshness window.
+func TestSpecCacheHit(t *testing.T) {
+	t.Setenv("XDG_CACHE_HOME", t.TempDir())
+	b, err := os.ReadFile("testdata/petstore.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var hits int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hits++
+		_, _ = w.Write(b)
+	}))
+	defer srv.Close()
+
+	svc := &Service{Name: "petstore", BaseURL: "http://petstore.example", Spec: srv.URL + "/openapi.yaml"}
+	if _, err := InferredCommands(svc, ""); err != nil {
+		t.Fatalf("first InferredCommands: %v", err)
+	}
+	if _, err := InferredCommands(svc, ""); err != nil {
+		t.Fatalf("second InferredCommands: %v", err)
+	}
+	if hits != 1 {
+		t.Fatalf("server hit %d times, want 1 (second call must hit the cache)", hits)
+	}
+}
+
+// TestLoadDegradesOnSpecFetchFailure proves a remote spec that does not resolve
+// degrades ONLY its service (kept with its static commands) and does NOT abort
+// the whole load. An unrelated service must still load.
+func TestLoadDegradesOnSpecFetchFailure(t *testing.T) {
+	t.Setenv("XDG_CACHE_HOME", t.TempDir())
+	dir := t.TempDir()
+	// A service whose spec: points at a closed port (immediate connection
+	// refused), plus one static command.
+	writeManifest(t, dir, "broken.yaml", `
+name: broken
+base_url: http://broken.example
+spec: http://127.0.0.1:1/openapi.yaml
+commands:
+  ping:
+    method: GET
+    path: /ping
+`)
+	// An unrelated, healthy service.
+	writeManifest(t, dir, "healthy.yaml", `
+name: healthy
+base_url: http://healthy.example
+commands:
+  list:
+    method: GET
+    path: /list
+`)
+
+	l, err := Load(dir)
+	if err != nil {
+		t.Fatalf("Load must not abort on a per-service spec failure: %v", err)
+	}
+	broken, ok := l.Services["broken"]
+	if !ok {
+		t.Fatal("broken service should still load (degraded), but is absent")
+	}
+	if _, ok := broken.Commands["ping"]; !ok {
+		t.Fatalf("degraded service lost its static command; commands: %v", cmdKeys(broken.Commands))
+	}
+	if _, ok := l.Services["healthy"]; !ok {
+		t.Fatal("unrelated healthy service must still load")
 	}
 }
 

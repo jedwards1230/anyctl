@@ -31,6 +31,7 @@ package manifest
 
 import (
 	"context"
+	"crypto/sha256"
 	"fmt"
 	"io"
 	"net/http"
@@ -42,6 +43,10 @@ import (
 
 	"github.com/pb33f/libopenapi"
 )
+
+// specCacheTTL is the freshness window for a cached remote spec. A cached spec
+// newer than this is reused without a network call; an older one is refetched.
+const specCacheTTL = 24 * time.Hour
 
 // InferredCommands derives Command entries from the OpenAPI spec referenced by
 // svc.Spec. If svc.Spec is empty it returns nil, nil. The configDir is used to
@@ -85,8 +90,15 @@ func fetchSpec(spec, configDir string) ([]byte, error) {
 	return b, nil
 }
 
-// fetchURL downloads a spec from an HTTP(S) URL with a 30-second timeout.
+// fetchURL downloads a spec from an HTTP(S) URL with a 30-second timeout,
+// serving from (and populating) a disk cache keyed by the URL so the common
+// repeated-invocation case does not re-fetch every spec on every call.
 func fetchURL(u string) ([]byte, error) {
+	cachePath := specCachePath(u)
+	if b, ok := readSpecCache(cachePath); ok {
+		return b, nil
+	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
@@ -111,7 +123,63 @@ func fetchURL(u string) ([]byte, error) {
 	if err != nil {
 		return nil, &DecodeError{Err: fmt.Errorf("read body: %w", err)}
 	}
+	writeSpecCache(cachePath, b) // best-effort; a cache miss just re-fetches
 	return b, nil
+}
+
+// specCacheDir returns the labctl spec cache dir, honoring XDG_CACHE_HOME.
+func specCacheDir() string {
+	if d := os.Getenv("XDG_CACHE_HOME"); d != "" {
+		return filepath.Join(d, "labctl", "specs")
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return filepath.Join(".cache", "labctl", "specs")
+	}
+	return filepath.Join(home, ".cache", "labctl", "specs")
+}
+
+// specCachePath is the cache file for a spec URL: <cacheDir>/<sha256(url)>.json.
+// Hashing the URL keeps the filename opaque and collision-free.
+func specCachePath(u string) string {
+	sum := sha256.Sum256([]byte(u))
+	return filepath.Join(specCacheDir(), fmt.Sprintf("%x", sum[:])+".json")
+}
+
+// readSpecCache returns the cached spec bytes if the file exists, is owned with
+// secure perms (0600/0400), and is within the freshness window. Any miss
+// (absent, insecure, stale, unreadable) returns ok=false so the caller refetches.
+func readSpecCache(path string) ([]byte, bool) {
+	info, err := os.Stat(path)
+	if err != nil {
+		return nil, false
+	}
+	if perm := info.Mode().Perm(); perm != 0o600 && perm != 0o400 {
+		return nil, false // insecure perms — ignore
+	}
+	if time.Since(info.ModTime()) > specCacheTTL {
+		return nil, false // stale
+	}
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return nil, false
+	}
+	return b, true
+}
+
+// writeSpecCache persists spec bytes to the cache with mode 0600 via an atomic
+// temp+rename. Best-effort: any failure is ignored (the next call refetches).
+func writeSpecCache(path string, b []byte) {
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		return
+	}
+	tmp := path + ".tmp"
+	if err := os.WriteFile(tmp, b, 0o600); err != nil {
+		return
+	}
+	if err := os.Rename(tmp, path); err != nil {
+		_ = os.Remove(tmp)
+	}
 }
 
 // specOp is a flat representation of one OpenAPI operation, used internally.
