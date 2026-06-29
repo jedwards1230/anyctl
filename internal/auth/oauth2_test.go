@@ -240,6 +240,59 @@ func TestReadCacheInsecurePerms(t *testing.T) {
 	}
 }
 
+// TestReadCacheEvictsExpired verifies that readCache deletes an expired cache
+// file from disk (so a stale bearer token does not linger) while leaving a
+// valid, non-expired cache file in place.
+func TestReadCacheEvictsExpired(t *testing.T) {
+	t.Run("expired entry is removed", func(t *testing.T) {
+		dir := t.TempDir()
+		path := filepath.Join(dir, "expired.token")
+
+		entry := tokenCacheEntry{
+			AccessToken: "stale-tok",
+			ExpiresAt:   time.Now().Add(-time.Second), // already expired
+		}
+		data, err := json.Marshal(entry)
+		if err != nil {
+			t.Fatalf("marshal: %v", err)
+		}
+		if err := os.WriteFile(path, data, 0600); err != nil {
+			t.Fatalf("WriteFile: %v", err)
+		}
+
+		if tok := readCache(path); tok != "" {
+			t.Errorf("readCache returned %q for expired entry, want empty", tok)
+		}
+		if _, err := os.Stat(path); !os.IsNotExist(err) {
+			t.Errorf("expired cache file still present (stat err = %v), want removed", err)
+		}
+	})
+
+	t.Run("valid entry is retained", func(t *testing.T) {
+		dir := t.TempDir()
+		path := filepath.Join(dir, "valid.token")
+
+		entry := tokenCacheEntry{
+			AccessToken: "fresh-tok",
+			ExpiresAt:   time.Now().Add(time.Hour), // well outside the margin
+		}
+		data, err := json.Marshal(entry)
+		if err != nil {
+			t.Fatalf("marshal: %v", err)
+		}
+		if err := os.WriteFile(path, data, 0600); err != nil {
+			t.Fatalf("WriteFile: %v", err)
+		}
+
+		if tok := readCache(path); tok != "fresh-tok" {
+			t.Errorf("readCache returned %q, want fresh-tok", tok)
+		}
+		if _, err := os.Stat(path); err != nil {
+			t.Errorf("valid cache file was removed or unreadable: %v", err)
+		}
+	})
+}
+
 // TestCacheFileNameKeying proves the cache filename depends on client ID, token
 // URL, and scope — two endpoints sharing a client_id but differing in token URL
 // or scope must not collide, while identical inputs map to the same file.
