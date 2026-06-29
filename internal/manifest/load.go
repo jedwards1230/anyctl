@@ -23,6 +23,7 @@ type Loaded struct {
 	Config   Config
 	Services map[string]*Service
 	Dir      string
+	Profile  *Profile // optional per-user profile.yaml (nil when absent)
 }
 
 // ConfigDir resolves the labctl config directory, honoring (in order):
@@ -69,6 +70,16 @@ func Load(dir string) (*Loaded, error) {
 		return nil, fmt.Errorf("%s: %w", cfgPath, err)
 	}
 
+	// Per-user profile (optional). Loaded ONCE before the services loop and
+	// applied per-service after mergeDefaults. Absence ⇒ behavior identical to a
+	// manifest-only config. A malformed profile or unknown field is a config
+	// error (exit 2), like config.yaml.
+	profile, err := LoadProfile(dir)
+	if err != nil {
+		return nil, err
+	}
+	l.Profile = profile
+
 	// Service manifests (optional dir).
 	svcDir := filepath.Join(dir, "services")
 	entries, err := os.ReadDir(svcDir)
@@ -91,12 +102,44 @@ func Load(dir string) (*Loaded, error) {
 			svc.Name = strings.TrimSuffix(strings.TrimSuffix(e.Name(), ".yaml"), ".yml")
 		}
 		mergeDefaults(svc, l.Config)
+		// Apply the user's binding (if any) AFTER defaults so the profile wins
+		// over the manifest but inherits global defaults the binding leaves unset.
+		if profile != nil {
+			if b, ok := profile.Services[svc.Name]; ok {
+				applyProfile(svc, b)
+			}
+		}
 		if other, dup := l.Services[svc.Name]; dup {
 			return nil, fmt.Errorf("duplicate service name %q in %s (also defined elsewhere as %s)", svc.Name, path, other.Name)
 		}
 		l.Services[svc.Name] = svc
 	}
+	// A binding for a service that never loaded is most likely a typo or a stale
+	// entry — warn (non-fatal, mirroring loadService's spec-failure warning) so a
+	// partial config dir still loads while the mismatch is surfaced.
+	warnOrphanProfileBindings(profile, l.Services, os.Stderr)
 	return l, nil
+}
+
+// warnOrphanProfileBindings emits a non-fatal warning for each profile binding
+// whose service did not load (no matching services/<name>.yaml). It is lenient
+// by design — a profile may legitimately carry entries for services not yet
+// added — but a silent drop is inconsistent with the strict-decode philosophy
+// elsewhere, so we surface it. Names are sorted for deterministic output.
+func warnOrphanProfileBindings(profile *Profile, services map[string]*Service, warn io.Writer) {
+	if profile == nil || warn == nil {
+		return
+	}
+	var orphans []string
+	for name := range profile.Services {
+		if _, ok := services[name]; !ok {
+			orphans = append(orphans, name)
+		}
+	}
+	sort.Strings(orphans)
+	for _, name := range orphans {
+		_, _ = fmt.Fprintf(warn, "labctl: profile binds unknown service %q (no services/%s.yaml)\n", name, name)
+	}
 }
 
 // LoadService reads a single manifest file (used by `labctl lint <file>`),

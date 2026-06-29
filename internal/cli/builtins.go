@@ -57,9 +57,15 @@ func (r *runner) listServices(loaded *manifest.Loaded, loadErr error) error {
 }
 
 func (r *runner) cmdLint(loaded *manifest.Loaded, loadErr error) *cobra.Command {
-	return &cobra.Command{
+	var strict bool
+	cmd := &cobra.Command{
 		Use:   "lint [service|path.yaml]",
 		Short: "validate manifest schema",
+		Long: "Validate manifest schema (structural).\n\n" +
+			"--strict also requires completeness: a base_url/endpoint and a bound\n" +
+			"ref/env for every declared secret (post profile-merge for a configured\n" +
+			"service, or the file as-is for a path argument). A portable manifest\n" +
+			"passes plain lint but fails --strict until a profile binds it.",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			r.curCommand = "lint"
 			// A failed load (e.g. invalid config.yaml) surfaces its real
@@ -67,14 +73,21 @@ func (r *runner) cmdLint(loaded *manifest.Loaded, loadErr error) *cobra.Command 
 			if loadErr != nil {
 				return loadErr
 			}
-			// A file path argument: validate that file directly.
+			// A file path argument: validate that file directly. There is no
+			// profile context for a bare file, so --strict checks the file as-is.
 			if len(args) == 1 && (strings.HasSuffix(args[0], ".yaml") || strings.HasSuffix(args[0], ".yml")) {
 				cfg := manifest.Config{}
 				if loaded != nil {
 					cfg = loaded.Config
 				}
-				if _, err := manifest.LoadService(args[0], cfg); err != nil {
+				svc, err := manifest.LoadService(args[0], cfg)
+				if err != nil {
 					return err
+				}
+				if strict {
+					if err := manifest.ValidateComplete(svc); err != nil {
+						return fmt.Errorf("%s: %w", args[0], err)
+					}
 				}
 				_, _ = fmt.Fprintf(r.stdout, "ok %s\n", args[0])
 				return nil
@@ -93,11 +106,19 @@ func (r *runner) cmdLint(loaded *manifest.Loaded, loadErr error) *cobra.Command 
 				if err := manifest.Validate(loaded.Services[name]); err != nil {
 					return fmt.Errorf("%s: %w", name, err)
 				}
+				// --strict adds the post-merge completeness check.
+				if strict {
+					if err := manifest.ValidateComplete(loaded.Services[name]); err != nil {
+						return fmt.Errorf("%s: %w", name, err)
+					}
+				}
 				_, _ = fmt.Fprintf(r.stdout, "ok %s\n", name)
 			}
 			return nil
 		},
 	}
+	cmd.Flags().BoolVar(&strict, "strict", false, "also require completeness (base_url + bound secrets) post profile-merge")
+	return cmd
 }
 
 func (r *runner) cmdDoctor(loaded *manifest.Loaded) *cobra.Command {
@@ -118,6 +139,12 @@ func (r *runner) cmdDoctor(loaded *manifest.Loaded) *cobra.Command {
 			}
 			for _, name := range names {
 				svc := loaded.Services[name]
+				// An incomplete (portable-but-unbound) service can't be meaningfully
+				// probed — report why and move on rather than probing an empty base.
+				if err := manifest.ValidateComplete(svc); err != nil {
+					_, _ = fmt.Fprintf(r.stdout, "%-14s incomplete: %s\n", name, err)
+					continue
+				}
 				_, _ = fmt.Fprintf(r.stdout, "%-14s %s\n", name, probe(svc))
 			}
 			return nil

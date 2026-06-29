@@ -63,6 +63,13 @@ func TestExamplesLoadAndValidate(t *testing.T) {
 			if err := Validate(svc); err != nil {
 				t.Fatalf("Validate(%s): %v", name, err)
 			}
+			// Load applies examples/profile.yaml, so the shipped example set must
+			// also be COMPLETE: portable-demo is bound via the profile; the
+			// all-in-one examples are complete on their own. This proves the
+			// examples+profile are a working end-to-end config.
+			if err := ValidateComplete(svc); err != nil {
+				t.Fatalf("ValidateComplete(%s): %v", name, err)
+			}
 		})
 	}
 }

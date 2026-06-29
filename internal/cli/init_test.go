@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/jedwards1230/labctl/internal/manifest"
 )
 
 // TestInitStdout confirms `labctl init <svc>` prints a validating manifest to
@@ -87,6 +89,133 @@ func TestInitOutputValidatesViaLint(t *testing.T) {
 				t.Fatalf("lint exit = %d, want 0 (stderr: %s)", code, errb.String())
 			}
 		})
+	}
+}
+
+// TestInitProvisionsConfigDir confirms bare `labctl init` provisions the config
+// dir (config.yaml + services/ + profile.yaml) and is idempotent — a second run
+// clobbers nothing and still exits 0.
+func TestInitProvisionsConfigDir(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("LABCTL_CONFIG_DIR", dir)
+
+	var out, errb bytes.Buffer
+	if code := Run([]string{"init"}, &out, &errb); code != exitOK {
+		t.Fatalf("init exit = %d, want 0 (stderr: %s)", code, errb.String())
+	}
+	for _, p := range []string{"config.yaml", "profile.yaml", "services"} {
+		if _, err := os.Stat(filepath.Join(dir, p)); err != nil {
+			t.Errorf("init did not provision %s: %v", p, err)
+		}
+	}
+	if !strings.Contains(errb.String(), "created:") {
+		t.Errorf("init should report created actions on stderr:\n%s", errb.String())
+	}
+
+	// Mutate config.yaml, then re-run: the second run must NOT clobber it.
+	cfgPath := filepath.Join(dir, "config.yaml")
+	const sentinel = "# user edited\n"
+	if err := os.WriteFile(cfgPath, []byte(sentinel), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	out.Reset()
+	errb.Reset()
+	if code := Run([]string{"init"}, &out, &errb); code != exitOK {
+		t.Fatalf("second init exit = %d, want 0 (stderr: %s)", code, errb.String())
+	}
+	b, err := os.ReadFile(cfgPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(b) != sentinel {
+		t.Errorf("idempotent init clobbered config.yaml:\n%s", b)
+	}
+	if !strings.Contains(errb.String(), "left as-is") {
+		t.Errorf("second init should report existing files left as-is:\n%s", errb.String())
+	}
+
+	// The provisioned config.yaml + profile.yaml must load clean (locks the
+	// seeded defaults against future strict-decode drift). Restore the default
+	// config.yaml first, since this test mutated it above.
+	if err := os.Remove(cfgPath); err != nil {
+		t.Fatal(err)
+	}
+	out.Reset()
+	errb.Reset()
+	if code := Run([]string{"init"}, &out, &errb); code != exitOK {
+		t.Fatalf("re-provision exit = %d (stderr: %s)", code, errb.String())
+	}
+	if _, err := manifest.Load(dir); err != nil {
+		t.Fatalf("provisioned config dir should load cleanly: %v", err)
+	}
+}
+
+// TestLintStrictPortable confirms a portable manifest passes plain `lint` (exit
+// 0) but fails `lint --strict` (exit 2), which enforces completeness.
+func TestLintStrictPortable(t *testing.T) {
+	cfgDir := t.TempDir()
+	t.Setenv("LABCTL_CONFIG_DIR", cfgDir)
+	// A portable manifest file: no base_url, an unbound secret slot.
+	path := filepath.Join(cfgDir, "portable.yaml")
+	const portable = `name: portable
+env_prefix: PORTABLE
+auth:
+  strategy: header-key
+  header: X-Api-Key
+  value: "{secret.api_key}"
+secrets:
+  api_key:
+    env: PORTABLE_API_KEY
+commands:
+  status: { method: GET, path: /api/status }
+`
+	if err := os.WriteFile(path, []byte(portable), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	var out, errb bytes.Buffer
+	if code := Run([]string{"lint", path}, &out, &errb); code != exitOK {
+		t.Fatalf("plain lint exit = %d, want 0 (stderr: %s)", code, errb.String())
+	}
+	out.Reset()
+	errb.Reset()
+	if code := Run([]string{"lint", "--strict", path}, &out, &errb); code != exitUsage {
+		t.Fatalf("strict lint exit = %d, want %d (stderr: %s)", code, exitUsage, errb.String())
+	}
+	if !strings.Contains(errb.String(), "unbound") && !strings.Contains(errb.String(), "base_url") {
+		t.Errorf("strict lint should explain the incompleteness:\n%s", errb.String())
+	}
+}
+
+// TestDoctorReportsIncomplete confirms doctor reports `incomplete:` for an
+// unbound portable service and continues to the next service without aborting.
+func TestDoctorReportsIncomplete(t *testing.T) {
+	dir := t.TempDir()
+	// One portable-but-unbound service, one complete service.
+	writeService(t, dir, "portable", `name: portable
+auth: { strategy: none }
+commands:
+  status: { method: GET, path: /s }
+`)
+	writeService(t, dir, "complete", `name: complete
+base_url: http://127.0.0.1:1
+auth: { strategy: none }
+commands:
+  status: { method: GET, path: /s }
+`)
+	t.Setenv("LABCTL_CONFIG_DIR", dir)
+
+	var out, errb bytes.Buffer
+	if code := Run([]string{"doctor"}, &out, &errb); code != exitOK {
+		t.Fatalf("doctor exit = %d, want 0 (stderr: %s)", code, errb.String())
+	}
+	got := out.String()
+	if !strings.Contains(got, "portable") || !strings.Contains(got, "incomplete:") {
+		t.Errorf("doctor should report the portable service as incomplete:\n%s", got)
+	}
+	// It must not abort — the complete service is still listed (unreachable here).
+	if !strings.Contains(got, "complete") {
+		t.Errorf("doctor should continue to the complete service:\n%s", got)
 	}
 }
 

@@ -34,10 +34,15 @@ labctl self-update --check    # report current vs latest, download nothing
 ```
 ~/.config/labctl/
 ├── config.yaml            # global defaults + secret resolver
+├── profile.yaml           # optional per-user binding (base_url + secret refs)
 └── services/
     ├── radarr.yaml
     └── tdarr.yaml
 ```
+
+Run `labctl init` (no argument) to provision this layout — it creates the dir,
+`services/`, a default `config.yaml`, and a commented `profile.yaml`, leaving any
+that already exist untouched.
 
 A minimal connection-only manifest is usable immediately via generic verbs:
 
@@ -61,13 +66,44 @@ labctl svc radarr list --filter 'length'
 labctl svc radarr list --dry-run      # print the resolved request, send nothing
 labctl s radarr list                  # `s` is shorthand for `svc`
 labctl doctor                         # probe each service's reachability (built-in)
-labctl lint                           # validate every manifest (built-in)
-labctl init myservice                 # scaffold a commented starter manifest (built-in, stdout)
+labctl lint                           # validate every manifest schema (built-in)
+labctl lint --strict                  # also require completeness (bound base_url + secrets)
+labctl init                           # provision the config dir (config.yaml + profile.yaml)
+labctl init myservice                 # scaffold a portable starter manifest (built-in, stdout)
 labctl init myservice --auth bearer -o services/myservice.yaml
 ```
 
 See [`examples/`](examples/) for fuller manifests (header-key, bearer, basic auth;
 named commands; pagination; multi-endpoint).
+
+### Portable manifests & profiles
+
+A manifest is **portable** — it describes *what* a service is (its commands, auth
+strategy, secret slots) and is identical for every user. The user-specific bits —
+`base_url`, secret `ref`s, and any per-machine endpoint/var/`tls_insecure`
+overrides — live in an optional `profile.yaml` at the config root:
+
+```yaml
+# profile.yaml
+version: 1
+services:
+  portable-demo:
+    base_url: https://demo.example.com
+    secrets:
+      api_key: { ref: "op://vault/Demo/api_key" }
+```
+
+Precedence at resolution time is **env override > profile > manifest**. The split
+is opt-in and additive: with **no `profile.yaml`**, every existing all-in-one
+manifest (one that carries its own `base_url` + secret `ref`) behaves *exactly* as
+before. A profile may also override an all-in-one manifest's `base_url` per
+machine.
+
+Structural validation (`labctl lint`) checks a manifest is well-formed; a portable
+manifest passes it even unbound. **Completeness** (a resolvable `base_url` and a
+bound `ref`/`env` for every declared secret) is enforced post-merge at execute
+time, surfaced by `labctl lint --strict`, and reported by `labctl doctor` (which
+prints `incomplete: …` for an unbound service instead of probing it).
 
 ### Secrets
 

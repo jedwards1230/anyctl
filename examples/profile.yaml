@@ -1,0 +1,12 @@
+# labctl per-user profile. Optional: binds portable manifests to THIS machine's
+# endpoints and credentials. Absent, every all-in-one manifest behaves unchanged.
+# Precedence at resolution time: env override > profile > manifest.
+version: 1
+services:
+  portable-demo:
+    base_url: https://demo.example.com
+    secrets:
+      api_key: { ref: "op://vault/Demo/api_key" }
+  # You can also override an all-in-one manifest's endpoint per machine, e.g.:
+  # radarr:
+  #   base_url: https://movies.my-lan.example
