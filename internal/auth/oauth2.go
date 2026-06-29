@@ -58,9 +58,16 @@ func cacheFileName(dir, clientID, tokenURL, scope string) string {
 // cached token that is expired (or within the safety margin) is best-effort
 // removed so an unusable bearer token does not linger on disk.
 func readCache(path string) string {
-	info, err := os.Stat(path)
+	// Lstat (not Stat) so a symlink at this path is rejected, not followed: the
+	// read and the eviction below must operate on the regular cache file only,
+	// never a symlink (defense-in-depth — os.Remove already unlinks a symlink
+	// itself rather than its target, but refuse symlinks outright).
+	info, err := os.Lstat(path)
 	if err != nil {
 		return ""
+	}
+	if !info.Mode().IsRegular() {
+		return "" // not a regular file (symlink/device/…) — refuse
 	}
 	if perm := info.Mode().Perm(); perm != 0o600 && perm != 0o400 {
 		return "" // insecure permissions — discard

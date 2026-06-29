@@ -291,6 +291,29 @@ func TestReadCacheEvictsExpired(t *testing.T) {
 			t.Errorf("valid cache file was removed or unreadable: %v", err)
 		}
 	})
+
+	t.Run("symlink path is refused without touching the target", func(t *testing.T) {
+		dir := t.TempDir()
+		target := filepath.Join(dir, "secret-target")
+		if err := os.WriteFile(target, []byte("do-not-delete"), 0600); err != nil {
+			t.Fatalf("WriteFile target: %v", err)
+		}
+		link := filepath.Join(dir, "link.token")
+		if err := os.Symlink(target, link); err != nil {
+			t.Skipf("symlink unsupported: %v", err)
+		}
+		// readCache must Lstat-reject the symlink: return empty AND never
+		// remove/follow it (the target must survive untouched).
+		if tok := readCache(link); tok != "" {
+			t.Errorf("readCache followed a symlink, returned %q, want empty", tok)
+		}
+		if _, err := os.Lstat(link); err != nil {
+			t.Errorf("symlink itself was removed: %v", err)
+		}
+		if _, err := os.Stat(target); err != nil {
+			t.Errorf("symlink target was removed/altered: %v", err)
+		}
+	})
 }
 
 // TestCacheFileNameKeying proves the cache filename depends on client ID, token
