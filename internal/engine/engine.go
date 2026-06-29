@@ -72,6 +72,17 @@ func Execute(ctx context.Context, req Request, stderr io.Writer) (*Result, error
 	svc := req.Service
 	cmd := req.Command
 
+	// Completeness gate: a portable manifest is structurally valid but cannot
+	// execute until a profile (or the manifest) supplies a base_url and binds
+	// every declared secret. This is config validation, not a safety/policy gate
+	// (the engine couldn't build a request without a base_url anyway). It returns
+	// *manifest.ConfigError, which classify() maps to exit 2 for both the CLI and
+	// the MCP server. It runs for dry-run too — an incomplete service can't
+	// preview a meaningful request.
+	if err := manifest.ValidateComplete(svc); err != nil {
+		return nil, err
+	}
+
 	transportKind := svc.Transport
 	if transportKind == "" {
 		transportKind = "http"

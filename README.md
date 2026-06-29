@@ -34,19 +34,52 @@ labctl self-update --check    # report current vs latest, download nothing
 ```
 ~/.config/labctl/
 ├── config.yaml            # global defaults + secret resolver
+├── profile.yaml           # optional per-user binding (base_url + secret refs)
 └── services/
     ├── radarr.yaml
     └── tdarr.yaml
 ```
 
-A minimal connection-only manifest is usable immediately via generic verbs:
+Run `labctl init` (no argument) to provision this layout — it creates the dir,
+`services/`, a default `config.yaml`, and a commented `profile.yaml`, leaving any
+that already exist untouched.
+
+A service ships as a **portable** manifest — it declares *what* the service is
+(commands, auth strategy, secret slots), with no machine-specific endpoint or
+credentials — and `profile.yaml` binds it to *this* machine:
 
 ```yaml
-# services/tdarr.yaml
-name: tdarr
-base_url: https://tdarr.example.com
-auth: { strategy: none }
+# services/radarr.yaml — portable: identical for every user
+name: radarr
+env_prefix: RADARR
+auth: { strategy: header-key, header: X-Api-Key, value: "{secret.api_key}" }
+secrets:
+  api_key: { env: RADARR_API_KEY }   # slot declared; bound in profile.yaml
+commands:
+  list: { method: GET, path: /api/v3/movie }
 ```
+
+```yaml
+# profile.yaml — your machine: base_url + secret refs
+version: 1
+services:
+  radarr:
+    base_url: https://movies.example.com
+    secrets:
+      api_key: { ref: "op://vault/Radarr/api_key" }
+```
+
+> **Legacy all-in-one.** A manifest may still carry its own `base_url` + secret
+> `ref` inline and run with no `profile.yaml` — every example used to ship this
+> way. It still works, but it's deprecated and slated for removal; write new
+> manifests in the portable form above.
+>
+> ```yaml
+> # services/tdarr.yaml — legacy all-in-one (deprecated)
+> name: tdarr
+> base_url: https://tdarr.example.com
+> auth: { strategy: none }
+> ```
 
 Service commands live under `svc` (aliased `s`); built-ins stay at the top
 level. Putting services in their own namespace means a user-defined service can
@@ -61,13 +94,36 @@ labctl svc radarr list --filter 'length'
 labctl svc radarr list --dry-run      # print the resolved request, send nothing
 labctl s radarr list                  # `s` is shorthand for `svc`
 labctl doctor                         # probe each service's reachability (built-in)
-labctl lint                           # validate every manifest (built-in)
-labctl init myservice                 # scaffold a commented starter manifest (built-in, stdout)
+labctl lint                           # validate every manifest schema (built-in)
+labctl lint --strict                  # also require completeness (bound base_url + secrets)
+labctl init                           # provision the config dir (config.yaml + profile.yaml)
+labctl init myservice                 # scaffold a portable starter manifest (built-in, stdout)
 labctl init myservice --auth bearer -o services/myservice.yaml
 ```
 
 See [`examples/`](examples/) for fuller manifests (header-key, bearer, basic auth;
 named commands; pagination; multi-endpoint).
+
+### Portable manifests & profiles
+
+This is the default workflow, and the form every example under [`examples/`](examples/)
+ships in. `labctl init` provisions `config.yaml`, `services/`, and a `profile.yaml`.
+A **portable** manifest in `services/` declares *what* a service is (its commands,
+auth strategy, secret slots) and is identical for every user; the `profile.yaml`
+at the config root binds each service to *this* machine — `base_url`, secret
+`ref`s, and any per-machine endpoint/var/`tls_insecure` overrides.
+
+Precedence at resolution time is **env override > profile > manifest**.
+
+Structural validation (`labctl lint`) checks a manifest is well-formed; a portable
+manifest passes it even unbound. **Completeness** (a resolvable `base_url` and a
+bound `ref`/`env` for every declared secret) is enforced post-merge at execute
+time, surfaced by `labctl lint --strict`, and reported by `labctl doctor` (which
+prints `incomplete: …` for an unbound service instead of probing it).
+
+The split is additive: a manifest may still carry its own `base_url` + secret
+`ref` inline (the legacy all-in-one form), which runs with **no `profile.yaml`**
+but is deprecated and slated for removal.
 
 ### Secrets
 

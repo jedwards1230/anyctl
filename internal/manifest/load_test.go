@@ -98,7 +98,6 @@ func TestLoadMissingDir(t *testing.T) {
 
 func TestValidateRejectsBad(t *testing.T) {
 	cases := map[string]*Service{
-		"no base_url":          {Name: "x"},
 		"bad transport":        {Name: "x", BaseURL: "http://h", Transport: "carrier-pigeon"},
 		"bad strategy":         {Name: "x", BaseURL: "http://h", Auth: Auth{Strategy: "telepathy"}},
 		"undeclared secret":    {Name: "x", BaseURL: "http://h", Auth: Auth{Strategy: "header-key", Header: "X", Value: "{secret.missing}"}},

@@ -64,9 +64,6 @@ func Validate(s *Service) error {
 // *ConfigError; keeping the body separate avoids double-wrapping at the many
 // internal fmt.Errorf call sites.
 func validate(s *Service) error {
-	if s.BaseURL == "" && len(s.Endpoints) == 0 {
-		return fmt.Errorf("service must set base_url or at least one endpoint")
-	}
 	if err := validateSpec(s); err != nil {
 		return err
 	}
@@ -86,9 +83,9 @@ func validate(s *Service) error {
 		return fmt.Errorf("unknown pagination style %q (want none|cursor|page-number|page-until-short|fixed-query)", s.Pagination.Style)
 	}
 	for name, sec := range s.Secrets {
-		if sec.Ref == "" && sec.Env == "" {
-			return fmt.Errorf("secret %q must set ref or env", name)
-		}
+		// ref/env are completeness concerns (a portable manifest declares the slot
+		// and a profile binds it) — checked by ValidateComplete, not here. The
+		// idiom is structural, so it stays.
 		if sec.Idiom != "" && sec.Idiom != "read" && sec.Idiom != "item-get" && sec.Idiom != "item-json" {
 			return fmt.Errorf("secret %q: unknown idiom %q (want read|item-get|item-json)", name, sec.Idiom)
 		}
@@ -98,9 +95,33 @@ func validate(s *Service) error {
 			return err
 		}
 	}
+	return nil
+}
+
+// ValidateComplete checks that a service is fully specified to execute — run it
+// AFTER the profile merge. A portable manifest is structurally valid (passes
+// Validate) but incomplete until a profile (or the manifest itself) supplies a
+// base_url/endpoint and binds every declared secret. This is the completeness
+// counterpart to the structural Validate: Validate answers "is this a
+// well-formed manifest?", ValidateComplete answers "can THIS user's resolved
+// config actually run it?". Any failure is wrapped in *ConfigError so callers
+// classify it to the usage exit code (2), regardless of entry point.
+//
+// Completeness is WHOLE-SERVICE by design: every declared secret must be bound,
+// even ones a given command doesn't reference — a service is "ready" only when
+// all of its slots are resolvable, not per-command.
+func ValidateComplete(s *Service) error {
+	if s.BaseURL == "" && len(s.Endpoints) == 0 {
+		return &ConfigError{Err: fmt.Errorf("service %q has no base_url and no endpoints: set one in profile.yaml or the manifest", s.Name)}
+	}
 	for name, ep := range s.Endpoints {
 		if ep.BaseURL == "" {
-			return fmt.Errorf("endpoint %q must set base_url", name)
+			return &ConfigError{Err: fmt.Errorf("endpoint %q has no base_url: set it in profile.yaml or the manifest", name)}
+		}
+	}
+	for name, sec := range s.Secrets {
+		if sec.Ref == "" && sec.Env == "" {
+			return &ConfigError{Err: fmt.Errorf("secret %q is unbound: set ref or env (bind it in profile.yaml)", name)}
 		}
 	}
 	return nil

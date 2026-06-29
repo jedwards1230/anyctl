@@ -69,6 +69,16 @@ MCP server (`labctl mcp`). The `truenas` and `sunshine` manifests execute fully.
   4 HTTP≥400, 5 network, 6 decode).
 - Secrets are refs (`op://...`) resolved at call time — never values in manifests,
   never in argv, redacted in verbose/dry-run output.
+- A manifest is **portable** (what a service *is*); user-specific endpoints and
+  credentials (`base_url`, secret `ref`s, per-machine endpoint/var/tls overrides)
+  live in an optional `profile.yaml` at the config root. Precedence is **env
+  override > profile > manifest**; absence of `profile.yaml` ⇒ all-in-one
+  manifests behave unchanged. Structural `Validate` (well-formed) is split from
+  `ValidateComplete` (resolvable base_url + every secret bound); completeness is
+  enforced post-merge at execute time and surfaced by `doctor` / `lint --strict`.
+  Portable + `profile.yaml` is now the **default** the shipped `examples/` use;
+  in-manifest all-in-one binding (`base_url` / secret `ref` inline) is legacy and
+  slated for removal.
 - New auth strategy / transport / pagination style → wire it in its package + add
   a test; keep the manifest schema additive.
 - Release: opt-in `semver:*` label on the merged PR (no label → no release);
