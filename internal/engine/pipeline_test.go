@@ -348,6 +348,63 @@ func TestPipelineOnErrorFallbackFailureLogged(t *testing.T) {
 	}
 }
 
+// TestPipelineOnErrorEndpointUnresolvable verifies that when a step fails AND its
+// on_error handler can't run because its endpoint won't resolve, the pipeline
+// surfaces the ORIGINAL step failure (does not silently exit 0) and logs the
+// endpoint-resolution failure to stderr.
+func TestPipelineOnErrorEndpointUnresolvable(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/fail":
+			w.WriteHeader(500)
+			_, _ = w.Write([]byte(`{"error":"primary failed"}`))
+		case "/final":
+			t.Error("final step ran despite an unrecoverable failure")
+			_, _ = w.Write([]byte(`{"continued":true}`))
+		}
+	}))
+	defer srv.Close()
+
+	// The on_error handler targets an endpoint the service doesn't define, so
+	// resolveStepEndpoint returns an error before it can run.
+	fallback := manifest.Step{
+		ID:       "fallback",
+		Method:   "GET",
+		Path:     "/fallback",
+		Endpoint: "ghost",
+	}
+	svc := newPipelineSvc(srv.URL, map[string]manifest.Command{
+		"recover": {
+			Steps: []manifest.Step{
+				{
+					ID:      "risky",
+					Method:  "GET",
+					Path:    "/fail",
+					OnError: &fallback,
+				},
+				{
+					ID:      "final",
+					Method:  "GET",
+					Path:    "/final",
+					Extract: map[string]string{"continued": ".continued"},
+				},
+			},
+			Output: manifest.Output{Filter: "."},
+		},
+	})
+
+	var stderrBuf bytes.Buffer
+	req := newPipelineReq(svc, "recover", Flags{})
+	_, err := Execute(context.Background(), req, &stderrBuf)
+	if err == nil {
+		t.Fatal("expected an error when the on_error endpoint is unresolvable, got nil (pipeline silently succeeded)")
+	}
+	stderrStr := stderrBuf.String()
+	if !strings.Contains(stderrStr, "on_error") || !strings.Contains(stderrStr, "ghost") {
+		t.Errorf("expected stderr to mention the on_error endpoint-resolution failure, got: %q", stderrStr)
+	}
+}
+
 // TestPipelineConfirmDefaultDeny verifies that a step with Confirm set and
 // Flags.Yes=false returns an error.
 func TestPipelineConfirmDefaultDeny(t *testing.T) {

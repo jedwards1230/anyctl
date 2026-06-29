@@ -90,6 +90,28 @@ func TestValidateOAuth2FieldAliases(t *testing.T) {
 	}
 }
 
+// TestValidateAuthParamsSecretRefs proves the {secret.X} scan covers ws-login
+// auth.params (e.g. truenas: params: ["{secret.api_key}"]) — a declared ref
+// passes, an undeclared one fails lint instead of only blowing up at runtime.
+func TestValidateAuthParamsSecretRefs(t *testing.T) {
+	mk := func(params []string, secrets map[string]Secret) *Service {
+		return &Service{
+			Name:      "x",
+			Transport: "jsonrpc-ws",
+			Auth:      Auth{Strategy: "ws-login", Method: "auth.login_with_api_key", Params: params},
+			Secrets:   secrets,
+		}
+	}
+	// Declared secret → passes.
+	if err := Validate(mk([]string{"{secret.api_key}"}, map[string]Secret{"api_key": {Env: "X_API_KEY"}})); err != nil {
+		t.Fatalf("Validate() with a declared params secret = %v, want nil", err)
+	}
+	// Undeclared secret → fails.
+	if err := Validate(mk([]string{"{secret.api_key}"}, map[string]Secret{})); err == nil {
+		t.Fatal("Validate() with an undeclared params secret = nil, want an error")
+	}
+}
+
 // TestValidateSteps covers pipeline (composed-command) step validation: endpoint
 // references, path-or-endpoint presence, and jq parseability (incl. recursive
 // on_error), each wrapped as *ConfigError so it classifies to exit 2.

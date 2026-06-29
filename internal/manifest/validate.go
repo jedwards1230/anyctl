@@ -289,8 +289,13 @@ func validateAuth(a Auth, secrets map[string]Secret) error {
 			return fmt.Errorf("auth oauth2-client-credentials requires client_id and client_secret templates")
 		}
 	}
-	// Verify {secret.X} references resolve to a declared secret.
-	for _, tmpl := range []string{a.Value, a.Username, a.Password, a.TokenURL, a.ClientID, a.ClientSecret} {
+	// Verify {secret.X} references resolve to a declared secret. Covers every
+	// credential-bearing field across strategies: the overloaded value/username/
+	// password, the oauth2 token_url/client_id/client_secret aliases, and the
+	// ws-login params templates (e.g. truenas: params: ["{secret.api_key}"]).
+	tmpls := []string{a.Value, a.Username, a.Password, a.TokenURL, a.ClientID, a.ClientSecret}
+	tmpls = append(tmpls, a.Params...)
+	for _, tmpl := range tmpls {
 		for _, ref := range secretRefs(tmpl) {
 			if _, ok := secrets[ref]; !ok {
 				return fmt.Errorf("auth references undeclared secret %q", ref)
