@@ -121,10 +121,15 @@ func executePipeline(
 					Getenv:  getenv,
 				}
 				onErrEp, epErr := resolveStepEndpoint(svc, *step.OnError)
-				if epErr == nil {
-					if err := runStep(ctx, req, svc, *step.OnError, onErrEp, onErrEnv, accVars, stderr); err != nil {
-						_, _ = fmt.Fprintf(stderr, "labctl: on_error step %q failed: %v (continuing)\n", stepID, err)
-					}
+				if epErr != nil {
+					// The on_error handler can't run (its endpoint won't resolve).
+					// Log that and surface the ORIGINAL step failure rather than
+					// silently continuing — a failed pipeline must not exit 0.
+					_, _ = fmt.Fprintf(stderr, "labctl: on_error step %q: resolve endpoint: %v\n", stepID, epErr)
+					return nil, fmt.Errorf("step %s: %w", stepID, stepErr)
+				}
+				if err := runStep(ctx, req, svc, *step.OnError, onErrEp, onErrEnv, accVars, stderr); err != nil {
+					_, _ = fmt.Fprintf(stderr, "labctl: on_error step %q failed: %v (continuing)\n", stepID, err)
 				}
 				continue
 			}

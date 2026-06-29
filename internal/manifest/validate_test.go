@@ -20,6 +20,132 @@ func TestValidateWrapsConfigError(t *testing.T) {
 	}
 }
 
+// TestValidateOAuth2FieldAliases proves the oauth2 strategy validates whichever
+// of the new (token_url/client_id/client_secret) or legacy (value/username/
+// password) pair is set — both forms pass, and the helpers prefer the new field
+// when present (back-compat).
+func TestValidateOAuth2FieldAliases(t *testing.T) {
+	mk := func(a Auth) *Service {
+		return &Service{Name: "x", Auth: a}
+	}
+	cases := []struct {
+		name string
+		auth Auth
+		ok   bool
+	}{
+		{
+			name: "new fields",
+			auth: Auth{Strategy: "oauth2-client-credentials", TokenURL: "https://idp/token", ClientID: "cid", ClientSecret: "sec"},
+			ok:   true,
+		},
+		{
+			name: "legacy fields",
+			auth: Auth{Strategy: "oauth2-client-credentials", Value: "https://idp/token", Username: "cid", Password: "sec"},
+			ok:   true,
+		},
+		{
+			name: "missing token_url",
+			auth: Auth{Strategy: "oauth2-client-credentials", ClientID: "cid", ClientSecret: "sec"},
+			ok:   false,
+		},
+		{
+			name: "missing client_secret",
+			auth: Auth{Strategy: "oauth2-client-credentials", TokenURL: "https://idp/token", ClientID: "cid"},
+			ok:   false,
+		},
+		{
+			// Mixed form: token_url from the new field, client_id from the legacy
+			// field — each pair resolves via its own fallback, so it's valid.
+			name: "mixed valid: new token_url + legacy username/password",
+			auth: Auth{Strategy: "oauth2-client-credentials", TokenURL: "https://idp/token", Username: "cid", Password: "sec"},
+			ok:   true,
+		},
+		{
+			// Mixed form with a hole: new token_url + legacy username, but neither
+			// client_secret nor password set — must fail (secret half is empty).
+			name: "mixed invalid: new token_url + legacy username, no secret",
+			auth: Auth{Strategy: "oauth2-client-credentials", TokenURL: "https://idp/token", Username: "cid"},
+			ok:   false,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := Validate(mk(tc.auth))
+			if tc.ok && err != nil {
+				t.Fatalf("Validate() = %v, want nil", err)
+			}
+			if !tc.ok && err == nil {
+				t.Fatal("Validate() = nil, want an error")
+			}
+		})
+	}
+
+	// Helper precedence: the new field wins when both are set.
+	a := Auth{TokenURL: "new-url", Value: "old-url", ClientID: "new-id", Username: "old-id", ClientSecret: "new-sec", Password: "old-sec"}
+	if got := a.OAuth2TokenURL(); got != "new-url" {
+		t.Errorf("OAuth2TokenURL() = %q, want new-url", got)
+	}
+	if got := a.OAuth2ClientID(); got != "new-id" {
+		t.Errorf("OAuth2ClientID() = %q, want new-id", got)
+	}
+	if got := a.OAuth2ClientSecret(); got != "new-sec" {
+		t.Errorf("OAuth2ClientSecret() = %q, want new-sec", got)
+	}
+	// Fallback to the legacy field when the new one is empty.
+	legacy := Auth{Value: "old-url", Username: "old-id", Password: "old-sec"}
+	if got := legacy.OAuth2TokenURL(); got != "old-url" {
+		t.Errorf("OAuth2TokenURL() fallback = %q, want old-url", got)
+	}
+	if got := legacy.OAuth2ClientID(); got != "old-id" {
+		t.Errorf("OAuth2ClientID() fallback = %q, want old-id", got)
+	}
+	if got := legacy.OAuth2ClientSecret(); got != "old-sec" {
+		t.Errorf("OAuth2ClientSecret() fallback = %q, want old-sec", got)
+	}
+
+	// Secret-ref scan covers the NEW alias fields too: a {secret.X} in client_id
+	// must be caught at lint time when X is undeclared (proves the clean names get
+	// the same coverage as value/username/password).
+	undeclared := &Service{
+		Name:    "x",
+		Auth:    Auth{Strategy: "oauth2-client-credentials", TokenURL: "https://idp/token", ClientID: "{secret.cid}", ClientSecret: "sec"},
+		Secrets: map[string]Secret{},
+	}
+	if err := Validate(undeclared); err == nil {
+		t.Error("Validate() = nil, want an error: {secret.cid} in client_id is undeclared")
+	}
+	declared := &Service{
+		Name:    "x",
+		Auth:    Auth{Strategy: "oauth2-client-credentials", TokenURL: "https://idp/token", ClientID: "{secret.cid}", ClientSecret: "sec"},
+		Secrets: map[string]Secret{"cid": {Env: "X_CID"}},
+	}
+	if err := Validate(declared); err != nil {
+		t.Errorf("Validate() = %v, want nil: {secret.cid} in client_id is declared", err)
+	}
+}
+
+// TestValidateAuthParamsSecretRefs proves the {secret.X} scan covers ws-login
+// auth.params (e.g. truenas: params: ["{secret.api_key}"]) — a declared ref
+// passes, an undeclared one fails lint instead of only blowing up at runtime.
+func TestValidateAuthParamsSecretRefs(t *testing.T) {
+	mk := func(params []string, secrets map[string]Secret) *Service {
+		return &Service{
+			Name:      "x",
+			Transport: "jsonrpc-ws",
+			Auth:      Auth{Strategy: "ws-login", Method: "auth.login_with_api_key", Params: params},
+			Secrets:   secrets,
+		}
+	}
+	// Declared secret → passes.
+	if err := Validate(mk([]string{"{secret.api_key}"}, map[string]Secret{"api_key": {Env: "X_API_KEY"}})); err != nil {
+		t.Fatalf("Validate() with a declared params secret = %v, want nil", err)
+	}
+	// Undeclared secret → fails.
+	if err := Validate(mk([]string{"{secret.api_key}"}, map[string]Secret{})); err == nil {
+		t.Fatal("Validate() with an undeclared params secret = nil, want an error")
+	}
+}
+
 // TestValidateSteps covers pipeline (composed-command) step validation: endpoint
 // references, path-or-endpoint presence, and jq parseability (incl. recursive
 // on_error), each wrapped as *ConfigError so it classifies to exit 2.
