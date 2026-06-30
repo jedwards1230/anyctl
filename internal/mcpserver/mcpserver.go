@@ -635,7 +635,7 @@ func executeAndRender(
 	// StructuredContent is additive (the text above is unchanged, always the
 	// fallback) and READ-tool only: a write tool's result stays text-only.
 	if !c.Write {
-		structured, structErr := buildStructuredContent(svc, c, res.Body, res.Output, renderOpts)
+		structured, structErr := buildStructured(svc, c, res.Body, res.Output, renderOpts)
 		if structErr != nil {
 			// output.Render already succeeded against the SAME body/opts, so this
 			// should not happen in practice; degrade to text-only rather than
@@ -668,6 +668,16 @@ type structuredLabctl struct {
 	Title   string `json:"title"`
 	UI      any    `json:"ui"`
 }
+
+// buildStructured is the structured-content builder executeAndRender invokes.
+// It is an overridable package variable (rather than a direct call to
+// buildStructuredContent) ONLY so a test can force the defensive
+// degrade-to-text-only branch: because buildStructuredContent and output.Render
+// share the same decode+jq machinery (output.Filtered mirrors output.Render),
+// in production they succeed or fail together, so that branch is otherwise
+// unreachable. Production behaviour is unchanged — the default is the real
+// builder.
+var buildStructured = buildStructuredContent
 
 // buildStructuredContent computes the StructuredContent wrapper for a
 // READ-tool result. result is the SAME value the text rendering is derived

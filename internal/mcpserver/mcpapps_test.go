@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	mcp "github.com/modelcontextprotocol/go-sdk/mcp"
@@ -346,5 +347,102 @@ func TestStructuredContentCarriesManifestUIHints(t *testing.T) {
 	sort, ok := ui["sort"].(map[string]any)
 	if !ok || sort["by"] != "id" || sort["dir"] != "desc" {
 		t.Errorf("labctl.ui.sort = %v, want {by:id dir:desc}", ui["sort"])
+	}
+}
+
+// loadedWithOutput builds a one-service ("testsvc") / one-command ("ping": GET
+// /ping) *manifest.Loaded pointing at baseURL, with the command's Output set to
+// out — so a test can exercise a default_filter / mode without touching the
+// shared buildTestLoaded fixture.
+func loadedWithOutput(baseURL string, out manifest.Output) *manifest.Loaded {
+	return &manifest.Loaded{
+		Config: manifest.Config{
+			Secret: manifest.SecretResolver{Command: []string{"op", "read", "{ref}"}},
+		},
+		Services: map[string]*manifest.Service{
+			"testsvc": {
+				Name:      "testsvc",
+				BaseURL:   baseURL,
+				Transport: "http",
+				Commands: map[string]manifest.Command{
+					"ping": {Help: "test ping", Method: "GET", Path: "/ping", Output: out},
+				},
+			},
+		},
+	}
+}
+
+// TestStructuredContentResultMatchesTextRendering is the end-to-end counterpart
+// to output_test's TestFilteredMatchesRenderSingleResult: it locks the contract
+// (mcpserver.go's buildStructuredContent) that StructuredContent.result is the
+// SAME value the human-facing text Content is derived from, all the way through
+// a real MCP tool call. It exercises default_filter, a --filter override, scalar
+// mode, and --raw — the four flag paths most at risk of Render/Filtered drift —
+// and asserts the text output, parsed to JSON, marshals identically to
+// StructuredContent.result. Without this, a future refactor could let agents see
+// inconsistent text vs structured data without any test failing.
+func TestStructuredContentResultMatchesTextRendering(t *testing.T) {
+	cases := []struct {
+		name string
+		body string
+		out  manifest.Output
+		args map[string]any
+	}{
+		{"default filter", `{"items":[{"id":1},{"id":2}],"total":2}`, manifest.Output{DefaultFilter: ".items"}, map[string]any{}},
+		{"filter override", `{"items":[{"id":1},{"id":2}],"total":2}`, manifest.Output{DefaultFilter: ".items"}, map[string]any{"filter": ".total"}},
+		{"scalar mode", `{"version":"6.0.4"}`, manifest.Output{DefaultFilter: ".version", Mode: "scalar"}, map[string]any{}},
+		{"raw flag", `{"status":"ok","nested":{"a":1}}`, manifest.Output{DefaultFilter: ".status"}, map[string]any{"raw": true}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			ts := jsonServer(t, tc.body)
+			loaded := loadedWithOutput(ts.URL, tc.out)
+			tracer := noop.NewTracerProvider().Tracer("test")
+			srv := mcpserver.BuildServer(loaded, loaded.Config, "v0", tracer, nil, mcpserver.Options{})
+			session := connectClientServer(t, srv)
+
+			result, err := session.CallTool(context.Background(), &mcp.CallToolParams{
+				Name:      "testsvc_ping",
+				Arguments: tc.args,
+			})
+			if err != nil {
+				t.Fatalf("CallTool: %v", err)
+			}
+			if result.IsError {
+				t.Fatalf("tool returned error: %v", result.Content)
+			}
+			if result.StructuredContent == nil {
+				t.Fatal("expected StructuredContent on a read-tool call, got nil")
+			}
+			if len(result.Content) == 0 {
+				t.Fatal("expected non-empty text Content alongside StructuredContent")
+			}
+			txt, ok := result.Content[0].(*mcp.TextContent)
+			if !ok {
+				t.Fatalf("content[0] type = %T, want *mcp.TextContent", result.Content[0])
+			}
+
+			// Derive the value the text path represents: parse it as JSON, falling
+			// back to the literal string for scalar mode's bare (non-JSON) output —
+			// exactly as TestFilteredMatchesRenderSingleResult does.
+			wantText := strings.TrimRight(txt.Text, "\n")
+			var textVal any
+			if jsonErr := json.Unmarshal([]byte(wantText), &textVal); jsonErr != nil {
+				textVal = wantText
+			}
+			textJSON, err := json.Marshal(textVal)
+			if err != nil {
+				t.Fatalf("marshal text-derived value: %v", err)
+			}
+
+			env := decodeStructured(t, result.StructuredContent)
+			resultJSON, err := json.Marshal(env.Result)
+			if err != nil {
+				t.Fatalf("marshal StructuredContent.result: %v", err)
+			}
+			if string(textJSON) != string(resultJSON) {
+				t.Errorf("StructuredContent.result = %s, want (derived from text Content) %s", resultJSON, textJSON)
+			}
+		})
 	}
 }
