@@ -72,6 +72,8 @@ resources:
 # so the homelab fsGroup:100 convention doesn't apply here.
 podSecurityContext:
   fsGroup: 10001
+  seccompProfile:
+    type: RuntimeDefault
 
 securityContext:
   runAsNonRoot: true
@@ -81,6 +83,24 @@ securityContext:
   readOnlyRootFilesystem: true
   capabilities:
     drop: [ALL]
+  seccompProfile:
+    type: RuntimeDefault
+
+# NetworkPolicy for the MCP pod. The /mcp endpoint has NO app-layer auth, so
+# network reachability IS the access boundary — enable this in any cluster that
+# supports NetworkPolicy. Off by default to keep the chart portable.
+networkPolicy:
+  enabled: false
+  ingress:
+    # Raw NetworkPolicyPeer entries (podSelector/namespaceSelector/ipBlock)
+    # allowed to reach the MCP port. Sources are OR-combined. Empty list while
+    # enabled = default-deny ingress for this pod (no source may reach it).
+    from: []
+  egress:
+    enabled: false
+    # Raw egress rule objects ({to: [...], ports: [...]}). Empty list while
+    # egress.enabled = default-deny egress for this pod.
+    rules: []
 
 nodeSelector: {}
 tolerations: []
