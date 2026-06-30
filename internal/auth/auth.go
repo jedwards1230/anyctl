@@ -1,8 +1,8 @@
 // Package auth applies a manifest's credential strategy to an outgoing HTTP
 // request. Secrets are interpolated from templates at apply time and go into
-// headers (never argv). Static strategies (none/header-key/bearer/basic) are
-// implemented inline; derived-token strategies (oauth2-client-credentials) fetch
-// a short-lived token and cache it on disk.
+// headers (never argv). Static strategies (none/header-key/bearer/basic/ws-login)
+// are implemented inline; derived-token strategies (oauth2-client-credentials)
+// fetch a short-lived token and cache it on disk.
 package auth
 
 import (

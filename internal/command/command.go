@@ -1,5 +1,5 @@
 // Package command holds the format-neutral Command model that every producer
-// emits — the hand-written commands: block today, OpenAPI inference in Phase 2 —
+// emits — the hand-written commands: block and OpenAPI inference (spec:) —
 // and the executor consumes. Keeping one model means CLI and MCP behave
 // identically regardless of where a command came from.
 package command

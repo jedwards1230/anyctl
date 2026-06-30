@@ -1,5 +1,5 @@
-// Package transport carries a resolved request over the wire. Phase 1 implements
-// http (curl-equivalent); jsonrpc-ws lands in a later phase. The transport is
+// Package transport carries a resolved request over the wire. It implements two
+// transports — http (curl-equivalent) and jsonrpc-ws. The transport is
 // dumb on purpose — template expansion, auth, and pagination happen above it.
 package transport
 

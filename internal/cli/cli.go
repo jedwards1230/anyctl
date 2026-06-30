@@ -132,7 +132,7 @@ func (r *runner) newSvcCmd(loaded *manifest.Loaded, loadErr error) *cobra.Comman
 		Short:   "run a configured service's API commands",
 		Long: "Run a configured service's API commands.\n\n" +
 			"Each service is a manifest under services/; built-ins (init, lint, list,\n" +
-			"doctor, mcp, version, self-update) live at the top level. Bare `labctl svc`\n" +
+			"doctor, catalog, mcp, version, self-update) live at the top level. Bare `labctl svc`\n" +
 			"lists the configured services (same as `labctl list`).",
 		Example: "  labctl svc                      # list configured services\n" +
 			"  labctl svc radarr list          # a named command\n" +
