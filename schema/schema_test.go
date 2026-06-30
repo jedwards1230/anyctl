@@ -117,6 +117,30 @@ func TestKnownInvalidManifestsFailSchema(t *testing.T) {
 			yaml: "name: x\nauth:\n  strategy: header-key\n  value: \"{secret.k}\"\n",
 		},
 		{
+			name: "bearer missing value",
+			yaml: "name: x\nauth:\n  strategy: bearer\n",
+		},
+		{
+			name: "basic missing username",
+			yaml: "name: x\nauth:\n  strategy: basic\n  password: p\n",
+		},
+		{
+			name: "basic missing password",
+			yaml: "name: x\nauth:\n  strategy: basic\n  username: u\n",
+		},
+		{
+			name: "oauth2-client-credentials missing token_url and value",
+			yaml: "name: x\nauth:\n  strategy: oauth2-client-credentials\n  client_id: c\n  client_secret: s\n",
+		},
+		{
+			name: "oauth2-client-credentials missing client_id and username",
+			yaml: "name: x\nauth:\n  strategy: oauth2-client-credentials\n  token_url: t\n  client_secret: s\n",
+		},
+		{
+			name: "oauth2-client-credentials missing client_secret and password",
+			yaml: "name: x\nauth:\n  strategy: oauth2-client-credentials\n  token_url: t\n  client_id: c\n",
+		},
+		{
 			name: "unknown top-level key",
 			yaml: "name: x\nbaseurl: https://example.test\n",
 		},
