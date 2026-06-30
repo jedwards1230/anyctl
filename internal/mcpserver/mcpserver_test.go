@@ -963,3 +963,70 @@ func TestCollidingCatalogToolNamesSanitized(t *testing.T) {
 		t.Errorf("expected unchanged tool name radarr_list for a non-colliding service; got %v", names)
 	}
 }
+
+// TestNamedToolRegistrationDedupesAgainstSanitizedSelector proves the named
+// (manifest-command) registration loop guards against the exact collision
+// described in mcpserver.go's selectorToolPrefix doc comment: a sanitized
+// qualified selector ("cat1:foo" -> tool-name prefix "cat1-foo") must not
+// silently overwrite a LITERAL service's tools already registered under that
+// same name ("cat1-foo"). This mirrors registerVerbTools' identical
+// registered[name] guard, now applied to the named-command loop too.
+func TestNamedToolRegistrationDedupesAgainstSanitizedSelector(t *testing.T) {
+	literal := &manifest.Service{
+		Name:      "cat1-foo",
+		BaseURL:   "http://example.com",
+		Transport: "http",
+		Commands: map[string]manifest.Command{
+			"status": {Help: "literal service status", Method: "GET", Path: "/literal-status"},
+		},
+	}
+	qualified := &manifest.Service{
+		Name:      "foo",
+		BaseURL:   "http://example.com",
+		Transport: "http",
+		Commands: map[string]manifest.Command{
+			"status": {Help: "qualified catalog service status", Method: "GET", Path: "/qualified-status"},
+		},
+	}
+	loaded := &manifest.Loaded{
+		Config: manifest.Config{
+			Secret: manifest.SecretResolver{Command: []string{"op", "read", "{ref}"}},
+		},
+		// "cat1-foo" sorts before "cat1:foo" ('-' < ':'), so CanonicalNames
+		// visits the literal service first — it must win the tool name.
+		Services: map[string]*manifest.Service{
+			"cat1-foo": literal,
+			"cat1:foo": qualified,
+		},
+	}
+	tracer := noop.NewTracerProvider().Tracer("test")
+
+	var srv *mcp.Server
+	func() {
+		defer func() {
+			if r := recover(); r != nil {
+				t.Fatalf("BuildServer panicked on a sanitized-selector/literal-service name collision: %v", r)
+			}
+		}()
+		srv = mcpserver.BuildServer(loaded, loaded.Config, "v0", tracer, nil, mcpserver.Options{})
+	}()
+
+	session := connectClientServer(t, srv)
+	defer func() { _ = session.Close() }()
+
+	var matches []mcp.Tool
+	for tool, err := range session.Tools(context.Background(), nil) {
+		if err != nil {
+			t.Fatalf("Tools iteration: %v", err)
+		}
+		if tool.Name == "cat1-foo_status" {
+			matches = append(matches, *tool)
+		}
+	}
+	if len(matches) != 1 {
+		t.Fatalf("cat1-foo_status registered %d times, want exactly 1 (dedupe guard missing)", len(matches))
+	}
+	if !strings.Contains(matches[0].Description, "literal service status") {
+		t.Errorf("cat1-foo_status description = %q, want the literal service (registered first) to win, not the sanitized-selector alias", matches[0].Description)
+	}
+}

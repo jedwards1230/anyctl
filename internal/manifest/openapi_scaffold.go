@@ -33,19 +33,19 @@ import (
 // caller never receives a manifest that would fail the same gate
 // `catalog add <dir>` applies to every manifest.
 func GenerateManifestFromSpec(name string, specBytes []byte) ([]byte, error) {
-	ops, err := parseOperations(specBytes)
-	if err != nil {
-		return nil, err
-	}
-	if err := checkCommandKeyUniqueness(ops); err != nil {
-		return nil, err
-	}
-	cmds := buildCommands(ops, SpecFilter{})
-
+	// Parse the document exactly once and thread it through operation
+	// extraction, auth-scheme inference, and info extraction below, rather
+	// than re-parsing the same bytes per extraction step.
 	doc, err := buildV3Document(specBytes)
 	if err != nil {
 		return nil, err
 	}
+
+	ops := operationsFromDoc(doc)
+	if err := checkCommandKeyUniqueness(ops); err != nil {
+		return nil, err
+	}
+	cmds := buildCommands(ops, SpecFilter{})
 
 	prefix := envPrefix(name)
 	desc := openapiDescription(doc, name)

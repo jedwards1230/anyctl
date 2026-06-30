@@ -299,10 +299,18 @@ func BuildServer(
 				continue
 			}
 
+			capturedName := toolName(prefix, id)
+			// A sanitized selector prefix (e.g. "cat1:foo" -> "cat1-foo") can
+			// collide with a literal service's tool name ("cat1-foo_foo"); the
+			// first registration wins rather than silently overwriting it,
+			// mirroring registerVerbTools' identical guard below.
+			if registered[capturedName] {
+				continue
+			}
+
 			// Capture loop variables for the closure.
 			capturedSvc := svc
 			capturedCmd := c
-			capturedName := toolName(prefix, id)
 
 			srv.AddTool(
 				&mcp.Tool{

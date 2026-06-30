@@ -253,8 +253,17 @@ func parseOperations(raw []byte) ([]specOp, error) {
 	if err != nil {
 		return nil, err
 	}
+	return operationsFromDoc(doc), nil
+}
+
+// operationsFromDoc extracts specOps from an already-parsed v3 document — the
+// doc-driven half of parseOperations, factored out so a caller that already
+// holds a built document (GenerateManifestFromSpec) can reuse it instead of
+// re-parsing the same bytes. doc may be nil (an empty/valid spec with no
+// model), which yields no operations.
+func operationsFromDoc(doc *v3.Document) []specOp {
 	if doc == nil || doc.Paths == nil || doc.Paths.PathItems == nil {
-		return nil, nil // empty spec is valid
+		return nil // empty spec is valid
 	}
 
 	var ops []specOp
@@ -285,7 +294,7 @@ func parseOperations(raw []byte) ([]specOp, error) {
 			ops = append(ops, so)
 		}
 	}
-	return ops, nil
+	return ops
 }
 
 // buildCommands converts specOps into Command entries, applying SpecFilter.

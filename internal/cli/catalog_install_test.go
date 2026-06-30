@@ -285,6 +285,165 @@ commands:
 	}
 }
 
+// TestCatalogUpdateOpenAPISource: `catalog update <name>` on an openapi-sourced
+// catalog re-fetches meta.Source and re-materializes the manifest via the same
+// pipeline `catalog add --openapi` uses, picking up an upstream spec change.
+func TestCatalogUpdateOpenAPISource(t *testing.T) {
+	cfg := t.TempDir()
+	t.Setenv("LABCTL_CONFIG_DIR", cfg)
+
+	specPath := filepath.Join(t.TempDir(), "petstore.yaml")
+	if err := os.WriteFile(specPath, []byte(openapiPetstoreFixture), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	var out, errb bytes.Buffer
+	if code := Run([]string{"catalog", "add", specPath, "--openapi", "--name", "petstore"}, &out, &errb); code != exitOK {
+		t.Fatalf("add exit = %d, want 0 (stderr: %s)", code, errb.String())
+	}
+
+	// Change the spec's info.title (still slugifies to a name the installed
+	// catalog's directory does NOT control — meta.Name must win over any
+	// re-inferred name) and add a new operation, then update.
+	const changedSpec = `openapi: "3.0.3"
+info:
+  title: Pet Store v2
+  version: "1.0"
+paths:
+  /pets:
+    get:
+      operationId: listPets
+      summary: List all pets, now with more detail
+      responses:
+        "200": { description: ok }
+  /pets/{id}:
+    get:
+      operationId: getPet
+      summary: Get one pet
+      responses:
+        "200": { description: ok }
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-Api-Key
+security:
+  - ApiKeyAuth: []
+`
+	if err := os.WriteFile(specPath, []byte(changedSpec), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	out.Reset()
+	errb.Reset()
+	if code := Run([]string{"catalog", "update", "petstore"}, &out, &errb); code != exitOK {
+		t.Fatalf("update exit = %d, want 0 (stderr: %s)", code, errb.String())
+	}
+
+	manifestPath := filepath.Join(cfg, "catalogs", "petstore", "petstore.yaml")
+	got, err := os.ReadFile(manifestPath)
+	if err != nil {
+		t.Fatalf("catalog manifest missing after update: %v", err)
+	}
+	// The new operation was picked up...
+	if !bytes.Contains(got, []byte("getpet")) && !bytes.Contains(got, []byte("get-pet")) {
+		t.Errorf("update did not re-materialize the new operation:\n%s", got)
+	}
+	// ...but the catalog/install NAME stayed "petstore" — the directory is the
+	// source of truth, not the spec's (changed) info.title.
+	if _, err := os.Stat(filepath.Join(cfg, "catalogs", "petstore")); err != nil {
+		t.Errorf("catalog dir should still be 'petstore' after update: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(cfg, "catalogs", "pet-store-v2")); err == nil {
+		t.Error("update must not retarget the install to a re-inferred name")
+	}
+}
+
+// TestCatalogUpdateBulkWithOpenAPISource: a bulk `catalog update` (no name)
+// updates an openapi-sourced catalog alongside a dir-sourced one without the
+// openapi case poisoning the exit code or aborting the other catalog's update
+// (the existing per-catalog firstErr pattern).
+func TestCatalogUpdateBulkWithOpenAPISource(t *testing.T) {
+	cfg := t.TempDir()
+	t.Setenv("LABCTL_CONFIG_DIR", cfg)
+
+	dirSrc := filepath.Join(t.TempDir(), "dircat")
+	writeSourceManifest(t, dirSrc, "widget.yaml", portableWidget)
+
+	specPath := filepath.Join(t.TempDir(), "petstore.yaml")
+	if err := os.WriteFile(specPath, []byte(openapiPetstoreFixture), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	var out, errb bytes.Buffer
+	if code := Run([]string{"catalog", "add", dirSrc, "--name", "dircat"}, &out, &errb); code != exitOK {
+		t.Fatalf("add dircat exit = %d (stderr: %s)", code, errb.String())
+	}
+	out.Reset()
+	errb.Reset()
+	if code := Run([]string{"catalog", "add", specPath, "--openapi", "--name", "apicat"}, &out, &errb); code != exitOK {
+		t.Fatalf("add apicat exit = %d (stderr: %s)", code, errb.String())
+	}
+
+	// Change both sources.
+	const changedWidget = `name: widget
+description: an UPDATED widget
+auth: { strategy: none }
+commands:
+  list: { method: GET, path: /list }
+`
+	writeSourceManifest(t, dirSrc, "widget.yaml", changedWidget)
+
+	out.Reset()
+	errb.Reset()
+	if code := Run([]string{"catalog", "update"}, &out, &errb); code != exitOK {
+		t.Fatalf("bulk update exit = %d, want 0 (an openapi catalog must not poison the exit code) (stderr: %s)", code, errb.String())
+	}
+
+	gotWidget, err := os.ReadFile(filepath.Join(cfg, "catalogs", "dircat", "widget.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Contains(gotWidget, []byte("UPDATED")) {
+		t.Errorf("bulk update did not refresh dircat:\n%s", gotWidget)
+	}
+	if _, err := os.Stat(filepath.Join(cfg, "catalogs", "apicat", "apicat.yaml")); err != nil {
+		t.Errorf("bulk update should leave apicat installed: %v", err)
+	}
+}
+
+// TestCatalogUpdateOpenAPIMovedFileErrors: when the recorded local-file source
+// no longer exists, update fails with the fetch error (not a panic) — the same
+// failure shape as a git remote that has gone away.
+func TestCatalogUpdateOpenAPIMovedFileErrors(t *testing.T) {
+	cfg := t.TempDir()
+	t.Setenv("LABCTL_CONFIG_DIR", cfg)
+
+	specPath := filepath.Join(t.TempDir(), "petstore.yaml")
+	if err := os.WriteFile(specPath, []byte(openapiPetstoreFixture), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	var out, errb bytes.Buffer
+	if code := Run([]string{"catalog", "add", specPath, "--openapi", "--name", "petstore"}, &out, &errb); code != exitOK {
+		t.Fatalf("add exit = %d (stderr: %s)", code, errb.String())
+	}
+
+	if err := os.Remove(specPath); err != nil {
+		t.Fatal(err)
+	}
+
+	out.Reset()
+	errb.Reset()
+	if code := Run([]string{"catalog", "update", "petstore"}, &out, &errb); code == exitOK {
+		t.Fatalf("update should fail when the recorded local-file source no longer exists (stderr: %s)", errb.String())
+	}
+	if !bytes.Contains(errb.Bytes(), []byte("petstore")) {
+		t.Errorf("stderr = %q, want it to mention the catalog %q", errb.String(), "petstore")
+	}
+}
+
 // TestCatalogAddRejectsInvalidGitURL: a source that is neither an existing dir nor
 // a valid git URL is a usage error (no process spawned).
 func TestCatalogAddRejectsInvalidGitURL(t *testing.T) {

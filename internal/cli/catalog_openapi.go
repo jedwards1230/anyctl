@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/jedwards1230/labctl/internal/manifest"
+	"github.com/jedwards1230/labctl/internal/transport"
 )
 
 // `catalog add --openapi <source>` materializes a portable manifest from an
@@ -134,17 +135,22 @@ func fetchOpenAPIURL(rawURL string) ([]byte, error) {
 	}
 	resp, err := client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("fetch OpenAPI document %s: %w", rawURL, err)
+		// A transport failure (connection refused, DNS, timeout, …) is a
+		// runtime network problem, not a usage/decode one → exit 5.
+		return nil, &transport.NetworkError{Err: fmt.Errorf("fetch OpenAPI document %s: %w", rawURL, err)}
 	}
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("fetch OpenAPI document %s: HTTP %d", rawURL, resp.StatusCode)
+		// The endpoint answered but did not return the document → decode (exit 6).
+		return nil, &manifest.DecodeError{Err: fmt.Errorf("fetch OpenAPI document %s: HTTP %d", rawURL, resp.StatusCode)}
 	}
 
 	limited := http.MaxBytesReader(nil, resp.Body, openapiMaxBodyBytes)
 	b, err := io.ReadAll(limited)
 	if err != nil {
-		return nil, fmt.Errorf("read OpenAPI document %s (exceeds %d byte limit or connection failed): %w", rawURL, openapiMaxBodyBytes, err)
+		// Exceeding the size cap (or any other body-read failure once the status
+		// is OK) is treated as a malformed/oversized document → decode (exit 6).
+		return nil, &manifest.DecodeError{Err: fmt.Errorf("read OpenAPI document %s (exceeds %d byte limit or connection failed): %w", rawURL, openapiMaxBodyBytes, err)}
 	}
 	return b, nil
 }

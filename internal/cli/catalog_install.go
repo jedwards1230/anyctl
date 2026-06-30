@@ -230,6 +230,11 @@ func (r *runner) updateOne(configDir, name string) error {
 	// The install directory is the source of truth for the name — a hand-edited
 	// lock file must not retarget the install to a different catalog.
 	meta.Name = name
+	meta.UpdatedAt = time.Now().UTC()
+
+	if meta.Type == "openapi" {
+		return r.updateOneOpenAPI(configDir, meta)
+	}
 
 	tmp, err := os.MkdirTemp("", "labctl-catalog-fetch-")
 	if err != nil {
@@ -237,7 +242,6 @@ func (r *runner) updateOne(configDir, name string) error {
 	}
 	defer func() { _ = os.RemoveAll(tmp) }()
 
-	meta.UpdatedAt = time.Now().UTC()
 	fetchDir := meta.Source
 	switch meta.Type {
 	case "dir":
@@ -261,6 +265,35 @@ func (r *runner) updateOne(configDir, name string) error {
 		return err
 	}
 	_, _ = fmt.Fprintf(r.stderr, "updated catalog %q (%s) from %s%s\n", name, countManifests(len(files)), meta.Source, commitSuffix(meta.Commit))
+	return nil
+}
+
+// updateOneOpenAPI re-runs the same pipeline `catalog add --openapi` uses
+// (fetch source → GenerateManifestFromSpec → ValidatePortableManifest) against
+// meta.Source, re-installing the result as meta.Name.yaml. This keeps an
+// openapi-sourced catalog symmetric with dir/git: re-fetch, re-validate
+// fail-closed, re-install — picking up any upstream spec change. A
+// local-file source that has since moved simply errors here (the fetch
+// error), the same as a git remote going away.
+func (r *runner) updateOneOpenAPI(configDir string, meta manifest.CatalogMeta) error {
+	specBytes, err := fetchOpenAPISource(meta.Source)
+	if err != nil {
+		return err
+	}
+	data, err := manifest.GenerateManifestFromSpec(meta.Name, specBytes)
+	if err != nil {
+		return err
+	}
+	// GenerateManifestFromSpec already validates its own output; call the
+	// install-time gate explicitly too, mirroring catalogAddOpenAPI.
+	if _, err := manifest.ValidatePortableManifest(data); err != nil {
+		return err
+	}
+	files := map[string][]byte{meta.Name + ".yaml": data}
+	if err := manifest.InstallCatalog(configDir, meta, files, true); err != nil {
+		return err
+	}
+	_, _ = fmt.Fprintf(r.stderr, "updated catalog %q (1 manifest) from OpenAPI document %s\n", meta.Name, meta.Source)
 	return nil
 }
 

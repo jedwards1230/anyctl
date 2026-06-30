@@ -2,12 +2,17 @@ package cli
 
 import (
 	"bytes"
+	"errors"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/jedwards1230/labctl/internal/manifest"
+	"github.com/jedwards1230/labctl/internal/transport"
 )
 
 const openapiPetstoreFixture = `openapi: "3.0.3"
@@ -207,7 +212,8 @@ func TestFetchOpenAPISourceLocalFile(t *testing.T) {
 }
 
 // TestFetchOpenAPIURLSizeCap confirms a response exceeding the size cap fails
-// rather than being read fully into memory.
+// rather than being read fully into memory, classified as a *manifest.DecodeError
+// (exit 6) — an oversized/malformed document, not a transport failure.
 func TestFetchOpenAPIURLSizeCap(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		chunk := bytes.Repeat([]byte("a"), 1<<20) // 1 MiB per write
@@ -223,17 +229,86 @@ func TestFetchOpenAPIURLSizeCap(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected an error when the response exceeds the size cap")
 	}
+	var decErr *manifest.DecodeError
+	if !errors.As(err, &decErr) {
+		t.Fatalf("size-cap error = %T, want *manifest.DecodeError (exit 6): %v", err, err)
+	}
+	if code := classify(err); code != exitDecode {
+		t.Errorf("classify(size-cap error) = %d, want %d (decode)", code, exitDecode)
+	}
 }
 
-// TestFetchOpenAPIURLNon200 confirms a non-200 response is a clean error.
+// TestFetchOpenAPIURLNon200 confirms a non-200 response is a clean error,
+// classified as a *manifest.DecodeError (exit 6) — the endpoint answered but
+// did not return the document.
 func TestFetchOpenAPIURLNon200(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
 	}))
 	defer srv.Close()
 
-	if _, err := fetchOpenAPIURL(srv.URL); err == nil {
+	_, err := fetchOpenAPIURL(srv.URL)
+	if err == nil {
 		t.Fatal("expected an error for a 404 response")
+	}
+	var decErr *manifest.DecodeError
+	if !errors.As(err, &decErr) {
+		t.Fatalf("non-200 error = %T, want *manifest.DecodeError (exit 6): %v", err, err)
+	}
+	if code := classify(err); code != exitDecode {
+		t.Errorf("classify(non-200 error) = %d, want %d (decode)", code, exitDecode)
+	}
+}
+
+// TestFetchOpenAPIURLNetworkError confirms a genuine transport failure
+// (connection refused) is classified as a *transport.NetworkError (exit 5),
+// not a decode/usage error — dialing a closed listener never gets an HTTP
+// response to classify on status.
+func TestFetchOpenAPIURLNetworkError(t *testing.T) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	addr := ln.Addr().String()
+	if err := ln.Close(); err != nil {
+		t.Fatal(err)
+	}
+	// Nothing is listening on addr anymore — Do() should fail with connection
+	// refused.
+
+	_, err = fetchOpenAPIURL("http://" + addr + "/openapi.yaml")
+	if err == nil {
+		t.Fatal("expected an error dialing a closed listener")
+	}
+	var netErr *transport.NetworkError
+	if !errors.As(err, &netErr) {
+		t.Fatalf("connection-refused error = %T, want *transport.NetworkError (exit 5): %v", err, err)
+	}
+	if code := classify(err); code != exitNetwork {
+		t.Errorf("classify(connection-refused error) = %d, want %d (network)", code, exitNetwork)
+	}
+}
+
+// TestCatalogAddOpenAPINetworkErrorExitCode drives the full `catalog add
+// --openapi` CLI path against an unreachable URL and asserts the process exit
+// code is 5 (network), not the generic exitGeneral fallback.
+func TestCatalogAddOpenAPINetworkErrorExitCode(t *testing.T) {
+	cfg := t.TempDir()
+	t.Setenv("LABCTL_CONFIG_DIR", cfg)
+
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	addr := ln.Addr().String()
+	if err := ln.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	var out, errb bytes.Buffer
+	code := Run([]string{"catalog", "add", "http://" + addr + "/openapi.yaml", "--openapi", "--name", "unreachable"}, &out, &errb)
+	if code != exitNetwork {
+		t.Fatalf("exit = %d, want %d (network) (stderr: %s)", code, exitNetwork, errb.String())
 	}
 }
 
@@ -248,5 +323,26 @@ func TestFetchOpenAPIURLRedirectCap(t *testing.T) {
 
 	if _, err := fetchOpenAPIURL(srv.URL); err == nil {
 		t.Fatal("expected an error for an unbounded redirect chain")
+	}
+}
+
+// TestFetchOpenAPIURLRejectsNonHTTPRedirect confirms a redirect to a
+// non-http(s) scheme (e.g. file:// — an attempted local-file read via
+// redirect) is rejected by the CheckRedirect scheme guard rather than
+// followed, so a malicious/compromised OpenAPI endpoint can't use a 3xx to
+// make labctl read an arbitrary local file.
+func TestFetchOpenAPIURLRejectsNonHTTPRedirect(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Location", "file:///etc/passwd")
+		w.WriteHeader(http.StatusFound)
+	}))
+	defer srv.Close()
+
+	b, err := fetchOpenAPIURL(srv.URL)
+	if err == nil {
+		t.Fatalf("expected the file:// redirect to be rejected, got body: %s", b)
+	}
+	if strings.Contains(err.Error(), "root:") {
+		t.Fatalf("error suggests /etc/passwd was actually read: %v", err)
 	}
 }

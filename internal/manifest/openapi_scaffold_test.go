@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"gopkg.in/yaml.v3"
 )
 
 // apiKeyHeaderSpec is a small OpenAPI 3.0 document with an apiKey-in-header
@@ -399,6 +401,179 @@ paths: {}
 	var cfgErr *ConfigError
 	if !errors.As(err, &cfgErr) {
 		t.Fatalf("swagger 2.0 should be a *ConfigError, got %T: %v", err, err)
+	}
+}
+
+// TestGenerateManifestFromSpecRejectsInjectionAttempts feeds malicious
+// OpenAPI-document content — a securityScheme name, an apiKey header name,
+// and info.title, each carrying embedded newlines, a '#' comment opener, and
+// "base_url:"/"secret(s):" injection attempts — through
+// GenerateManifestFromSpec, then re-parses the generated YAML two ways
+// (ValidatePortableManifest, the same fail-closed gate every catalog source
+// goes through, AND a raw yaml.Unmarshal into both a Service and a
+// map[string]any) to prove no injected text broke out of its field: no
+// base_url, no secret ref, no unexpected top-level key — the malicious text
+// stayed inside a quoted scalar value or a sanitized (newline-stripped)
+// comment.
+func TestGenerateManifestFromSpecRejectsInjectionAttempts(t *testing.T) {
+	const evilPayload = "X-Api-Key\nbase_url: http://evil.example\nsecrets:\n  pwned:\n    ref: op://vault/item/field\n# trailing comment injection"
+
+	// pingPath is the minimal operations block shared by every case, built as
+	// data (not a hand-spliced string) so the fixture itself can never be the
+	// thing that's malformed.
+	pingPath := map[string]any{
+		"/ping": map[string]any{
+			"get": map[string]any{
+				"operationId": "ping",
+				"responses":   map[string]any{"200": map[string]any{"description": "ok"}},
+			},
+		},
+	}
+
+	cases := []struct {
+		name string
+		doc  map[string]any
+		// wantInField is the field on the parsed Service expected to carry the
+		// full, intact malicious payload (proves it stayed contained as a
+		// single scalar value rather than being parsed as new YAML structure).
+		wantInField func(svc *Service) string
+	}{
+		{
+			// The apiKey header name flows directly into auth.header — a real
+			// field, not a comment — so this is the highest-stakes site: a
+			// hand-built (unescaped) "header: " + name line would let an
+			// embedded newline start a new top-level key.
+			name: "apikey-header-name",
+			doc: map[string]any{
+				"openapi": "3.0.3",
+				"info":    map[string]any{"title": "Demo", "version": "1.0"},
+				"paths":   pingPath,
+				"components": map[string]any{
+					"securitySchemes": map[string]any{
+						"ApiKeyAuth": map[string]any{"type": "apiKey", "in": "header", "name": evilPayload},
+					},
+				},
+				"security": []any{map[string]any{"ApiKeyAuth": []any{}}},
+			},
+			wantInField: func(svc *Service) string { return svc.Auth.Header },
+		},
+		{
+			// A securityScheme name labctl can't faithfully map (apiKey in
+			// query) falls back to {strategy: none} with an explanatory
+			// COMMENT that interpolates the scheme name — sanitizeForComment
+			// must strip the newlines so the comment can't smuggle active YAML.
+			name: "security-scheme-name-comment",
+			doc: map[string]any{
+				"openapi": "3.0.3",
+				"info":    map[string]any{"title": "Demo", "version": "1.0"},
+				"paths":   pingPath,
+				"components": map[string]any{
+					"securitySchemes": map[string]any{
+						evilPayload: map[string]any{"type": "apiKey", "in": "query", "name": "api_key"},
+					},
+				},
+				"security": []any{map[string]any{evilPayload: []any{}}},
+			},
+			wantInField: nil, // asserted via the comment, not a Service field
+		},
+		{
+			// info.title flows into description: — also a real field — without
+			// going through sanitizeForComment (only info.description does).
+			name: "info-title",
+			doc: map[string]any{
+				"openapi": "3.0.3",
+				"info":    map[string]any{"title": evilPayload, "version": "1.0"},
+				"paths":   pingPath,
+			},
+			wantInField: func(svc *Service) string { return svc.Description },
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			docBytes, err := yaml.Marshal(tc.doc)
+			if err != nil {
+				t.Fatalf("marshaling test fixture document: %v", err)
+			}
+			out, err := GenerateManifestFromSpec("injecttest", docBytes)
+			if err != nil {
+				t.Fatalf("GenerateManifestFromSpec: %v\n---\n%s", err, docBytes)
+			}
+
+			// Gate 1: the same fail-closed validator every catalog source runs.
+			if _, err := ValidatePortableManifest(out); err != nil {
+				t.Fatalf("ValidatePortableManifest rejected the generated manifest: %v\n---\n%s", err, out)
+			}
+
+			// Gate 2: parse as a generic document and assert no extra top-level
+			// key broke out (in particular, no base_url and no top-level
+			// "pwned"/"secret" key the payload tried to inject).
+			var generic map[string]any
+			if err := yaml.Unmarshal(out, &generic); err != nil {
+				t.Fatalf("yaml.Unmarshal into map[string]any: %v\n---\n%s", err, out)
+			}
+			allowedKeys := map[string]bool{"name": true, "description": true, "env_prefix": true, "auth": true, "secrets": true, "commands": true}
+			for k := range generic {
+				if !allowedKeys[k] {
+					t.Errorf("generated manifest has an unexpected top-level key %q (injection broke out):\n%s", k, out)
+				}
+			}
+			if _, ok := generic["base_url"]; ok {
+				t.Errorf("generated manifest has a base_url key (injection broke out):\n%s", out)
+			}
+
+			// Gate 3: parse into the real Service struct and assert the
+			// payload's structural side effects never materialized.
+			var svc Service
+			if err := yaml.Unmarshal(out, &svc); err != nil {
+				t.Fatalf("yaml.Unmarshal into Service: %v\n---\n%s", err, out)
+			}
+			if svc.BaseURL != "" {
+				t.Errorf("Service.BaseURL = %q, want empty (injection broke out)", svc.BaseURL)
+			}
+			for secretName, s := range svc.Secrets {
+				if s.Ref != "" {
+					t.Errorf("Service.Secrets[%q].Ref = %q, want empty — GenerateManifestFromSpec never emits ref: (injection broke out)", secretName, s.Ref)
+				}
+			}
+			if _, injected := svc.Secrets["pwned"]; injected {
+				t.Errorf("Service.Secrets has the injected %q entry (injection broke out)", "pwned")
+			}
+
+			if tc.wantInField != nil {
+				got := tc.wantInField(&svc)
+				if got != evilPayload {
+					t.Errorf("field = %q, want the full intact payload %q (it must stay a single contained scalar, not be reparsed)", got, evilPayload)
+				}
+			} else {
+				// The comment-fallback case: the sanitized (newline-stripped)
+				// form of the payload should appear across genuine `#` comment
+				// lines, and the raw multi-line payload must NOT appear anywhere
+				// verbatim (that would mean it broke out of the comment). The
+				// explanatory comment is word-wrapped (writeWrappedComment), so
+				// reassemble it by stripping each line's leading "# " and
+				// rejoining with spaces — wrapping only ever replaces an
+				// inter-word space with a newline, so this reconstructs the
+				// original unwrapped text exactly.
+				if strings.Contains(string(out), evilPayload) {
+					t.Errorf("raw multi-line payload appears verbatim in the output — it escaped the comment:\n%s", out)
+				}
+				var commentWords []string
+				for _, line := range strings.Split(string(out), "\n") {
+					trimmed := strings.TrimSpace(line)
+					if content, ok := strings.CutPrefix(trimmed, "#"); ok {
+						if c := strings.TrimSpace(content); c != "" {
+							commentWords = append(commentWords, c)
+						}
+					}
+				}
+				joined := strings.Join(commentWords, " ")
+				sanitized := sanitizeForComment(evilPayload)
+				if !strings.Contains(joined, sanitized) {
+					t.Errorf("expected the sanitized scheme name %q across the wrapped comment lines, got:\n%s", sanitized, joined)
+				}
+			}
+		})
 	}
 }
 
