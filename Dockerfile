@@ -19,19 +19,28 @@ ARG TARGETARCH
 RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
     go build -trimpath -ldflags "-s -w -X main.version=${VERSION}" -o /out/labctl .
 
-FROM debian:trixie-slim
-ARG OP_VERSION=2.31.1
-ARG TARGETARCH
-# ca-certificates for HTTPS to service APIs + 1Password; op CLI for op:// refs.
+# Pinned to a digest (not the mutable trixie-slim tag) so rebuilds are
+# reproducible and don't silently drift onto a different base.
+FROM debian:trixie-slim@sha256:28de0877c2189802884ccd20f15ee41c203573bd87bb6b883f5f46362d24c5c2
+# Install the 1Password CLI (op) from 1Password's official GPG-signed APT repo.
+# The signed repo gives supply-chain integrity verification (CWE-494) without
+# pinning brittle per-arch checksums that break on every op bump. arch is
+# derived per build platform, so this works under buildx for amd64 + arm64.
+# ca-certificates stays for runtime HTTPS to service APIs + 1Password.
 RUN set -eux; \
     apt-get update; \
-    apt-get install -y --no-install-recommends ca-certificates curl unzip; \
+    apt-get install -y --no-install-recommends ca-certificates curl gnupg; \
     update-ca-certificates; \
-    curl -sSfLo /tmp/op.zip "https://cache.agilebits.com/dist/1P/op2/pkg/v${OP_VERSION}/op_linux_${TARGETARCH}_v${OP_VERSION}.zip"; \
-    unzip -od /usr/local/bin /tmp/op.zip op; \
-    chmod 0755 /usr/local/bin/op; \
-    apt-get purge -y --auto-remove curl unzip; \
-    rm -rf /tmp/op.zip /var/lib/apt/lists/*
+    arch="$(dpkg --print-architecture)"; \
+    curl -sSf https://downloads.1password.com/linux/keys/1password.asc \
+      | gpg --dearmor --output /usr/share/keyrings/1password-archive-keyring.gpg; \
+    printf 'deb [arch=%s signed-by=/usr/share/keyrings/1password-archive-keyring.gpg] https://downloads.1password.com/linux/debian/%s stable main\n' "$arch" "$arch" \
+      > /etc/apt/sources.list.d/1password.list; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends 1password-cli; \
+    op --version; \
+    apt-get purge -y --auto-remove curl gnupg; \
+    rm -rf /var/lib/apt/lists/*
 COPY --from=build /out/labctl /usr/local/bin/labctl
 # labctl reads config.yaml + profile.yaml from LABCTL_CONFIG_DIR; service
 # manifests are embedded in the binary. HOME holds op/oauth2 caches (kept
