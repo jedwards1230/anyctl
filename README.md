@@ -51,8 +51,8 @@ They are the default catalog — `labctl catalog list` shows them, and a local
 `services/<name>.yaml` of the same name *overrides* the embedded one. `list`
 marks each service `embedded`, `local`, or `override`. Bind the catalog to your
 machine with a `profile.yaml` (below); reach for a local `services/` file only to
-add a new service or fork an embedded one (`labctl catalog show <name> >
-services/<name>.yaml`).
+add a new service or fork an embedded one — `labctl catalog edit <name>` seeds the
+override for you (see [Editing a catalog manifest](#editing-a-catalog-manifest)).
 
 A service ships as a **portable** manifest — it declares *what* the service is
 (commands, auth strategy, secret slots), with no machine-specific endpoint or
@@ -92,7 +92,9 @@ never collide with a built-in like `list` or `doctor`:
 ```sh
 labctl list                           # all services (embedded + local), with source marker
 labctl catalog list                   # the embedded catalog (built-in manifests)
-labctl catalog show radarr            # dump an embedded manifest (fork into services/)
+labctl catalog show radarr            # dump an embedded manifest to stdout
+labctl catalog edit radarr            # seed it into services/ for live editing (no rebuild)
+labctl catalog vendor radarr --catalog-dir ./catalog   # promote an edited override into a repo checkout
 labctl svc                            # same list as `list`, under the svc namespace
 labctl svc tdarr get /api/v2/status   # generic verb passthrough
 labctl svc tdarr status               # a named command, if the manifest defines one
@@ -112,6 +114,35 @@ auth; named commands; pagination; multi-endpoint; jsonrpc-ws) — read any with
 `labctl catalog show <name>`. [`examples/`](examples/) is a **profile-only** config
 dir: no `services/`, just an `examples/profile.yaml` binding all 15 embedded
 services to placeholder hosts (run `LABCTL_CONFIG_DIR=examples labctl lint --strict`).
+
+### Editing a catalog manifest
+
+The binary just ships **sane defaults** — a manifest is plain YAML, and editing
+one is **rebuild-free**. The authoring loop:
+
+```sh
+labctl catalog edit authentik          # seed the FULL manifest into services/authentik.yaml
+$EDITOR "$(labctl catalog edit authentik)"   # …or open it straight away (prints the path)
+# iterate: edit services/authentik.yaml, re-run `labctl svc authentik …` — no recompile.
+# the override shadows the embedded manifest by name at every load.
+
+labctl catalog vendor authentik --catalog-dir ./catalog   # when it's right, promote it back
+git add catalog/authentik.yaml && git commit                # …and it ships embedded next release
+```
+
+`catalog edit` copies the **complete** embedded manifest into
+`<config-dir>/services/<name>.yaml`. It seeds a full copy, not a sparse patch,
+because a local override **wholesale replaces** the embedded entry — it is
+validated standalone with no field-level merge, so a partial override would drop
+endpoints or fail validation. It refuses to clobber an in-progress override
+without `--force`, prints the absolute path to stdout, and opens `$VISUAL`/`$EDITOR`
+on the file with `--edit`.
+
+`catalog vendor` is the maintainer half: it promotes an edited override back into a
+labctl repo checkout's `catalog/` source tree (`--catalog-dir` points at it; the
+running binary can't know the repo path). It **validates** the override first — a
+portable manifest with no `base_url`/secret `ref` — so a broken manifest is never
+promoted, and won't overwrite an existing `catalog/<name>.yaml` without `--force`.
 
 ### Portable manifests & profiles
 

@@ -69,7 +69,24 @@ The `truenas` and `sunshine` manifests execute fully.
 
 Embedded catalog (done): 15 portable manifests (top-level `catalog/`) are
 compiled into the binary via `//go:embed`, so consumers no longer vendor copies.
-`labctl catalog list` / `catalog show <name>` inspect/extract them.
+A manifest is plain YAML and editing one is **rebuild-free** — the binary just
+ships sane defaults. The authoring loop:
+
+- `labctl catalog list` / `catalog show <name>` — inspect/dump the embedded manifests.
+- `labctl catalog edit <name>` — seed the **full** embedded manifest into
+  `<config-dir>/services/<name>.yaml`, where it shadows the embedded one at the
+  next load. Iterate live (no recompile). A FULL copy is seeded, not a sparse
+  patch, because a local override **wholesale replaces** the embedded entry
+  (validated standalone, no field-level merge — see `decodeService`/`Validate` in
+  `load.go`); a partial override would drop endpoints or fail validation. Refuses
+  to clobber without `--force`; prints the absolute path; `--edit` opens
+  `$VISUAL`/`$EDITOR`.
+- `labctl catalog vendor <name> [--catalog-dir catalog]` — promote an edited
+  override back into a repo checkout's `catalog/` source tree to commit and ship
+  embedded. Validates first (structural `Validate` — a portable manifest, no
+  `base_url`/secret `ref`), so a broken manifest is never promoted; refuses to
+  clobber without `--force`. `--catalog-dir` is required because the running
+  binary can't know the repo path.
 
 ## Conventions
 
