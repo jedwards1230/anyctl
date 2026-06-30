@@ -654,58 +654,125 @@ func TestVerbNameCollisionGuard(t *testing.T) {
 	}
 }
 
-// TestVerbToolCallDispatch verifies a generic-verb tool call round-trips to the
-// HTTP endpoint with the right method, path, and body, returning the response
-// body as text content.
+// TestVerbToolCallDispatch verifies that a generic-verb tool call round-trips to
+// the HTTP endpoint with the right method, path, query, and body for every
+// exposed verb (get/post/put/patch/delete), returning the response body as text
+// content. One row per verb; the httptest handler captures what reached the
+// upstream so each row can assert method/path/query/body independently.
 func TestVerbToolCallDispatch(t *testing.T) {
-	var gotMethod, gotPath, gotBody string
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		gotMethod = r.Method
-		gotPath = r.URL.Path
-		b, _ := io.ReadAll(r.Body)
-		gotBody = string(b)
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = fmt.Fprint(w, `{"created":true}`)
-	}))
-	defer ts.Close()
-
-	loaded := buildTestLoaded(ts.URL)
-	tracer := noop.NewTracerProvider().Tracer("test")
-	srv := mcpserver.BuildServer(loaded, loaded.Config, "v9.9.9", tracer, nil, mcpserver.Options{})
-	session := connectClientServer(t, srv)
-
-	ctx := context.Background()
-	result, err := session.CallTool(ctx, &mcp.CallToolParams{
-		Name: "testsvc_post",
-		Arguments: map[string]any{
-			"path": "/widgets",
-			"body": `{"name":"gadget"}`,
+	cases := []struct {
+		name      string
+		tool      string
+		args      map[string]any
+		wantMeth  string
+		wantPath  string
+		wantQuery string
+		wantBody  string // substring expected in the upstream request body ("" = none)
+	}{
+		{
+			name:     "get",
+			tool:     "testsvc_get",
+			args:     map[string]any{"path": "/api/users"},
+			wantMeth: "GET",
+			wantPath: "/api/users",
 		},
-	})
-	if err != nil {
-		t.Fatalf("CallTool: %v", err)
+		{
+			name:      "get with query",
+			tool:      "testsvc_get",
+			args:      map[string]any{"path": "/api/users", "query": "page=2"},
+			wantMeth:  "GET",
+			wantPath:  "/api/users",
+			wantQuery: "page=2",
+		},
+		{
+			name:     "post with body",
+			tool:     "testsvc_post",
+			args:     map[string]any{"path": "/widgets", "body": `{"name":"gadget"}`},
+			wantMeth: "POST",
+			wantPath: "/widgets",
+			wantBody: "gadget",
+		},
+		{
+			name:     "put with body",
+			tool:     "testsvc_put",
+			args:     map[string]any{"path": "/api/item/42", "body": `{"name":"updated"}`},
+			wantMeth: "PUT",
+			wantPath: "/api/item/42",
+			wantBody: "updated",
+		},
+		{
+			name:     "patch with body",
+			tool:     "testsvc_patch",
+			args:     map[string]any{"path": "/api/item/42", "body": `{"name":"patched"}`},
+			wantMeth: "PATCH",
+			wantPath: "/api/item/42",
+			wantBody: "patched",
+		},
+		{
+			name:     "delete",
+			tool:     "testsvc_delete",
+			args:     map[string]any{"path": "/api/item/42"},
+			wantMeth: "DELETE",
+			wantPath: "/api/item/42",
+		},
 	}
-	if result.IsError {
-		t.Fatalf("tool returned error: %v", result.Content)
-	}
-	if gotMethod != "POST" {
-		t.Errorf("upstream method = %q, want POST", gotMethod)
-	}
-	if gotPath != "/widgets" {
-		t.Errorf("upstream path = %q, want /widgets", gotPath)
-	}
-	if !strings.Contains(gotBody, "gadget") {
-		t.Errorf("upstream body = %q, want it to contain gadget", gotBody)
-	}
-	if len(result.Content) == 0 {
-		t.Fatal("no content in result")
-	}
-	txt, ok := result.Content[0].(*mcp.TextContent)
-	if !ok {
-		t.Fatalf("content[0] type = %T, want *mcp.TextContent", result.Content[0])
-	}
-	if !strings.Contains(txt.Text, "created") {
-		t.Errorf("result text = %q, want to contain \"created\"", txt.Text)
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var gotMethod, gotPath, gotQuery, gotBody string
+			ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				gotMethod = r.Method
+				gotPath = r.URL.Path
+				gotQuery = r.URL.RawQuery
+				b, _ := io.ReadAll(r.Body)
+				gotBody = string(b)
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = fmt.Fprint(w, `{"ok":true}`)
+			}))
+			defer ts.Close()
+
+			loaded := buildTestLoaded(ts.URL)
+			tracer := noop.NewTracerProvider().Tracer("test")
+			srv := mcpserver.BuildServer(loaded, loaded.Config, "v9.9.9", tracer, nil, mcpserver.Options{})
+			session := connectClientServer(t, srv)
+
+			result, err := session.CallTool(context.Background(), &mcp.CallToolParams{
+				Name:      tc.tool,
+				Arguments: tc.args,
+			})
+			if err != nil {
+				t.Fatalf("CallTool: %v", err)
+			}
+			if result.IsError {
+				t.Fatalf("tool returned error: %v", result.Content)
+			}
+			if gotMethod != tc.wantMeth {
+				t.Errorf("upstream method = %q, want %q", gotMethod, tc.wantMeth)
+			}
+			if gotPath != tc.wantPath {
+				t.Errorf("upstream path = %q, want %q", gotPath, tc.wantPath)
+			}
+			if gotQuery != tc.wantQuery {
+				t.Errorf("upstream query = %q, want %q", gotQuery, tc.wantQuery)
+			}
+			if tc.wantBody == "" {
+				if gotBody != "" {
+					t.Errorf("upstream body = %q, want empty", gotBody)
+				}
+			} else if !strings.Contains(gotBody, tc.wantBody) {
+				t.Errorf("upstream body = %q, want it to contain %q", gotBody, tc.wantBody)
+			}
+			if len(result.Content) == 0 {
+				t.Fatal("no content in result")
+			}
+			txt, ok := result.Content[0].(*mcp.TextContent)
+			if !ok {
+				t.Fatalf("content[0] type = %T, want *mcp.TextContent", result.Content[0])
+			}
+			if !strings.Contains(txt.Text, "ok") {
+				t.Errorf("result text = %q, want to contain \"ok\"", txt.Text)
+			}
+		})
 	}
 }
 
@@ -726,6 +793,41 @@ func TestVerbToolCallMissingPath(t *testing.T) {
 	}
 	if !result.IsError {
 		t.Errorf("expected IsError=true for missing path, got false; content: %v", result.Content)
+	}
+}
+
+// TestVerbCallMissingMethod verifies a jsonrpc-ws `call` with no method returns a
+// tool-level error: command.Verb rejects the empty method before engine.Execute
+// is reached, so no ws connection is attempted (the dummy BaseURL is never
+// dialed) and there is no protocol error.
+func TestVerbCallMissingMethod(t *testing.T) {
+	svc := &manifest.Service{
+		Name:      "truenas",
+		BaseURL:   "ws://127.0.0.1:1", // never dialed: command.Verb errors first
+		Transport: "jsonrpc-ws",
+		Commands: map[string]manifest.Command{
+			"info": {Help: "system info", Method: "system.info"},
+		},
+	}
+	loaded := &manifest.Loaded{
+		Config: manifest.Config{
+			Secret: manifest.SecretResolver{Command: []string{"op", "read", "{ref}"}},
+		},
+		Services: map[string]*manifest.Service{"truenas": svc},
+	}
+	tracer := noop.NewTracerProvider().Tracer("test")
+	srv := mcpserver.BuildServer(loaded, loaded.Config, "v0", tracer, nil, mcpserver.Options{})
+	session := connectClientServer(t, srv)
+
+	result, err := session.CallTool(context.Background(), &mcp.CallToolParams{
+		Name:      "truenas_call",
+		Arguments: map[string]any{}, // no method
+	})
+	if err != nil {
+		t.Fatalf("CallTool protocol error (want tool-level error): %v", err)
+	}
+	if !result.IsError {
+		t.Errorf("expected IsError=true for missing method, got false; content: %v", result.Content)
 	}
 }
 
