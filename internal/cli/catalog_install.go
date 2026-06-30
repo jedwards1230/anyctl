@@ -35,31 +35,47 @@ var gitRefPattern = regexp.MustCompile(`^[A-Za-z0-9._/-]+$`)
 
 func (r *runner) cmdCatalogAdd() *cobra.Command {
 	var name, ref string
-	var force bool
+	var force, openapi bool
 	cmd := &cobra.Command{
-		Use:   "add <source> [--name <name>] [--ref <ref>] [--force]",
-		Short: "install a named catalog of portable manifests from a dir or git URL",
+		Use:   "add <source> [--name <name>] [--ref <ref>] [--force] [--openapi]",
+		Short: "install a named catalog of portable manifests from a dir, git URL, or OpenAPI document",
 		Long: "Install a named catalog of portable manifests under\n" +
-			"<config-dir>/catalogs/<name>/. <source> is either an existing local directory\n" +
-			"or a git URL (https/http/ssh/git/file:// or scp-style user@host:path).\n\n" +
-			"Every top-level *.yaml/*.yml in the source is validated to be a PORTABLE\n" +
+			"<config-dir>/catalogs/<name>/. <source> is either an existing local directory,\n" +
+			"a git URL (https/http/ssh/git/file:// or scp-style user@host:path), or — with\n" +
+			"--openapi — an OpenAPI 3.x document (an http(s):// URL or a local file).\n\n" +
+			"Every top-level *.yaml/*.yml in a dir/git source is validated to be a PORTABLE\n" +
 			"manifest — no base_url, no secret ref — before anything is written; one bad\n" +
 			"manifest rejects the whole add. A git source is pinned to the resolved commit\n" +
 			"SHA, so an installed catalog is a reproducible, inert bundle until profile.yaml\n" +
 			"binds it.\n\n" +
+			"--openapi materializes a single-service portable manifest from the document:\n" +
+			"its operations become commands: and its security schemes are inferred into an\n" +
+			"auth: block on a best-effort basis (anything that can't be faithfully mapped\n" +
+			"falls back to `auth: { strategy: none }` with a comment explaining what to wire\n" +
+			"by hand). The spec is parsed once at add-time; it is NOT vendored and no spec:\n" +
+			"reference is kept — the installed manifest stands alone. --ref does not apply\n" +
+			"to an --openapi source (it is git-only).\n\n" +
 			"The catalog name defaults to the dir/repo basename (a trailing .git is\n" +
-			"stripped); pass --name to override, or if the inferred name is not a valid\n" +
-			"single path segment. --ref selects a git branch/tag/commit. --force replaces\n" +
-			"an already-installed catalog of the same name.",
+			"stripped) — or, with --openapi, the document's info.title, slugified. Pass\n" +
+			"--name to override, or if the inferred name is not a valid single path segment.\n" +
+			"--ref selects a git branch/tag/commit. --force replaces an already-installed\n" +
+			"catalog of the same name.",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			r.curCommand = "catalog"
+			if openapi {
+				if ref != "" {
+					return &usageError{"--ref is git-only and cannot be combined with --openapi"}
+				}
+				return r.catalogAddOpenAPI(args[0], name, force)
+			}
 			return r.catalogAdd(args[0], name, ref, force)
 		},
 	}
-	cmd.Flags().StringVar(&name, "name", "", "catalog name (default: dir/repo basename)")
+	cmd.Flags().StringVar(&name, "name", "", "catalog name (default: dir/repo basename, or the OpenAPI document's title with --openapi)")
 	cmd.Flags().StringVar(&ref, "ref", "", "git branch, tag, or commit to check out (git sources only)")
 	cmd.Flags().BoolVar(&force, "force", false, "replace an already-installed catalog of the same name")
+	cmd.Flags().BoolVar(&openapi, "openapi", false, "treat <source> as an OpenAPI 3.x document (http(s):// URL or local file) and materialize a manifest from it")
 	return cmd
 }
 
