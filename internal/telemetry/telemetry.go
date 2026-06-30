@@ -6,8 +6,8 @@
 // Tempo. Shutdown flushes with a short timeout so a slow collector can never
 // hang the CLI.
 //
-// This is the CLI face; the long-running MCP server (a later phase) reuses the
-// same provider and is where span-per-tool-call and metrics earn their keep.
+// The CLI emits one span per invocation; the MCP server reuses the same
+// provider and emits one span per tool call. Metrics remain future work.
 package telemetry
 
 import (

@@ -6,7 +6,7 @@ a manifest edit, never a recompile.
 
 `labctl` replaces a pile of bespoke per-service `curl`/`jq`/auth/pagination shell
 wrappers with one static Go binary a human runs at a shell, an agent calls over
-the CLI, and (soon) an agent calls over MCP — all from the same config.
+the CLI, and an agent calls over MCP — all from the same config.
 
 ## Install
 
