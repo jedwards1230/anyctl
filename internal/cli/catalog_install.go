@@ -169,7 +169,7 @@ func (r *runner) catalogAdd(source, name, ref string, force bool) error {
 		meta.Commit = commit
 	}
 
-	files, err := r.collectAndValidate(fetchDir, source, name)
+	files, err := r.collectAndValidate(fetchDir, source)
 	if err != nil {
 		return err
 	}
@@ -257,7 +257,7 @@ func (r *runner) updateOne(configDir, name string) error {
 		return fmt.Errorf("catalog %q has unknown source type %q", name, meta.Type)
 	}
 
-	files, err := r.collectAndValidate(fetchDir, meta.Source, name)
+	files, err := r.collectAndValidate(fetchDir, meta.Source)
 	if err != nil {
 		return err
 	}
@@ -337,31 +337,22 @@ func (r *runner) catalogInstalled() error {
 // allowed — both stay addressable via their qualified "<catalog>:<service>"
 // selector; the bare name becomes ambiguous (see manifest.Loaded.Ambiguous) and
 // is resolved at load/lookup time, not blocked here.
-func (r *runner) collectAndValidate(fetchDir, source, _ string) (map[string][]byte, error) {
-	entries, err := yamlEntriesIn(fetchDir)
+func (r *runner) collectAndValidate(fetchDir, source string) (map[string][]byte, error) {
+	entries, err := validateEntries(fetchDir)
 	if err != nil {
 		return nil, fmt.Errorf("read %s: %w", source, err)
 	}
 	files := map[string][]byte{}
-	svcToFile := map[string]string{} // service name → filename, within this source
 	for _, e := range entries {
-		path := filepath.Join(fetchDir, e.Name())
-		b, err := os.ReadFile(path)
-		if err != nil {
-			return nil, fmt.Errorf("read %s: %w", path, err)
+		switch {
+		case e.readErr != nil:
+			return nil, e.readErr
+		case e.valErr != nil:
+			return nil, fmt.Errorf("%s: %w", e.file, e.valErr)
+		case e.dupOf != "":
+			return nil, &usageError{fmt.Sprintf("source defines service %q twice (%s and %s)", e.name, e.dupOf, e.file)}
 		}
-		svcName, err := manifest.ValidatePortableManifest(b)
-		if err != nil {
-			return nil, fmt.Errorf("%s: %w", e.Name(), err)
-		}
-		if svcName == "" {
-			svcName = strings.TrimSuffix(strings.TrimSuffix(e.Name(), ".yaml"), ".yml")
-		}
-		if prev, dup := svcToFile[svcName]; dup {
-			return nil, &usageError{fmt.Sprintf("source defines service %q twice (%s and %s)", svcName, prev, e.Name())}
-		}
-		svcToFile[svcName] = e.Name()
-		files[e.Name()] = b
+		files[e.file] = e.data
 	}
 	if len(files) == 0 {
 		return nil, &usageError{fmt.Sprintf("no manifests (*.yaml) found in %s", source)}
