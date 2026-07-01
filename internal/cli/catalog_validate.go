@@ -7,6 +7,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/jedwards1230/labctl/internal/agentsafety"
 	"github.com/jedwards1230/labctl/internal/manifest"
 	"github.com/spf13/cobra"
 )
@@ -61,7 +62,7 @@ func (r *runner) catalogValidate(dir string) error {
 		return fmt.Errorf("read %s: %w", dir, err)
 	}
 	if len(entries) == 0 {
-		return &usageError{fmt.Sprintf("no manifests (*.yaml/*.yml) found in %s", dir)}
+		return agentsafety.NewUsageError(fmt.Sprintf("no manifests (*.yaml/*.yml) found in %s", dir))
 	}
 
 	results := make([]catalogValidateResult, 0, len(entries))
@@ -88,7 +89,7 @@ func (r *runner) catalogValidate(dir string) error {
 		_, _ = fmt.Fprintf(r.stdout, "ok   %s (%s)\n", res.file, res.name)
 	}
 	if failed > 0 {
-		return &usageError{fmt.Sprintf("%d of %d manifest(s) failed validation in %s", failed, len(results), dir)}
+		return agentsafety.NewUsageError(fmt.Sprintf("%d of %d manifest(s) failed validation in %s", failed, len(results), dir))
 	}
 	return nil
 }

@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/jedwards1230/labctl/internal/agentsafety"
 	"github.com/jedwards1230/labctl/internal/manifest"
 	"github.com/spf13/cobra"
 )
@@ -65,7 +66,7 @@ func (r *runner) cmdCatalogAdd() *cobra.Command {
 			r.curCommand = "catalog"
 			if openapi {
 				if ref != "" {
-					return &usageError{"--ref is git-only and cannot be combined with --openapi"}
+					return agentsafety.NewUsageError("--ref is git-only and cannot be combined with --openapi")
 				}
 				return r.catalogAddOpenAPI(args[0], name, force)
 			}
@@ -144,10 +145,10 @@ func (r *runner) catalogAdd(source, name, ref string, force bool) error {
 		name = inferCatalogName(source, srcType)
 	}
 	if err := manifest.ValidateName(name); err != nil {
-		return &usageError{fmt.Sprintf("inferred catalog name %q is invalid; pass --name with a single path segment (^[a-z0-9][a-z0-9_-]*$)", name)}
+		return agentsafety.NewUsageError(fmt.Sprintf("inferred catalog name %q is invalid; pass --name with a single path segment (^[a-z0-9][a-z0-9_-]*$)", name))
 	}
 	if ref != "" && srcType != "git" {
-		return &usageError{"--ref only applies to a git source"}
+		return agentsafety.NewUsageError("--ref only applies to a git source")
 	}
 
 	tmp, err := os.MkdirTemp("", "labctl-catalog-fetch-")
@@ -187,7 +188,7 @@ func (r *runner) catalogUpdate(name string) error {
 	var targets []string
 	if name != "" {
 		if err := manifest.ValidateName(name); err != nil {
-			return &usageError{err.Error()}
+			return agentsafety.NewUsageError(err.Error())
 		}
 		targets = []string{name}
 	} else {
@@ -222,7 +223,7 @@ func (r *runner) updateOne(configDir, name string) error {
 		return err
 	}
 	if !found {
-		return &usageError{fmt.Sprintf("catalog %q is not installed", name)}
+		return agentsafety.NewUsageError(fmt.Sprintf("catalog %q is not installed", name))
 	}
 	if meta.Source == "" || meta.Type == "" {
 		return fmt.Errorf("catalog %q has no recorded source; remove and re-add it", name)
@@ -350,12 +351,12 @@ func (r *runner) collectAndValidate(fetchDir, source string) (map[string][]byte,
 		case e.valErr != nil:
 			return nil, fmt.Errorf("%s: %w", e.file, e.valErr)
 		case e.dupOf != "":
-			return nil, &usageError{fmt.Sprintf("source defines service %q twice (%s and %s)", e.name, e.dupOf, e.file)}
+			return nil, agentsafety.NewUsageError(fmt.Sprintf("source defines service %q twice (%s and %s)", e.name, e.dupOf, e.file))
 		}
 		files[e.file] = e.data
 	}
 	if len(files) == 0 {
-		return nil, &usageError{fmt.Sprintf("no manifests (*.yaml) found in %s", source)}
+		return nil, agentsafety.NewUsageError(fmt.Sprintf("no manifests (*.yaml) found in %s", source))
 	}
 	return files, nil
 }
@@ -368,7 +369,7 @@ func (r *runner) collectAndValidate(fetchDir, source string) (map[string][]byte,
 func (r *runner) gitFetch(url, ref, tmp string) (string, error) {
 	gitBin, err := exec.LookPath("git")
 	if err != nil {
-		return "", &usageError{"git is required to add a git catalog source but was not found in PATH"}
+		return "", agentsafety.NewUsageError("git is required to add a git catalog source but was not found in PATH")
 	}
 	if err := validateGitURL(url); err != nil {
 		return "", err
@@ -413,11 +414,11 @@ func (r *runner) gitFetch(url, ref, tmp string) (string, error) {
 // is a usage error.
 func classifySource(source string) (string, error) {
 	if source == "" {
-		return "", &usageError{"empty catalog source"}
+		return "", agentsafety.NewUsageError("empty catalog source")
 	}
 	if info, err := os.Stat(source); err == nil {
 		if !info.IsDir() {
-			return "", &usageError{fmt.Sprintf("source %q is a file, not a directory or git URL", source)}
+			return "", agentsafety.NewUsageError(fmt.Sprintf("source %q is a file, not a directory or git URL", source))
 		}
 		return "dir", nil
 	}
@@ -445,17 +446,17 @@ func inferCatalogName(source, srcType string) string {
 // as a git option (leading '-').
 func validateGitURL(url string) error {
 	if url == "" {
-		return &usageError{"empty git URL"}
+		return agentsafety.NewUsageError("empty git URL")
 	}
 	if strings.HasPrefix(url, "-") {
-		return &usageError{fmt.Sprintf("invalid git URL %q: must not start with '-'", url)}
+		return agentsafety.NewUsageError(fmt.Sprintf("invalid git URL %q: must not start with '-'", url))
 	}
 	// Reject anything containing "::" — git reads scheme::path as a transport
 	// helper (ext::/fd:: can run arbitrary commands). This also rejects a bare IPv6
 	// literal, but those aren't valid git remotes without a scheme anyway, so the
 	// over-broad guard is the safe tradeoff here.
 	if strings.Contains(url, "::") {
-		return &usageError{fmt.Sprintf("invalid git URL %q: transport helpers (scheme::) are not allowed", url)}
+		return agentsafety.NewUsageError(fmt.Sprintf("invalid git URL %q: transport helpers (scheme::) are not allowed", url))
 	}
 	for _, scheme := range gitURLSchemes {
 		if strings.HasPrefix(url, scheme) {
@@ -465,16 +466,16 @@ func validateGitURL(url string) error {
 	if scpStyleURL.MatchString(url) {
 		return nil
 	}
-	return &usageError{fmt.Sprintf("source %q is neither an existing directory nor a valid git URL (want https/http/ssh/git/file:// or user@host:path)", url)}
+	return agentsafety.NewUsageError(fmt.Sprintf("source %q is neither an existing directory nor a valid git URL (want https/http/ssh/git/file:// or user@host:path)", url))
 }
 
 // validateGitRef restricts --ref to a safe ref-ish token.
 func validateGitRef(ref string) error {
 	if strings.HasPrefix(ref, "-") {
-		return &usageError{fmt.Sprintf("invalid --ref %q: must not start with '-'", ref)}
+		return agentsafety.NewUsageError(fmt.Sprintf("invalid --ref %q: must not start with '-'", ref))
 	}
 	if !gitRefPattern.MatchString(ref) {
-		return &usageError{fmt.Sprintf("invalid --ref %q: must match ^[A-Za-z0-9._/-]+$", ref)}
+		return agentsafety.NewUsageError(fmt.Sprintf("invalid --ref %q: must match ^[A-Za-z0-9._/-]+$", ref))
 	}
 	return nil
 }

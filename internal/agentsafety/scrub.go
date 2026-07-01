@@ -1,4 +1,15 @@
-package secret
+// Package agentsafety consolidates labctl's agent-safety machinery — secret
+// scrubbing, dry-run preview rendering, the exit-code taxonomy + classifier,
+// the tool-annotation policy, and mutation audit logging — into one SDK-light
+// package shared by the engine, the CLI, and the MCP server.
+//
+// It is deliberately unopinionated: it renders, classifies, and records, but it
+// gates nothing. Write-confirmation, elicitation, and read-only enforcement are
+// NOT part of this package (see CLAUDE.md's "unopinionated executor" principle).
+//
+// Import layering: agentsafety may import transport/secret/manifest/command and
+// the MCP SDK, but none of engine/cli/mcpserver — those import agentsafety.
+package agentsafety
 
 import (
 	"sort"

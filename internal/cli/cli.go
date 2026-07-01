@@ -14,6 +14,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/jedwards1230/labctl/internal/agentsafety"
 	"github.com/jedwards1230/labctl/internal/command"
 	"github.com/jedwards1230/labctl/internal/engine"
 	"github.com/jedwards1230/labctl/internal/manifest"
@@ -78,12 +79,12 @@ func Run(args []string, stdout, stderr io.Writer) int {
 			if r.loadErr != nil {
 				err = r.loadErr
 			} else {
-				err = &usageError{err.Error()}
+				err = agentsafety.NewUsageError(err.Error())
 			}
 		}
 		return reportError(stderr, err, r.flags.jsonErrors, r.curService, r.curCommand)
 	}
-	return exitOK
+	return agentsafety.ExitOK
 }
 
 func (r *runner) newRoot() *cobra.Command {
@@ -149,7 +150,7 @@ func (r *runner) newSvcCmd(loaded *manifest.Loaded, loadErr error) *cobra.Comman
 				return loadErr
 			}
 			if len(args) > 0 {
-				return &usageError{fmt.Sprintf("unknown service %q", args[0])}
+				return agentsafety.NewUsageError(fmt.Sprintf("unknown service %q", args[0]))
 			}
 			return r.listServices(loaded, loadErr)
 		},
@@ -214,7 +215,7 @@ func (r *runner) newServiceCmd(selector string, svc *manifest.Service) *cobra.Co
 		// so return a usageError (exit 2) instead of printing help and exiting 0.
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) > 0 {
-				return &usageError{fmt.Sprintf("unknown command %q for %q", args[0], cmd.CommandPath())}
+				return agentsafety.NewUsageError(fmt.Sprintf("unknown command %q for %q", args[0], cmd.CommandPath()))
 			}
 			return cmd.Help()
 		},
@@ -270,7 +271,7 @@ func (r *runner) execVerb(selector string, svc *manifest.Service, verb string, a
 	r.curService, r.curCommand = selector, verb
 	c, err := command.Verb(svc.Transport, verb, args)
 	if err != nil {
-		return &usageError{err.Error()}
+		return agentsafety.NewUsageError(err.Error())
 	}
 	// For verbs, positional args beyond the path are consumed by the synthesizer;
 	// pass none as templating args.
@@ -316,7 +317,7 @@ func (r *runner) dispatch(svc *manifest.Service, c *command.Command, args []stri
 		ResponseCodec: res.ResponseCodec,
 	}, r.stdout); err != nil {
 		recordSpanError(span, err)
-		return &decodeError{err}
+		return agentsafety.NewDecodeError(err)
 	}
 	span.SetStatus(codes.Ok, "")
 	return nil
