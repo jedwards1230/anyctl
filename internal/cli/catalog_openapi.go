@@ -50,12 +50,12 @@ func (r *runner) catalogAddOpenAPI(source, name string, force bool) error {
 		if inferred == "" {
 			return &usageError{"OpenAPI document has no info.title to infer a service name from; pass --name"}
 		}
-		if err := manifest.ValidateCatalogName(inferred); err != nil {
+		if err := manifest.ValidateName(inferred); err != nil {
 			return &usageError{fmt.Sprintf("inferred name %q from the OpenAPI document's info.title is not a valid service/catalog name (^[a-z0-9][a-z0-9_-]*$); pass --name", inferred)}
 		}
 		name = inferred
-	} else if err := manifest.ValidateCatalogName(name); err != nil {
-		return err
+	} else if err := manifest.ValidateName(name); err != nil {
+		return &usageError{err.Error()}
 	}
 
 	data, err := manifest.GenerateManifestFromSpec(name, specBytes)

@@ -143,7 +143,7 @@ func (r *runner) catalogAdd(source, name, ref string, force bool) error {
 	if name == "" {
 		name = inferCatalogName(source, srcType)
 	}
-	if err := manifest.ValidateCatalogName(name); err != nil {
+	if err := manifest.ValidateName(name); err != nil {
 		return &usageError{fmt.Sprintf("inferred catalog name %q is invalid; pass --name with a single path segment (^[a-z0-9][a-z0-9_-]*$)", name)}
 	}
 	if ref != "" && srcType != "git" {
@@ -186,8 +186,8 @@ func (r *runner) catalogUpdate(name string) error {
 	configDir := r.configDir()
 	var targets []string
 	if name != "" {
-		if err := manifest.ValidateCatalogName(name); err != nil {
-			return err
+		if err := manifest.ValidateName(name); err != nil {
+			return &usageError{err.Error()}
 		}
 		targets = []string{name}
 	} else {
