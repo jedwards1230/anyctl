@@ -324,6 +324,15 @@ a backend (e.g. `aws://`, `vault://`) is three edits in
 [`internal/secret/provider.go`](internal/secret/provider.go) — no engine/CLI
 changes.
 
+A `service_account_token.file` is permission-checked before it is ever read:
+it must be owner-only readable — mode `0600` or `0400`, nothing else — the same
+rigor ssh expects of a private key. Any group or other permission bit (read,
+write, *or* execute) is refused with an actionable error naming the fix
+(`chmod 0600 <path>`). This bites Kubernetes/CI environments that materialize
+the file with a permissive default umask — set the mode explicitly wherever
+you provision it (a K8s Secret volume mount's `defaultMode: 0600`, an Ansible
+`mode: "0600"`, etc.).
+
 ## How it works
 
 - **Two command producers, one model.** Hand-written `commands:` or OpenAPI
