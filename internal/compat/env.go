@@ -9,6 +9,8 @@ import (
 	"fmt"
 	"os"
 	"sync"
+
+	"github.com/jedwards1230/anyctl/internal/brand"
 )
 
 // warnedEnv records which legacy env names have already emitted a deprecation
@@ -46,6 +48,6 @@ func warnLegacyEnv(oldName, newName string) {
 		return
 	}
 	fmt.Fprintf(os.Stderr,
-		"anyctl: %s is deprecated; set %s instead (the legacy name still works for now)\n",
-		oldName, newName)
+		"%s: %s is deprecated; set %s instead (the legacy name still works for now)\n",
+		brand.Name, oldName, newName)
 }

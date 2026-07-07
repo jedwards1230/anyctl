@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/jedwards1230/anyctl/internal/agentsafety"
+	"github.com/jedwards1230/anyctl/internal/brand"
 	"github.com/jedwards1230/anyctl/internal/command"
 	"github.com/jedwards1230/anyctl/internal/manifest"
 	"github.com/jedwards1230/anyctl/internal/mcpserver"
@@ -257,7 +258,7 @@ func (r *runner) cmdMCP() *cobra.Command {
 			"with the MCP endpoint at /mcp and a GET /healthz liveness probe — suitable\n" +
 			"for in-cluster deployment behind an MCP gateway.\n\n" +
 			"Bearer-token auth on the /mcp endpoint (transport-layer access control):\n" +
-			"set ANYCTL_MCP_AUTH_TOKEN or pass --auth-token-file <path> to require an\n" +
+			fmt.Sprintf("set %s or pass --auth-token-file <path> to require an\n", mcpserver.AuthTokenEnv) +
 			"\"Authorization: Bearer <token>\" header on every /mcp request. GET /healthz\n" +
 			"remains unauthenticated (liveness probe). Only meaningful with --http;\n" +
 			"stdio transport ignores this setting.\n\n" +
@@ -298,7 +299,7 @@ func (r *runner) cmdMCP() *cobra.Command {
 			// stdio endpoint is unauthenticated. Mirrors the hard --auth-token-file
 			// guard above, but env vars are often set ambiently so this only warns.
 			if envName := setAuthTokenEnvName(); envName != "" && r.stderr != nil {
-				_, _ = fmt.Fprintf(r.stderr, "anyctl mcp: warning: %s is set but has no effect over stdio (bearer auth only applies to --http)\n", envName)
+				_, _ = fmt.Fprintf(r.stderr, "%s mcp: warning: %s is set but has no effect over stdio (bearer auth only applies to --http)\n", brand.Name, envName)
 			}
 			return mcpserver.Serve(cmd.Context(), r.loaded, r.config, Version, r.tracer, r.stderr, opts)
 		},
@@ -314,9 +315,9 @@ func (r *runner) cmdMCP() *cobra.Command {
 func (r *runner) cmdVersion() *cobra.Command {
 	return &cobra.Command{
 		Use:   "version",
-		Short: "print the anyctl version",
+		Short: fmt.Sprintf("print the %s version", brand.Name),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			_, _ = fmt.Fprintln(r.stdout, "anyctl", Version)
+			_, _ = fmt.Fprintln(r.stdout, brand.Name, Version)
 			return nil
 		},
 	}

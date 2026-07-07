@@ -15,12 +15,13 @@ import (
 	"time"
 
 	"github.com/jedwards1230/anyctl/internal/agentsafety"
+	"github.com/jedwards1230/anyctl/internal/brand"
 	"github.com/jedwards1230/anyctl/internal/transport"
 	"github.com/spf13/cobra"
 )
 
 // selfUpdateRepo is the GitHub owner/repo self-update pulls release assets from.
-const selfUpdateRepo = "jedwards1230/anyctl"
+const selfUpdateRepo = brand.Repo
 
 // selfUpdateOpts holds the parsed flags for `anyctl self-update`.
 type selfUpdateOpts struct {
@@ -85,8 +86,8 @@ func (r *runner) cmdSelfUpdate() *cobra.Command {
 	var opts selfUpdateOpts
 	cmd := &cobra.Command{
 		Use:   "self-update",
-		Short: "update anyctl to the latest GitHub release",
-		Long: "Download the matching GitHub release binary (anyctl-{os}-{arch}), verify\n" +
+		Short: fmt.Sprintf("update %s to the latest GitHub release", brand.Name),
+		Long: fmt.Sprintf("Download the matching GitHub release binary (%s-{os}-{arch}), verify\n", brand.Name) +
 			"its sha256, and atomically replace the running binary in place. Use --check\n" +
 			"to compare versions without downloading. This is a CLI utility — it gates\n" +
 			"nothing on the service-execution path and never escalates privileges.",
@@ -123,7 +124,7 @@ func (u *selfUpdater) run(opts selfUpdateOpts) error {
 		return nil
 	}
 
-	assetName := fmt.Sprintf("anyctl-%s-%s", u.goos, u.goarch)
+	assetName := fmt.Sprintf("%s-%s-%s", brand.Name, u.goos, u.goarch)
 	asset, ok := findAsset(rel.Assets, assetName)
 	if !ok {
 		// No binary for this platform is an environment problem (exit 2).
@@ -287,9 +288,9 @@ func (u *selfUpdater) resolveExe() (string, error) {
 // removes the temp file, leaving the target untouched — never a partial binary.
 func replaceBinary(exe string, data []byte) error {
 	dir := filepath.Dir(exe)
-	tmp, err := os.CreateTemp(dir, ".anyctl-*.new")
+	tmp, err := os.CreateTemp(dir, "."+brand.Name+"-*.new")
 	if err != nil {
-		return fmt.Errorf("creating temp file in %s: %w (re-run with write access to that directory; anyctl does not escalate privileges)", dir, err)
+		return fmt.Errorf("creating temp file in %s: %w (re-run with write access to that directory; %s does not escalate privileges)", dir, err, brand.Name)
 	}
 	tmpName := tmp.Name()
 	cleanup := func() { _ = os.Remove(tmpName) }
@@ -308,7 +309,7 @@ func replaceBinary(exe string, data []byte) error {
 	}
 	if err := os.Rename(tmpName, exe); err != nil {
 		cleanup()
-		return fmt.Errorf("replacing %s: %w (re-run with write access to that path; anyctl does not escalate privileges)", exe, err)
+		return fmt.Errorf("replacing %s: %w (re-run with write access to that path; %s does not escalate privileges)", exe, err, brand.Name)
 	}
 	return nil
 }

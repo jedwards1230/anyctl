@@ -20,6 +20,7 @@ import (
 	"go.opentelemetry.io/otel/trace"
 
 	"github.com/jedwards1230/anyctl/internal/agentsafety"
+	"github.com/jedwards1230/anyctl/internal/brand"
 	"github.com/jedwards1230/anyctl/internal/command"
 	"github.com/jedwards1230/anyctl/internal/engine"
 	"github.com/jedwards1230/anyctl/internal/manifest"
@@ -33,7 +34,7 @@ import (
 // that understands MCP Apps renders this resource and feeds it the tool's
 // CallToolResult (StructuredContent + the original input) via the ext-apps
 // bridge; a host that doesn't falls back to the tool's TextContent.
-const resultResourceURI = "ui://labctl/result"
+const resultResourceURI = "ui://" + brand.FederationName + "/result"
 
 // argRe finds {arg.N} and {argN} placeholders in a template string.
 var argRe = regexp.MustCompile(`\{arg\.?(\d+)\}`)
@@ -124,9 +125,9 @@ func registerResultResource(srv *mcp.Server) {
 	html := string(views.ResultHTML())
 	srv.AddResource(
 		&mcp.Resource{
-			Name:        "labctl result",
-			Title:       "labctl Result View",
-			Description: "Universal adaptive table/record/tree View for labctl read-tool results.",
+			Name:        fmt.Sprintf("%s result", brand.FederationName),
+			Title:       fmt.Sprintf("%s Result View", brand.FederationName),
+			Description: fmt.Sprintf("Universal adaptive table/record/tree View for %s read-tool results.", brand.FederationName),
 			URI:         resultResourceURI,
 			MIMEType:    views.ResultMIMEType,
 		},
@@ -301,7 +302,7 @@ func BuildServer(
 	if version == "" {
 		version = "dev"
 	}
-	srv := mcp.NewServer(&mcp.Implementation{Name: "labctl", Version: version}, nil)
+	srv := mcp.NewServer(&mcp.Implementation{Name: brand.FederationName, Version: version}, nil)
 	registerResultResource(srv)
 
 	// registered tracks every tool name added so far, so a generic verb never
@@ -655,7 +656,8 @@ func executeAndRender(
 // object root (rather than a bare array/scalar) is required because some MCP
 // Apps hosts only accept an object as structuredContent.
 type structuredResult struct {
-	Result any              `json:"result"`
+	Result any `json:"result"`
+	// json key "labctl" is brand.FederationName (pinned); struct tags can't be constants.
 	Labctl structuredLabctl `json:"labctl"`
 }
 

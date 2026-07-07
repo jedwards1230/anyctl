@@ -16,6 +16,7 @@ import (
 	"strings"
 
 	"github.com/jedwards1230/anyctl/internal/agentsafety"
+	"github.com/jedwards1230/anyctl/internal/brand"
 	"github.com/jedwards1230/anyctl/internal/command"
 	"github.com/jedwards1230/anyctl/internal/engine"
 	"github.com/jedwards1230/anyctl/internal/manifest"
@@ -97,22 +98,34 @@ func warnLegacyArgv0(stderr io.Writer) {
 	if stderr == nil || len(os.Args) == 0 {
 		return
 	}
-	if filepath.Base(os.Args[0]) == "labctl" {
-		_, _ = fmt.Fprintln(stderr, "anyctl: invoked as `labctl`; that name is deprecated — the binary is now `anyctl` (the labctl alias still works for now)")
+	if filepath.Base(os.Args[0]) == brand.LegacyName {
+		_, _ = fmt.Fprintf(stderr, "%s: invoked as `%s`; that name is deprecated — the binary is now `%s` (the %s alias still works for now)\n", brand.Name, brand.LegacyName, brand.Name, brand.LegacyName)
 	}
+}
+
+// ex renders a cobra Example block: each line is prefixed with the two-space
+// indent cobra help uses plus the binary name, and the lines are joined with
+// newlines (no trailing newline). Routing the command name through brand.Name
+// keeps every example in lockstep with the tool's identity.
+func ex(lines ...string) string {
+	out := make([]string, len(lines))
+	for i, l := range lines {
+		out[i] = "  " + brand.Name + " " + l
+	}
+	return strings.Join(out, "\n")
 }
 
 func (r *runner) newRoot() *cobra.Command {
 	root := &cobra.Command{
-		Use:           "anyctl",
+		Use:           brand.Name,
 		Short:         "Manifest-driven CLI for homelab service APIs",
-		Long:          "anyctl executes one HTTP/RPC call against a service described by a YAML manifest.\nAdding a service is a manifest edit, never a recompile.",
+		Long:          fmt.Sprintf("%s executes one HTTP/RPC call against a service described by a YAML manifest.\nAdding a service is a manifest edit, never a recompile.", brand.Name),
 		SilenceErrors: true,
 		SilenceUsage:  true,
 		Version:       Version,
 	}
 	pf := root.PersistentFlags()
-	pf.StringVar(&r.flags.configDir, "config-dir", "", "config dir (default: $XDG_CONFIG_HOME/anyctl or ~/.config/anyctl)")
+	pf.StringVar(&r.flags.configDir, "config-dir", "", fmt.Sprintf("config dir (default: $XDG_CONFIG_HOME/%s or ~/.config/%s)", brand.ConfigDirName, brand.ConfigDirName))
 	pf.StringVar(&r.flags.filter, "filter", "", "jq filter over the response (overrides the command default)")
 	pf.BoolVar(&r.flags.raw, "raw", false, "print the raw response, no jq filtering")
 	pf.StringVar(&r.flags.query, "query", "", "extra query string appended to the request")
@@ -149,12 +162,14 @@ func (r *runner) newSvcCmd(loaded *manifest.Loaded, loadErr error) *cobra.Comman
 		Short:   "run a configured service's API commands",
 		Long: "Run a configured service's API commands.\n\n" +
 			"Each service is a manifest under services/; built-ins (init, lint, list,\n" +
-			"doctor, catalog, mcp, version, self-update) live at the top level. Bare `anyctl svc`\n" +
-			"lists the configured services (same as `anyctl list`).",
-		Example: "  anyctl svc                      # list configured services\n" +
-			"  anyctl svc radarr list          # a named command\n" +
-			"  anyctl svc tdarr get /api/v2/status   # generic verb passthrough\n" +
-			"  anyctl s radarr list            # `s` is an alias for `svc`",
+			fmt.Sprintf("doctor, catalog, mcp, version, self-update) live at the top level. Bare `%s svc`\n", brand.Name) +
+			fmt.Sprintf("lists the configured services (same as `%s list`).", brand.Name),
+		Example: ex(
+			"svc                      # list configured services",
+			"svc radarr list          # a named command",
+			"svc tdarr get /api/v2/status   # generic verb passthrough",
+			"s radarr list            # `s` is an alias for `svc`",
+		),
 		// RunE handles bare `anyctl svc` (list services) and an unknown service
 		// argument (usage error). A known service routes to its own subcommand.
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -343,9 +358,9 @@ func (r *runner) dispatch(svc *manifest.Service, c *command.Command, args []stri
 func (r *runner) startSpan(svc *manifest.Service, c *command.Command) (context.Context, trace.Span) {
 	ctx, span := r.tracer.Start(context.Background(), svc.Name+" "+c.ID)
 	attrs := []attribute.KeyValue{
-		attribute.String("anyctl.service", svc.Name),
-		attribute.String("anyctl.command", c.ID),
-		attribute.Bool("anyctl.write", c.Write),
+		attribute.String(brand.TelemetryPrefix+"service", svc.Name),
+		attribute.String(brand.TelemetryPrefix+"command", c.ID),
+		attribute.Bool(brand.TelemetryPrefix+"write", c.Write),
 	}
 	if svc.Transport == "jsonrpc-ws" {
 		attrs = append(attrs, attribute.String("rpc.method", c.Method))

@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+
+	"github.com/jedwards1230/anyctl/internal/brand"
 )
 
 // ScaffoldAuthSchemes lists the --auth values Scaffold understands, in a stable
@@ -108,17 +110,17 @@ func envPrefix(name string) string {
 }
 
 func writeHeader(b *strings.Builder, name string) {
-	fmt.Fprintf(b, "# %s — anyctl service manifest.\n", name)
+	fmt.Fprintf(b, "# %s — %s service manifest.\n", name, brand.Name)
 	b.WriteString("#\n")
 	b.WriteString("# A service is one YAML file; the binary compiles in zero service-specific\n")
 	b.WriteString("# logic. Fill in the placeholders below, drop this file at\n")
-	fmt.Fprintf(b, "#   ~/.config/anyctl/services/%s.yaml\n", name)
-	fmt.Fprintf(b, "# then run `anyctl svc %s status`. Validate any time: `anyctl lint <this-file>`.\n\n", name)
+	fmt.Fprintf(b, "#   ~/.config/%s/services/%s.yaml\n", brand.ConfigDirName, name)
+	fmt.Fprintf(b, "# then run `%s svc %s status`. Validate any time: `%s lint <this-file>`.\n\n", brand.Name, name, brand.Name)
 	fmt.Fprintf(b, "name: %s\n", name)
 }
 
 func writeConnection(b *strings.Builder, name, prefix, auth string) {
-	b.WriteString("\n# Description shown by `anyctl list`.\n")
+	b.WriteString("\n# Description shown by `" + brand.Name + " list`.\n")
 	fmt.Fprintf(b, "description: %s service\n", name)
 
 	// This manifest is PORTABLE: base_url and tls_insecure are user-specific and
@@ -170,7 +172,7 @@ func writeAuth(b *strings.Builder, name, prefix, auth string) {
 		b.WriteString("  password: \"{secret.password}\"\n")
 		writeSecrets(b, prefix, scaffoldSecrets(auth)...)
 	case "oauth2-client-credentials":
-		b.WriteString("# OAuth2 client-credentials grant. anyctl caches the token on disk and\n")
+		b.WriteString("# OAuth2 client-credentials grant. " + brand.Name + " caches the token on disk and\n")
 		b.WriteString("# refreshes it as needed. `token_url` is the token endpoint URL.\n")
 		b.WriteString("auth:\n")
 		b.WriteString("  strategy: oauth2-client-credentials\n")
@@ -179,7 +181,7 @@ func writeAuth(b *strings.Builder, name, prefix, auth string) {
 		b.WriteString("  client_secret: \"{secret.client_secret}\"  # the OAuth client_secret\n")
 		writeSecrets(b, prefix, scaffoldSecrets(auth)...)
 	case "ws-login":
-		b.WriteString("# JSON-RPC login: anyctl calls `method` with `params` after connecting.\n")
+		b.WriteString("# JSON-RPC login: " + brand.Name + " calls `method` with `params` after connecting.\n")
 		b.WriteString("auth:\n")
 		b.WriteString("  strategy: ws-login\n")
 		b.WriteString("  method: auth.login_with_api_key   # the jsonrpc login method\n")
@@ -228,7 +230,7 @@ func writeSecrets(b *strings.Builder, prefix string, secrets ...secret) {
 		return
 	}
 	b.WriteString("\nsecrets:\n")
-	b.WriteString("  # A secret is a reference, never a literal value — anyctl resolves it at\n")
+	b.WriteString("  # A secret is a reference, never a literal value — " + brand.Name + " resolves it at\n")
 	b.WriteString("  # call time via the configured provider (1Password `op://` by default).\n")
 	b.WriteString("  # This manifest only DECLARES each slot; bind the `ref:` per machine in\n")
 	b.WriteString("  # profile.yaml (see the commented section below).\n")
@@ -246,7 +248,7 @@ func writeSecrets(b *strings.Builder, prefix string, secrets ...secret) {
 func writeProfileSection(b *strings.Builder, name, auth string) {
 	b.WriteString("\n# --- Portable manifest — add your machine-specific binding to profile.yaml ---\n")
 	b.WriteString("# The block above is identical for every user. Your base_url and secret refs\n")
-	b.WriteString("# live in ~/.config/anyctl/profile.yaml (run `anyctl init` to provision it):\n")
+	b.WriteString("# live in ~/.config/" + brand.ConfigDirName + "/profile.yaml (run `" + brand.Name + " init` to provision it):\n")
 	b.WriteString("#\n")
 	b.WriteString("# version: 1\n")
 	b.WriteString("# services:\n")
@@ -267,7 +269,7 @@ func writeCommands(b *strings.Builder, name, auth string) {
 	b.WriteString("commands:\n")
 
 	if auth == "ws-login" {
-		b.WriteString("  # A read command. Run: anyctl svc " + name + " status\n")
+		b.WriteString("  # A read command. Run: " + brand.Name + " svc " + name + " status\n")
 		b.WriteString("  status:\n")
 		b.WriteString("    help: service status / health\n")
 		b.WriteString("    method: system.info        # the jsonrpc method to call\n")
@@ -278,23 +280,23 @@ func writeCommands(b *strings.Builder, name, auth string) {
 		b.WriteString("    method: core.ping\n")
 		b.WriteString("    noauth: true\n")
 		b.WriteString("\n# Generic JSON-RPC passthrough is always available without declaring a command:\n")
-		b.WriteString("#   anyctl svc " + name + " call system.info\n")
-		b.WriteString("#   anyctl svc " + name + " call some.method '[\"arg1\", 42]'\n")
+		b.WriteString("#   " + brand.Name + " svc " + name + " call system.info\n")
+		b.WriteString("#   " + brand.Name + " svc " + name + " call some.method '[\"arg1\", 42]'\n")
 		return
 	}
 
-	b.WriteString("  # A read command (GET). Run: anyctl svc " + name + " status\n")
+	b.WriteString("  # A read command (GET). Run: " + brand.Name + " svc " + name + " status\n")
 	b.WriteString("  status:\n")
 	b.WriteString("    help: service status / health\n")
 	b.WriteString("    method: GET\n")
 	b.WriteString("    path: /api/status\n")
 	b.WriteString("    output: { filter: \".\" }    # optional jq filter over the JSON response\n")
-	b.WriteString("\n  # A read command taking a positional arg: anyctl svc " + name + " get-item 42\n")
+	b.WriteString("\n  # A read command taking a positional arg: " + brand.Name + " svc " + name + " get-item 42\n")
 	b.WriteString("  get-item:\n")
 	b.WriteString("    help: fetch one item by id\n")
 	b.WriteString("    method: GET\n")
 	b.WriteString("    path: /api/items/{arg.0}\n")
 	b.WriteString("\n# Generic verb passthrough is always available without declaring a command:\n")
-	b.WriteString("#   anyctl svc " + name + " get /api/items\n")
-	b.WriteString("#   anyctl svc " + name + " post /api/items '{\"name\":\"demo\"}'   # a [WRITE] call\n")
+	b.WriteString("#   " + brand.Name + " svc " + name + " get /api/items\n")
+	b.WriteString("#   " + brand.Name + " svc " + name + " post /api/items '{\"name\":\"demo\"}'   # a [WRITE] call\n")
 }

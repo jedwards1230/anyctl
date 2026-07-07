@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/jedwards1230/anyctl/catalog"
+	"github.com/jedwards1230/anyctl/internal/brand"
 	"github.com/jedwards1230/anyctl/internal/compat"
 	"gopkg.in/yaml.v3"
 )
@@ -128,18 +129,18 @@ func (l *Loaded) CanonicalNames() []string {
 // that predates the rename keep working; a one-time stderr hint points at the
 // `mv` that migrates it.
 func ConfigDir() string {
-	if d := compat.Getenv("ANYCTL_CONFIG_DIR", "LABCTL_CONFIG_DIR"); d != "" {
+	if d := compat.Getenv(brand.EnvPrefix+"CONFIG_DIR", brand.LegacyEnvPrefix+"CONFIG_DIR"); d != "" {
 		return d
 	}
 	if xdg := os.Getenv("XDG_CONFIG_HOME"); xdg != "" {
-		return filepath.Join(xdg, "anyctl")
+		return filepath.Join(xdg, brand.ConfigDirName)
 	}
 	home, err := os.UserHomeDir()
 	if err != nil {
-		return filepath.Join(".config", "anyctl")
+		return filepath.Join(".config", brand.ConfigDirName)
 	}
-	newDir := filepath.Join(home, ".config", "anyctl")
-	if legacy := filepath.Join(home, ".config", "labctl"); dirExists(legacy) && !dirExists(newDir) {
+	newDir := filepath.Join(home, ".config", brand.ConfigDirName)
+	if legacy := filepath.Join(home, ".config", brand.LegacyConfigDirName); dirExists(legacy) && !dirExists(newDir) {
 		warnLegacyConfigDir(legacy, newDir)
 		return legacy
 	}
@@ -159,8 +160,8 @@ var legacyConfigDirWarnedOnce sync.Once
 func warnLegacyConfigDir(legacy, newDir string) {
 	legacyConfigDirWarnedOnce.Do(func() {
 		_, _ = fmt.Fprintf(os.Stderr,
-			"anyctl: using legacy config dir %s; migrate with `mv %s %s`\n",
-			legacy, legacy, newDir)
+			"%s: using legacy config dir %s; migrate with `mv %s %s`\n",
+			brand.Name, legacy, legacy, newDir)
 	})
 }
 
@@ -413,7 +414,7 @@ func warnOrphanProfileBindings(profile *Profile, services map[string]*Service, w
 	}
 	sort.Strings(orphans)
 	for _, name := range orphans {
-		_, _ = fmt.Fprintf(warn, "anyctl: profile binds unknown service %q (no services/%s.yaml)\n", name, name)
+		_, _ = fmt.Fprintf(warn, "%s: profile binds unknown service %q (no services/%s.yaml)\n", brand.Name, name, name)
 	}
 }
 
@@ -488,7 +489,7 @@ func decodeService(b []byte, label, configDir string, warn io.Writer) (*Service,
 		if l == "" {
 			l = label
 		}
-		_, _ = fmt.Fprintf(warn, "anyctl: service %q: spec inference failed: %v (using static commands only)\n", l, err)
+		_, _ = fmt.Fprintf(warn, "%s: service %q: spec inference failed: %v (using static commands only)\n", brand.Name, l, err)
 	}
 	return &svc, nil
 }
