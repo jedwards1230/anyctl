@@ -1,6 +1,6 @@
-# Contributing to labctl
+# Contributing to anyctl
 
-`labctl` is a manifest-driven Go CLI for homelab service APIs. All changes go through the workflow below.
+`anyctl` is a manifest-driven Go CLI for homelab service APIs. All changes go through the workflow below.
 
 ## Prerequisites
 
@@ -10,7 +10,7 @@
 
 ```bash
 # Build
-go build -o labctl .
+go build -o anyctl .
 
 # Format check (must be clean before committing)
 gofmt -l .
@@ -31,37 +31,37 @@ go mod tidy && git diff --exit-code go.mod go.sum
 go build ./...
 
 # Try against the example manifests without installing
-LABCTL_CONFIG_DIR="$PWD/examples" ./labctl list
-LABCTL_CONFIG_DIR="$PWD/examples" ./labctl lint
-LABCTL_CONFIG_DIR="$PWD/examples" ./labctl --dry-run svc radarr list
+ANYCTL_CONFIG_DIR="$PWD/examples" ./anyctl list
+ANYCTL_CONFIG_DIR="$PWD/examples" ./anyctl lint
+ANYCTL_CONFIG_DIR="$PWD/examples" ./anyctl --dry-run svc radarr list
 
 # Validate the reference catalog (read-only, no config dir needed)
-./labctl catalog validate examples/catalog
+./anyctl catalog validate examples/catalog
 ```
 
 CI runs `gofmt`, `go vet`, `golangci-lint`, `go mod tidy` check, `go test -race` (with a 75% coverage floor), and `go build`. All checks must pass before a PR can merge.
 
 ## Changing an embedded manifest
 
-The embedded catalog lives in `catalog/`. Editing a manifest is **rebuild-free** — the authoring loop assumes one terminal session where `LABCTL_CONFIG_DIR` stays exported throughout:
+The embedded catalog lives in `catalog/`. Editing a manifest is **rebuild-free** — the authoring loop assumes one terminal session where `ANYCTL_CONFIG_DIR` stays exported throughout:
 
 1. **Seed a local override**:
    ```bash
-   export LABCTL_CONFIG_DIR=$(mktemp -d)
-   labctl catalog edit <name>          # copies the full manifest into $LABCTL_CONFIG_DIR/services/<name>.yaml
+   export ANYCTL_CONFIG_DIR=$(mktemp -d)
+   anyctl catalog edit <name>          # copies the full manifest into $ANYCTL_CONFIG_DIR/services/<name>.yaml
    ```
 2. **Edit and test**:
    ```bash
-   $EDITOR "$LABCTL_CONFIG_DIR/services/<name>.yaml"
-   labctl svc <name> <command> --dry-run   # preview the resolved request without sending
+   $EDITOR "$ANYCTL_CONFIG_DIR/services/<name>.yaml"
+   anyctl svc <name> <command> --dry-run   # preview the resolved request without sending
    ```
 3. **Promote back into the catalog**:
    ```bash
-   labctl catalog vendor <name> --catalog-dir catalog   # run from the repo root
+   anyctl catalog vendor <name> --catalog-dir catalog   # run from the repo root
    ```
 4. **Validate**:
    ```bash
-   labctl lint catalog/<name>.yaml
+   anyctl lint catalog/<name>.yaml
    ```
 5. **Commit and open a PR**:
    ```bash

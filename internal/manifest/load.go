@@ -9,9 +9,11 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
-	"github.com/jedwards1230/labctl/catalog"
+	"github.com/jedwards1230/anyctl/catalog"
+	"github.com/jedwards1230/anyctl/internal/compat"
 	"gopkg.in/yaml.v3"
 )
 
@@ -60,7 +62,7 @@ type Loaded struct {
 	// names that define it, when more than one does and no local override
 	// resolves it. The bare name does NOT appear in Services or Origins in this
 	// case; only the qualified "<catalog>:<service>" selectors do. Looking up the
-	// bare name is a hard error (Lookup) listing the qualified forms — labctl
+	// bare name is a hard error (Lookup) listing the qualified forms — anyctl
 	// never silently picks one.
 	Ambiguous map[string][]string
 	Dir       string
@@ -78,7 +80,7 @@ func (l *Loaded) OriginOf(name string) Origin {
 // Lookup resolves a selector — a bare service name or a qualified
 // "<catalog>:<service>" name — to its Service. An ambiguous bare name (defined
 // by more than one installed catalog, with no local override) is a *ConfigError
-// (exit 2) listing the qualified forms to disambiguate with; labctl never
+// (exit 2) listing the qualified forms to disambiguate with; anyctl never
 // silently picks one. An unrecognized selector is also a *ConfigError (exit 2).
 func (l *Loaded) Lookup(name string) (*Service, error) {
 	if cats, ok := l.Ambiguous[name]; ok {
@@ -118,20 +120,48 @@ func (l *Loaded) CanonicalNames() []string {
 	return names
 }
 
-// ConfigDir resolves the labctl config directory, honoring (in order):
-// LABCTL_CONFIG_DIR, $XDG_CONFIG_HOME/labctl, then ~/.config/labctl.
+// ConfigDir resolves the anyctl config directory, honoring (in order):
+// ANYCTL_CONFIG_DIR, the legacy LABCTL_CONFIG_DIR (with a one-time deprecation
+// warning), $XDG_CONFIG_HOME/anyctl, a read-only fallback to the legacy
+// ~/.config/labctl directory when it exists and ~/.config/anyctl does not, and
+// finally ~/.config/anyctl. The legacy directory fallback lets a workstation
+// that predates the rename keep working; a one-time stderr hint points at the
+// `mv` that migrates it.
 func ConfigDir() string {
-	if d := os.Getenv("LABCTL_CONFIG_DIR"); d != "" {
+	if d := compat.Getenv("ANYCTL_CONFIG_DIR", "LABCTL_CONFIG_DIR"); d != "" {
 		return d
 	}
 	if xdg := os.Getenv("XDG_CONFIG_HOME"); xdg != "" {
-		return filepath.Join(xdg, "labctl")
+		return filepath.Join(xdg, "anyctl")
 	}
 	home, err := os.UserHomeDir()
 	if err != nil {
-		return filepath.Join(".config", "labctl")
+		return filepath.Join(".config", "anyctl")
 	}
-	return filepath.Join(home, ".config", "labctl")
+	newDir := filepath.Join(home, ".config", "anyctl")
+	if legacy := filepath.Join(home, ".config", "labctl"); dirExists(legacy) && !dirExists(newDir) {
+		warnLegacyConfigDir(legacy, newDir)
+		return legacy
+	}
+	return newDir
+}
+
+// dirExists reports whether path exists and is a directory.
+func dirExists(path string) bool {
+	info, err := os.Stat(path)
+	return err == nil && info.IsDir()
+}
+
+// legacyConfigDirWarnedOnce ensures the legacy-config-dir migration hint is
+// printed at most once per process.
+var legacyConfigDirWarnedOnce sync.Once
+
+func warnLegacyConfigDir(legacy, newDir string) {
+	legacyConfigDirWarnedOnce.Do(func() {
+		_, _ = fmt.Fprintf(os.Stderr,
+			"anyctl: using legacy config dir %s; migrate with `mv %s %s`\n",
+			legacy, legacy, newDir)
+	})
 }
 
 // Load reads and merges the config dir. A missing dir or missing config.yaml is
@@ -302,7 +332,7 @@ func loadInstalledCatalogs(l *Loaded, profile *Profile) error {
 		names := make([]string, 0, len(files))
 		for _, f := range files {
 			if f.IsDir() || !isYAML(f.Name()) {
-				continue // ignore .labctl-catalog.json and any non-YAML
+				continue // ignore the catalog marker (.anyctl-catalog.json / legacy .labctl-catalog.json) and any non-YAML
 			}
 			names = append(names, f.Name())
 		}
@@ -383,11 +413,11 @@ func warnOrphanProfileBindings(profile *Profile, services map[string]*Service, w
 	}
 	sort.Strings(orphans)
 	for _, name := range orphans {
-		_, _ = fmt.Fprintf(warn, "labctl: profile binds unknown service %q (no services/%s.yaml)\n", name, name)
+		_, _ = fmt.Fprintf(warn, "anyctl: profile binds unknown service %q (no services/%s.yaml)\n", name, name)
 	}
 }
 
-// LoadService reads a single manifest file (used by `labctl lint <file>`),
+// LoadService reads a single manifest file (used by `anyctl lint <file>`),
 // applying global config defaults. Relative spec: paths resolve from the same
 // directory as the manifest file (since there is no separate config root here).
 func LoadService(path string, cfg Config) (*Service, error) {
@@ -458,7 +488,7 @@ func decodeService(b []byte, label, configDir string, warn io.Writer) (*Service,
 		if l == "" {
 			l = label
 		}
-		_, _ = fmt.Fprintf(warn, "labctl: service %q: spec inference failed: %v (using static commands only)\n", l, err)
+		_, _ = fmt.Fprintf(warn, "anyctl: service %q: spec inference failed: %v (using static commands only)\n", l, err)
 	}
 	return &svc, nil
 }

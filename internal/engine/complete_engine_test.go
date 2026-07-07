@@ -5,8 +5,8 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/jedwards1230/labctl/internal/command"
-	"github.com/jedwards1230/labctl/internal/manifest"
+	"github.com/jedwards1230/anyctl/internal/command"
+	"github.com/jedwards1230/anyctl/internal/manifest"
 )
 
 // TestExecuteIncompleteServiceErrors proves the completeness gate at the top of

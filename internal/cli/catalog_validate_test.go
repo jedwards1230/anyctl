@@ -5,11 +5,11 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/jedwards1230/labctl/internal/agentsafety"
+	"github.com/jedwards1230/anyctl/internal/agentsafety"
 )
 
 // TestCatalogValidateValid: a directory with one valid portable manifest
-// validates clean (exit 0) and reports it "ok" on stdout. No LABCTL_CONFIG_DIR
+// validates clean (exit 0) and reports it "ok" on stdout. No ANYCTL_CONFIG_DIR
 // is set — validate is config-dir-free.
 func TestCatalogValidateValid(t *testing.T) {
 	dir := t.TempDir()
@@ -95,10 +95,10 @@ func TestCatalogValidateMixedResults(t *testing.T) {
 }
 
 // TestCatalogValidateNoConfigDirNeeded: validate works with no config dir set
-// up at all (it never touches XDG/LABCTL_CONFIG_DIR), confirming it is a
+// up at all (it never touches XDG/ANYCTL_CONFIG_DIR), confirming it is a
 // standalone, config-dir-free check.
 func TestCatalogValidateNoConfigDirNeeded(t *testing.T) {
-	t.Setenv("LABCTL_CONFIG_DIR", filepath.Join(t.TempDir(), "does-not-exist"))
+	t.Setenv("ANYCTL_CONFIG_DIR", filepath.Join(t.TempDir(), "does-not-exist"))
 	dir := t.TempDir()
 	writeSourceManifest(t, dir, "widget.yaml", portableWidget)
 

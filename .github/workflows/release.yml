@@ -1,4 +1,4 @@
-# Release labctl on push to main. Opt-in via a semver:* label on the merged PR
+# Release anyctl on push to main. Opt-in via a semver:* label on the merged PR
 # (no label → no release). The detect job reads the label, the shared
 # ai-release.yml computes the version/tag and AI release notes (create_release:
 # false), then build cross-compiles static binaries from the tagged ref and the
@@ -90,7 +90,7 @@ jobs:
     if: needs.detect.outputs.release == 'true'
     uses: jedwards1230/release-workflows/.github/workflows/ai-release.yml@v1
     with:
-      service_name: labctl
+      service_name: anyctl
       service_description: "a manifest-driven CLI for homelab service APIs"
       bump_type: ${{ needs.detect.outputs.bump_type }}
       create_release: false
@@ -127,15 +127,15 @@ jobs:
           CGO_ENABLED: "0"
           VERSION: ${{ needs.prepare.outputs.version }}
         run: |
-          out="labctl-${GOOS}-${GOARCH}"
+          out="anyctl-${GOOS}-${GOARCH}"
           go build -trimpath -ldflags "-s -w -X main.version=${VERSION}" -o "$out" .
           sha256sum "$out" > "$out.sha256"
       - uses: actions/upload-artifact@v7
         with:
-          name: labctl-${{ matrix.goos }}-${{ matrix.goarch }}
+          name: anyctl-${{ matrix.goos }}-${{ matrix.goarch }}
           path: |
-            labctl-${{ matrix.goos }}-${{ matrix.goarch }}
-            labctl-${{ matrix.goos }}-${{ matrix.goarch }}.sha256
+            anyctl-${{ matrix.goos }}-${{ matrix.goarch }}
+            anyctl-${{ matrix.goos }}-${{ matrix.goarch }}.sha256
 
   release:
     name: Create GitHub Release
@@ -161,7 +161,7 @@ jobs:
             echo "## Install"
             echo ""
             echo '```bash'
-            echo "go install github.com/jedwards1230/labctl@${VERSION}"
+            echo "go install github.com/jedwards1230/anyctl@${VERSION}"
             echo '```'
             echo ""
             echo "Or download a static binary for your platform below."
@@ -217,7 +217,7 @@ jobs:
       - uses: docker/metadata-action@v6
         id: meta
         with:
-          images: ghcr.io/jedwards1230/labctl
+          images: ghcr.io/jedwards1230/anyctl
           tags: |
             type=raw,value=${{ needs.prepare.outputs.version }}
             type=raw,value=latest
@@ -253,5 +253,5 @@ jobs:
         run: |
           set -euo pipefail
           echo "$GITHUB_TOKEN" | helm registry login ghcr.io -u "${{ github.actor }}" --password-stdin
-          helm package deploy/helm/labctl-mcp --version "$VERSION" --app-version "$VERSION"
-          helm push "labctl-mcp-${VERSION}.tgz" oci://ghcr.io/jedwards1230/charts
+          helm package deploy/helm/anyctl-mcp --version "$VERSION" --app-version "$VERSION"
+          helm push "anyctl-mcp-${VERSION}.tgz" oci://ghcr.io/jedwards1230/charts

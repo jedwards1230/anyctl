@@ -2,9 +2,9 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: {{ include "labctl-mcp.fullname" . }}-config
+  name: {{ include "anyctl-mcp.fullname" . }}-config
   labels:
-    {{- include "labctl-mcp.labels" . | nindent 4 }}
+    {{- include "anyctl-mcp.labels" . | nindent 4 }}
 data:
   {{- if .Values.config.configYaml }}
   config.yaml: |

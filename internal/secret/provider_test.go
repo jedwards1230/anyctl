@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/jedwards1230/labctl/internal/manifest"
+	"github.com/jedwards1230/anyctl/internal/manifest"
 )
 
 func TestSchemeOf(t *testing.T) {
@@ -72,7 +72,7 @@ func TestRegistryResolvedBinaries_AbsolutePath(t *testing.T) {
 // found is reported (not silently omitted) as an "unresolved: …" note.
 func TestRegistryResolvedBinaries_Unresolved(t *testing.T) {
 	sc := manifest.SecretsConfig{Providers: map[string]manifest.ProviderConfig{
-		"op": {Scheme: "op", Command: []string{"labctl-definitely-not-a-real-binary", "read", "{ref}"}},
+		"op": {Scheme: "op", Command: []string{"anyctl-definitely-not-a-real-binary", "read", "{ref}"}},
 	}}
 	reg := NewRegistry(sc, nil)
 

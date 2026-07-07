@@ -11,8 +11,8 @@ import (
 	"io"
 	"strings"
 
-	"github.com/jedwards1230/labctl/internal/filter"
-	"github.com/jedwards1230/labctl/internal/manifest"
+	"github.com/jedwards1230/anyctl/internal/filter"
+	"github.com/jedwards1230/anyctl/internal/manifest"
 )
 
 // Options controls a single render.

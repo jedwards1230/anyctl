@@ -7,7 +7,7 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/jedwards1230/labctl/internal/manifest"
+	"github.com/jedwards1230/anyctl/internal/manifest"
 )
 
 // OnePassword resolves op:// references via the 1Password CLI. When configured

@@ -3,9 +3,9 @@ package agentsafety
 import (
 	"errors"
 
-	"github.com/jedwards1230/labctl/internal/manifest"
-	"github.com/jedwards1230/labctl/internal/secret"
-	"github.com/jedwards1230/labctl/internal/transport"
+	"github.com/jedwards1230/anyctl/internal/manifest"
+	"github.com/jedwards1230/anyctl/internal/secret"
+	"github.com/jedwards1230/anyctl/internal/transport"
 )
 
 // Exit codes (documented in the plan §11). stdout=data, stderr=diagnostics.

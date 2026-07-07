@@ -1,13 +1,13 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{ include "labctl-mcp.fullname" . }}
+  name: {{ include "anyctl-mcp.fullname" . }}
   labels:
-    {{- include "labctl-mcp.labels" . | nindent 4 }}
+    {{- include "anyctl-mcp.labels" . | nindent 4 }}
 spec:
   type: {{ .Values.service.type }}
   selector:
-    {{- include "labctl-mcp.selectorLabels" . | nindent 4 }}
+    {{- include "anyctl-mcp.selectorLabels" . | nindent 4 }}
   ports:
     - name: http
       port: {{ .Values.service.port }}

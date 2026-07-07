@@ -6,7 +6,7 @@ Guidance for Claude Code in this repository.
 
 ## What this is
 
-`labctl` is a single, manifest-driven Go CLI for HTTP/RPC service APIs. A service
+`anyctl` is a single, manifest-driven Go CLI for HTTP/RPC service APIs. A service
 is one `services/<name>.yaml` manifest; the binary compiles in **zero**
 service-specific logic. Adding/removing a service is a YAML edit, never a
 recompile. It replaces a set of bespoke per-service bash wrappers.
@@ -70,10 +70,10 @@ three edits in `internal/secret/provider.go` (new `Provider`, a config block, a
 Phase 2+3 (done): `jsonrpc-ws` transport + ws-login auth; oauth2-client-credentials
 with on-disk token cache; OpenAPI inference via libopenapi (`spec:` + `spec_filter:`);
 composed multi-step pipelines (`steps:` with extract/when/confirm/on_error); MCP
-server (`labctl mcp`) over stdio (default) or streamable-HTTP (`--http :9000`,
+server (`anyctl mcp`) over stdio (default) or streamable-HTTP (`--http :9000`,
 MCP endpoint at `/mcp`, `GET /healthz` probe — for in-cluster gateway federation).
 Secure by default: a `--http` bind to a non-loopback address refuses to start
-without a bearer token (`LABCTL_MCP_AUTH_TOKEN` or `--auth-token-file`) unless
+without a bearer token (`ANYCTL_MCP_AUTH_TOKEN` or `--auth-token-file`) unless
 `--allow-unauthenticated` explicitly opts out; a loopback bind (127.0.0.1/::1/
 localhost) needs no token. The `truenas` and `sunshine` manifests execute fully.
 
@@ -82,8 +82,8 @@ compiled into the binary via `//go:embed`, so consumers no longer vendor copies.
 A manifest is plain YAML and editing one is **rebuild-free** — the binary just
 ships sane defaults. The authoring loop:
 
-- `labctl catalog list` / `catalog show <name>` — inspect/dump the embedded manifests.
-- `labctl catalog edit <name>` — seed the **full** embedded manifest into
+- `anyctl catalog list` / `catalog show <name>` — inspect/dump the embedded manifests.
+- `anyctl catalog edit <name>` — seed the **full** embedded manifest into
   `<config-dir>/services/<name>.yaml`, where it shadows the embedded one at the
   next load. Iterate live (no recompile). A FULL copy is seeded, not a sparse
   patch, because a local override **wholesale replaces** the embedded entry
@@ -91,7 +91,7 @@ ships sane defaults. The authoring loop:
   `load.go`); a partial override would drop endpoints or fail validation. Refuses
   to clobber without `--force`; prints the absolute path; `--edit` opens
   `$VISUAL`/`$EDITOR`.
-- `labctl catalog vendor <name> [--catalog-dir catalog]` — promote an edited
+- `anyctl catalog vendor <name> [--catalog-dir catalog]` — promote an edited
   override back into a repo checkout's `catalog/` source tree to commit and ship
   embedded. Validates first (structural `Validate` — a portable manifest, no
   `base_url`/secret `ref`), so a broken manifest is never promoted; refuses to
@@ -102,11 +102,11 @@ Named, installable catalogs (done): beyond the single embedded catalog, install
 **named** catalogs of portable manifests into `<config-dir>/catalogs/<name>/` from
 a directory or a git repo:
 
-- `labctl catalog add <source> [--name --ref --force]` — fetch a dir or git URL,
+- `anyctl catalog add <source> [--name --ref --force]` — fetch a dir or git URL,
   validate every top-level `*.yaml` against the schema AND structural `Validate`
   (portability: no `base_url`/secret `ref`) fail-closed, then install atomically
   (stage in a temp dir, swap into place). A git source is pinned to its resolved
-  commit SHA in `.labctl-catalog.json`. Git fetches shell to the system `git` with
+  commit SHA in `.anyctl-catalog.json`. Git fetches shell to the system `git` with
   `ext`/`fd` transports blocked and the URL after `--` (no shell). `--openapi
   <url|file>` materializes a single-service portable manifest from an OpenAPI
   3.x document instead (operations → `commands:`, `securitySchemes` inferred
@@ -115,8 +115,8 @@ a directory or a git repo:
   over; the spec is parsed once at add-time and not vendored — no `spec:`
   reference is kept). Implementation: `internal/manifest/openapi_scaffold.go`
   + `internal/cli/catalog_openapi.go`.
-- `labctl catalog update [name]` / `remove <name>` / `installed`.
-- `labctl catalog validate <dir>` — the SAME fail-closed gate `catalog add`
+- `anyctl catalog update [name]` / `remove <name>` / `installed`.
+- `anyctl catalog validate <dir>` — the SAME fail-closed gate `catalog add`
   runs (`ValidatePortableManifest` + intra-dir duplicate-name check), exposed
   read-only and config-dir-free: no network, no install, no profile/catalog
   interaction — just a per-file `ok`/`FAIL` report and exit 0/2. This is what a
@@ -132,7 +132,7 @@ a directory or a git repo:
   installed-catalog service both ways — bare AND qualified — except a bare name
   more than one catalog defines, which is dropped from `Services` and recorded in
   `Loaded.Ambiguous` instead). `Loaded.Lookup` on an ambiguous bare name is a
-  `*ConfigError` (exit 2) listing both qualified forms — labctl never silently
+  `*ConfigError` (exit 2) listing both qualified forms — anyctl never silently
   picks one. The MCP server derives a tool's name from the *selector*
   (`<catalog>-<service>_<command>` once qualified, `:` sanitized to `-`), so
   installing a second catalog that collides with an existing name **renames**
@@ -147,8 +147,8 @@ a directory or a git repo:
   CLI handlers in `internal/cli/catalog_install.go`.
 - `.github/actions/validate-catalog` — a composite action a third-party catalog
   repo points its own CI at (`uses:
-  jedwards1230/labctl/.github/actions/validate-catalog@v1`): installs labctl
-  (`go install …@<version>`, default `latest`) and runs `labctl catalog
+  jedwards1230/anyctl/.github/actions/validate-catalog@v1`): installs anyctl
+  (`go install …@<version>`, default `latest`) and runs `anyctl catalog
   validate <path>` against it. `examples/catalog/` (singular — NOT
   `examples/catalogs/`, which `Load` would scan as an installed catalog) is the
   reference catalog both this action and `internal/manifest/example_catalog_test.go`
@@ -161,8 +161,8 @@ universal table/record/tree HTML View registered ONCE on the server
 (`internal/mcpserver.BuildServer`) — zero per-service Go. The View itself is a
 single built HTML file (`internal/mcpserver/views/result.html`, built from the
 separate `views/` TS/Vite project and committed so plain `go build` needs no
-npm) `//go:embed`'d via `internal/mcpserver/views`, with `LABCTL_VIEWS_DIR`
-overriding it from disk for the dev loop (mirrors `LABCTL_CONFIG_DIR`). A read
+npm) `//go:embed`'d via `internal/mcpserver/views`, with `ANYCTL_VIEWS_DIR`
+overriding it from disk for the dev loop (mirrors `ANYCTL_CONFIG_DIR`). A read
 tool's `executeAndRender` populates `CallToolResult.StructuredContent`
 ADDITIVELY (the existing `TextContent` is unchanged — the fallback for
 non-Apps hosts and the headless/ContextForge agent path) with an object-root
@@ -176,6 +176,34 @@ StructuredContent. A command can shape its own rendering with an optional
 only (no HTML/URLs/secrets), so it stays portable and never trips
 `validateNoInManifestBinding`; absent, the View auto-detects by result shape.
 A write-confirmation View is a separate, later PR.
+
+> **MCP wire surface stays `labctl` on purpose.** The binary, module, and CLI
+> renamed to `anyctl`, but the federated MCP surface did NOT: the MCP server
+> `Implementation.Name` is still `labctl`, the result-View resource URI is still
+> `ui://labctl/result`, and the StructuredContent wrapper key is still
+> `"labctl"`. The ContextForge gateway federates this server registered as
+> `labctl`, and the embedded result View reads the `labctl` key — changing either
+> would break federation and the View in lockstep. These strings are the one
+> place `labctl` is retained deliberately.
+
+## Back-compat shims (labctl → anyctl)
+
+The rename ships with fallbacks so downstream consumers cut over without a
+lockstep edit (`internal/compat`):
+
+- **Env vars**: `ANYCTL_CONFIG_DIR` / `ANYCTL_VIEWS_DIR` / `ANYCTL_MCP_AUTH_TOKEN`
+  are preferred; the legacy `LABCTL_*` names are still honored with a one-time
+  stderr deprecation warning. `LABCTL_MCP_AUTH_TOKEN` is the cross-repo contract
+  (the Helm chart and Ansible-managed workstation configs still set it), so the
+  fallback is what lets the K8s pod and workstations run the `anyctl` binary
+  unchanged.
+- **Config dir**: `ConfigDir()` resolves `ANYCTL_CONFIG_DIR` → `LABCTL_CONFIG_DIR`
+  → `$XDG_CONFIG_HOME/anyctl` → a read-fallback to `~/.config/labctl` when it
+  exists and `~/.config/anyctl` does not (one-time migration hint to stderr) →
+  else `~/.config/anyctl`.
+- **Catalog marker**: written as `.anyctl-catalog.json`; either it OR the legacy
+  `.labctl-catalog.json` is accepted on load, re-stamped to the new name on the
+  next `catalog update`.
 
 ## Conventions
 

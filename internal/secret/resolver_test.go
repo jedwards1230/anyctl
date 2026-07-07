@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/jedwards1230/labctl/internal/manifest"
+	"github.com/jedwards1230/anyctl/internal/manifest"
 )
 
 // TestResolvedValuesSnapshot proves the resolver exposes only the non-empty

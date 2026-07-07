@@ -11,7 +11,7 @@ import (
 	mcp "github.com/modelcontextprotocol/go-sdk/mcp"
 	"go.opentelemetry.io/otel/trace"
 
-	"github.com/jedwards1230/labctl/internal/manifest"
+	"github.com/jedwards1230/anyctl/internal/manifest"
 )
 
 // MCP endpoint and health paths served by the streamable-HTTP transport.
@@ -120,7 +120,7 @@ func ServeHTTP(
 		if authToken != "" {
 			authStatus = "auth: enabled (bearer)"
 		}
-		_, _ = fmt.Fprintf(stderr, "labctl mcp: serving streamable-HTTP on %s (MCP at %s, health at %s, %s)\n",
+		_, _ = fmt.Fprintf(stderr, "anyctl mcp: serving streamable-HTTP on %s (MCP at %s, health at %s, %s)\n",
 			addr, mcpPath, healthPath, authStatus)
 	}
 

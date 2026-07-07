@@ -14,7 +14,7 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/jedwards1230/labctl/internal/agentsafety"
+	"github.com/jedwards1230/anyctl/internal/agentsafety"
 )
 
 // fakeGH is a hermetic stand-in for the GitHub releases API + asset CDN. It
@@ -35,7 +35,7 @@ type fakeGH struct {
 	lastPath  atomic.Value // string: last release path served
 }
 
-func (f *fakeGH) assetName() string { return fmt.Sprintf("labctl-%s-%s", f.goos, f.goarch) }
+func (f *fakeGH) assetName() string { return fmt.Sprintf("anyctl-%s-%s", f.goos, f.goarch) }
 
 // newFakeGH wires the httptest server. Release JSON points asset URLs back at
 // this same server so downloads stay loopback (scheme matches the http apiBase).
@@ -76,8 +76,8 @@ func newFakeGH(t *testing.T, f *fakeGH) *fakeGH {
 		_, _ = w.Write(releaseJSON())
 	}
 
-	mux.HandleFunc("/repos/jedwards1230/labctl/releases/latest", serveRelease)
-	mux.HandleFunc("/repos/jedwards1230/labctl/releases/tags/", serveRelease)
+	mux.HandleFunc("/repos/jedwards1230/anyctl/releases/latest", serveRelease)
+	mux.HandleFunc("/repos/jedwards1230/anyctl/releases/tags/", serveRelease)
 
 	mux.HandleFunc("/dl/", func(w http.ResponseWriter, r *http.Request) {
 		switch {
@@ -120,7 +120,7 @@ func updaterFor(t *testing.T, f *fakeGH, current, exePath string) (*selfUpdater,
 // makeExe writes a temp file standing in for the installed binary.
 func makeExe(t *testing.T, content string) string {
 	t.Helper()
-	path := filepath.Join(t.TempDir(), "labctl")
+	path := filepath.Join(t.TempDir(), "anyctl")
 	if err := os.WriteFile(path, []byte(content), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -215,7 +215,7 @@ func TestSelfUpdateForceOnEqualTag(t *testing.T) {
 }
 
 func TestSelfUpdateSHAMismatchAborts(t *testing.T) {
-	bad := strings.Repeat("0", 64) + "  labctl-linux-amd64"
+	bad := strings.Repeat("0", 64) + "  anyctl-linux-amd64"
 	f := newFakeGH(t, &fakeGH{goos: "linux", goarch: "amd64", tag: "v0.5.0", assetBytes: []byte("NEW"), shaContent: bad})
 	exe := makeExe(t, "ORIGINAL")
 	u, _, _ := updaterFor(t, f, "v0.4.0", exe)
@@ -352,7 +352,7 @@ func TestParseSHA256(t *testing.T) {
 		want    string
 		wantErr bool
 	}{
-		{"sha256sum format", good + "  labctl-linux-amd64", good, false},
+		{"sha256sum format", good + "  anyctl-linux-amd64", good, false},
 		{"digest only", good, good, false},
 		{"empty", "   ", "", true},
 		{"short", "abc123  file", "", true},
@@ -380,7 +380,7 @@ func TestParseSHA256(t *testing.T) {
 func TestSelfUpdateSchemeDowngradeRejected(t *testing.T) {
 	// apiBase https but an asset URL on http → refused before any fetch.
 	u := &selfUpdater{apiBase: "https://api.github.com"}
-	if err := u.checkScheme("http://evil.example/labctl-linux-amd64"); err == nil {
+	if err := u.checkScheme("http://evil.example/anyctl-linux-amd64"); err == nil {
 		t.Fatal("expected scheme-downgrade rejection, got nil")
 	}
 	if err := u.checkScheme("https://objects.githubusercontent.com/x"); err != nil {
@@ -391,7 +391,7 @@ func TestSelfUpdateSchemeDowngradeRejected(t *testing.T) {
 // TestSelfUpdateRegistered confirms the builtin is wired into the command tree
 // and its help renders without touching the network (cobra handles --help).
 func TestSelfUpdateRegistered(t *testing.T) {
-	t.Setenv("LABCTL_CONFIG_DIR", t.TempDir())
+	t.Setenv("ANYCTL_CONFIG_DIR", t.TempDir())
 	var out, errb bytes.Buffer
 	if code := Run([]string{"self-update", "--help"}, &out, &errb); code != agentsafety.ExitOK {
 		t.Fatalf("self-update --help exit = %d (stderr: %s)", code, errb.String())

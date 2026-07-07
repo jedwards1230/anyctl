@@ -1,4 +1,4 @@
-// Command labctl is a manifest-driven CLI for homelab service APIs. A service is
+// Command anyctl is a manifest-driven CLI for homelab service APIs. A service is
 // a YAML manifest; the binary knows nothing service-specific. See the README.
 package main
 
@@ -6,7 +6,7 @@ import (
 	"os"
 	"runtime/debug"
 
-	"github.com/jedwards1230/labctl/internal/cli"
+	"github.com/jedwards1230/anyctl/internal/cli"
 )
 
 // version is the ldflags sink: release builds stamp it via
@@ -20,7 +20,7 @@ type buildInfoReader func() (*debug.BuildInfo, bool)
 // resolveVersion returns the ldflags value when a release build stamped it (i.e.
 // it is not the "dev" default). Otherwise it falls back to the module version
 // recorded in build info — which the toolchain sets for
-// `go install github.com/jedwards1230/labctl@vX.Y.Z` — when that is a real tag
+// `go install github.com/jedwards1230/anyctl@vX.Y.Z` — when that is a real tag
 // (not empty, not the "(devel)" placeholder). When neither yields a real
 // version it stays "dev".
 func resolveVersion(ldflags string, read buildInfoReader) string {

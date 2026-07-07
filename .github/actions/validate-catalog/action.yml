@@ -1,11 +1,11 @@
 # Composite action a third-party catalog repository wires into its own CI to
-# check its manifests against labctl's contract: installs labctl, then runs
-# `labctl catalog validate <path>` (read-only — no network, no install, no
+# check its manifests against anyctl's contract: installs anyctl, then runs
+# `anyctl catalog validate <path>` (read-only — no network, no install, no
 # config dir) against the catalog directory.
-name: Validate labctl catalog
+name: Validate anyctl catalog
 description: >-
-  Validate a directory of portable labctl service manifests with
-  `labctl catalog validate` (the same fail-closed gate `labctl catalog add`
+  Validate a directory of portable anyctl service manifests with
+  `anyctl catalog validate` (the same fail-closed gate `anyctl catalog add`
   enforces).
 
 inputs:
@@ -14,7 +14,7 @@ inputs:
     required: false
     default: "."
   version:
-    description: labctl version/ref to install (passed to `go install …@<version>`).
+    description: anyctl version/ref to install (passed to `go install …@<version>`).
     required: false
     default: latest
 
@@ -26,14 +26,14 @@ runs:
         go-version: "1.25"
         cache: true
 
-    - name: Install labctl
+    - name: Install anyctl
       shell: bash
       env:
-        LABCTL_VERSION: ${{ inputs.version }}
-      run: go install "github.com/jedwards1230/labctl@${LABCTL_VERSION}"
+        ANYCTL_VERSION: ${{ inputs.version }}
+      run: go install "github.com/jedwards1230/anyctl@${ANYCTL_VERSION}"
 
-    - name: labctl catalog validate
+    - name: anyctl catalog validate
       shell: bash
       env:
         CATALOG_PATH: ${{ inputs.path }}
-      run: labctl catalog validate "${CATALOG_PATH}"
+      run: anyctl catalog validate "${CATALOG_PATH}"

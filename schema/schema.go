@@ -1,4 +1,4 @@
-// Package schema serves the JSON Schema (draft-07) for a portable labctl service
+// Package schema serves the JSON Schema (draft-07) for a portable anyctl service
 // manifest, compiled into the binary via go:embed. The schema is hand-authored
 // (not struct-tag generated) because the manifest's rules — conditional required
 // fields per auth strategy, and forbidding an in-manifest base_url / secret ref —

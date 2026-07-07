@@ -11,11 +11,17 @@ import (
 	"time"
 )
 
-// CatalogMetaFile is the per-catalog metadata file labctl writes into each
+// CatalogMetaFile is the per-catalog metadata file anyctl writes into each
 // installed catalog dir. It records where the catalog came from (a dir or a git
 // URL, pinned to a commit) so `catalog update` can re-fetch and `catalog
 // installed` can report provenance. It is NOT a manifest and the loader ignores it.
-const CatalogMetaFile = ".labctl-catalog.json"
+const CatalogMetaFile = ".anyctl-catalog.json"
+
+// LegacyCatalogMetaFile is the pre-rename marker name written by labctl. It is
+// still accepted on read so a catalog installed by an old binary keeps its
+// provenance; `catalog update` re-stages the dir and writes CatalogMetaFile,
+// so the legacy marker naturally ages out on the next update.
+const LegacyCatalogMetaFile = ".labctl-catalog.json"
 
 // CatalogMeta is the provenance record for one installed catalog.
 type CatalogMeta struct {
@@ -52,9 +58,16 @@ func ValidateName(name string) error {
 }
 
 // readMetaFile reads and parses the metadata file from a catalog dir. found is
-// false (with a nil error) when the file is simply absent.
+// false (with a nil error) when the file is simply absent. It accepts either the
+// current marker name or the legacy .labctl-catalog.json (preferring the current
+// one) so a catalog installed before the anyctl rename still reports provenance.
 func readMetaFile(catalogDir string) (meta CatalogMeta, found bool, err error) {
-	b, err := os.ReadFile(filepath.Join(catalogDir, CatalogMetaFile))
+	path := filepath.Join(catalogDir, CatalogMetaFile)
+	b, err := os.ReadFile(path)
+	if os.IsNotExist(err) {
+		path = filepath.Join(catalogDir, LegacyCatalogMetaFile)
+		b, err = os.ReadFile(path)
+	}
 	if err != nil {
 		if os.IsNotExist(err) {
 			return CatalogMeta{}, false, nil
@@ -62,7 +75,7 @@ func readMetaFile(catalogDir string) (meta CatalogMeta, found bool, err error) {
 		return CatalogMeta{}, false, err
 	}
 	if err := json.Unmarshal(b, &meta); err != nil {
-		return CatalogMeta{}, false, fmt.Errorf("parse %s: %w", filepath.Join(catalogDir, CatalogMetaFile), err)
+		return CatalogMeta{}, false, fmt.Errorf("parse %s: %w", path, err)
 	}
 	return meta, true, nil
 }

@@ -13,8 +13,8 @@ import (
 	mcp "github.com/modelcontextprotocol/go-sdk/mcp"
 	"go.opentelemetry.io/otel/trace/noop"
 
-	"github.com/jedwards1230/labctl/internal/manifest"
-	"github.com/jedwards1230/labctl/internal/mcpserver"
+	"github.com/jedwards1230/anyctl/internal/manifest"
+	"github.com/jedwards1230/anyctl/internal/mcpserver"
 )
 
 // syncBuffer is a race-safe io.Writer: the MCP server writes the audit record

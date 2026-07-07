@@ -1,24 +1,24 @@
-# labctl-mcp Helm chart
+# anyctl-mcp Helm chart
 
-Deploys [`labctl`](https://github.com/jedwards1230/labctl)'s MCP server over
+Deploys [`anyctl`](https://github.com/jedwards1230/anyctl)'s MCP server over
 streamable-HTTP so it is network-reachable in a cluster (e.g. to be federated by
 an MCP gateway).
 
-The image bundles the 1Password `op` CLI; labctl resolves `op://` secret refs at
+The image bundles the 1Password `op` CLI; anyctl resolves `op://` secret refs at
 call time using an `OP_SERVICE_ACCOUNT_TOKEN`.
 
 ## Quick start
 
-`labctl mcp --http` is secure by default: a non-loopback bind (this chart
+`anyctl mcp --http` is secure by default: a non-loopback bind (this chart
 always binds `:9000`, i.e. every interface) refuses to start without a bearer
 token, so `mcp.auth.enabled` (with a token source) or `mcp.allowUnauthenticated`
 must be set — the chart does not pick a default for you.
 
 ```bash
-helm install labctl-mcp oci://ghcr.io/jedwards1230/charts/labctl-mcp \
-  --set auth.existingSecret.name=labctl-op-token \
+helm install anyctl-mcp oci://ghcr.io/jedwards1230/charts/anyctl-mcp \
+  --set auth.existingSecret.name=anyctl-op-token \
   --set mcp.auth.enabled=true \
-  --set mcp.auth.existingSecret.name=labctl-mcp-auth-token \
+  --set mcp.auth.existingSecret.name=anyctl-mcp-auth-token \
   --set-file config.profileYaml=profile.yaml
 ```
 
@@ -26,7 +26,7 @@ helm install labctl-mcp oci://ghcr.io/jedwards1230/charts/labctl-mcp \
 
 | Key | Default | Purpose |
 |-----|---------|---------|
-| `mcp.http` | `:9000` | listen address for `labctl mcp --http` |
+| `mcp.http` | `:9000` | listen address for `anyctl mcp --http` |
 | `mcp.readOnly` | `false` | `--read-only`: expose read tools only |
 | `mcp.services` | `[]` | `--service` allowlist (empty = all) |
 | `mcp.auth.enabled` | `false` | require `Authorization: Bearer <token>` on `/mcp` (transport-layer access control) |
@@ -44,7 +44,7 @@ helm install labctl-mcp oci://ghcr.io/jedwards1230/charts/labctl-mcp \
 | `networkPolicy.egress.enabled` | `false` | also restrict egress (adds `Egress` to `policyTypes`) |
 | `networkPolicy.egress.rules` | `[]` | raw egress rule objects (empty while enabled = default-deny egress) |
 
-Service manifests are embedded in the labctl binary — only `profile.yaml`
+Service manifests are embedded in the anyctl binary — only `profile.yaml`
 (and optional `config.yaml`) need supplying.
 
 ## Access boundaries
@@ -57,14 +57,14 @@ Two independent, composable boundaries guard the endpoint:
    `Authorization: Bearer <token>` on `/mcp` (see [Endpoint authentication](#endpoint-authentication-bearer-token)).
 
 Bearer-token auth is **required, not opt-in**, because this chart's `mcp.http`
-is a bare-port bind (non-loopback): `labctl mcp` refuses to start unless
+is a bare-port bind (non-loopback): `anyctl mcp` refuses to start unless
 `mcp.auth.enabled` (with a token source) is set, or `mcp.allowUnauthenticated`
 explicitly accepts an unauthenticated deploy (e.g. when NetworkPolicy or an
 upstream gateway is the sole intended boundary). NetworkPolicy stays opt-in
 and composes with either choice.
 
 These are transport-/network-layer access control (*who may reach the endpoint at
-all*), not per-tool policy gating — labctl stays an unopinionated executor.
+all*), not per-tool policy gating — anyctl stays an unopinionated executor.
 `GET /healthz` is always unauthenticated so liveness/readiness probes work.
 
 ### NetworkPolicy
@@ -129,7 +129,7 @@ networkPolicy:
 `mcp.auth.enabled` adds an app-layer boundary: every request to `/mcp`
 must carry `Authorization: Bearer <token>`; missing/invalid tokens get `401`
 (compared in constant time). `GET /healthz` is never authenticated. Since
-`mcp.http` is a non-loopback bind, `labctl mcp` itself now requires this (or
+`mcp.http` is a non-loopback bind, `anyctl mcp` itself now requires this (or
 `mcp.allowUnauthenticated`) to start — leaving `mcp.auth.enabled` at its
 default `false` without also setting `mcp.allowUnauthenticated` makes the
 container CrashLoop with an actionable error, not a silently-unauthenticated
@@ -142,18 +142,18 @@ mcp:
   auth:
     enabled: true
     existingSecret:
-      name: labctl-mcp-bearer   # key "token" by default
+      name: anyctl-mcp-bearer   # key "token" by default
 ```
 
 …or have the 1Password operator mint it (renders a OnePasswordItem CRD named
-`<release>-labctl-mcp-mcp-auth-token`):
+`<release>-anyctl-mcp-mcp-auth-token`):
 
 ```yaml
 mcp:
   auth:
     enabled: true
     onePasswordItem:
-      itemPath: vaults/homelab/items/k8s-mcp-gateway-labctl-mcp-auth
+      itemPath: vaults/homelab/items/k8s-mcp-gateway-anyctl-mcp-auth
 ```
 
 Enabling `mcp.auth.enabled` without a token source is a hard render error
@@ -163,6 +163,6 @@ injected as the `LABCTL_MCP_AUTH_TOKEN` env var — never passed on argv.
 ## Federating into ContextForge
 
 Register a gateway with `transport: STREAMABLEHTTP` pointing at
-`http://<release>-labctl-mcp.<ns>.svc:9000/mcp`. When `mcp.auth.enabled` is set,
+`http://<release>-anyctl-mcp.<ns>.svc:9000/mcp`. When `mcp.auth.enabled` is set,
 configure the gateway with the matching bearer token (a `Authorization: Bearer
 <token>` header) so it can reach the endpoint.

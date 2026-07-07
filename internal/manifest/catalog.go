@@ -4,17 +4,17 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/jedwards1230/labctl/catalog"
+	"github.com/jedwards1230/anyctl/catalog"
 )
 
 // The embedded catalog is the built-in set of portable manifests compiled into
 // the binary (the top-level catalog package). The loader merges it with the local services/
 // dir: a local manifest of the same name overrides the embedded one, but every
 // service present only in the catalog is still available. These helpers expose
-// the catalog directly, for `labctl catalog list/show` and tests.
+// the catalog directly, for `anyctl catalog list/show` and tests.
 
 // CatalogManifest returns the raw embedded YAML for a service name (used by
-// `labctl catalog show` to dump a manifest for forking into a local override).
+// `anyctl catalog show` to dump a manifest for forking into a local override).
 func CatalogManifest(name string) ([]byte, bool) { return catalog.Manifest(name) }
 
 // catalogService decodes and structurally validates one embedded manifest. It

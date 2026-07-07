@@ -2,7 +2,7 @@ package manifest
 
 // Package manifest — OpenAPI inference (Phase 2).
 //
-// When a Service sets spec:, labctl fetches/reads the OpenAPI 3.x document and
+// When a Service sets spec:, anyctl fetches/reads the OpenAPI 3.x document and
 // derives a Command for each operation. Explicit commands: entries override any
 // inferred command with the same key.
 //
@@ -128,16 +128,16 @@ func fetchURL(u string) ([]byte, error) {
 	return b, nil
 }
 
-// specCacheDir returns the labctl spec cache dir, honoring XDG_CACHE_HOME.
+// specCacheDir returns the anyctl spec cache dir, honoring XDG_CACHE_HOME.
 func specCacheDir() string {
 	if d := os.Getenv("XDG_CACHE_HOME"); d != "" {
-		return filepath.Join(d, "labctl", "specs")
+		return filepath.Join(d, "anyctl", "specs")
 	}
 	home, err := os.UserHomeDir()
 	if err != nil {
-		return filepath.Join(".cache", "labctl", "specs")
+		return filepath.Join(".cache", "anyctl", "specs")
 	}
-	return filepath.Join(home, ".cache", "labctl", "specs")
+	return filepath.Join(home, ".cache", "anyctl", "specs")
 }
 
 // specCachePath is the cache file for a spec URL: <cacheDir>/<sha256(url)>.json.
@@ -148,7 +148,7 @@ func specCachePath(u string) string {
 }
 
 // readSpecCache returns the cached spec bytes if the file exists, has the exact
-// perms labctl writes (0600), and is within the freshness window. Any miss
+// perms anyctl writes (0600), and is within the freshness window. Any miss
 // (absent, wrong perms, stale, unreadable) returns ok=false so the caller
 // refetches. Requiring exactly 0600 — the only mode writeSpecCache produces —
 // means a file at any other mode (e.g. a 0400 downgrade) is treated as

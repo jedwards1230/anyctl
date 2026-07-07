@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/jedwards1230/labctl/internal/agentsafety"
+	"github.com/jedwards1230/anyctl/internal/agentsafety"
 )
 
 // writeSourceManifest writes a manifest into a source dir used by `catalog add`.
@@ -32,7 +32,7 @@ commands:
 // services load with origin catalog:<name>; `catalog installed` lists it.
 func TestCatalogAddDirSource(t *testing.T) {
 	cfg := t.TempDir()
-	t.Setenv("LABCTL_CONFIG_DIR", cfg)
+	t.Setenv("ANYCTL_CONFIG_DIR", cfg)
 	src := filepath.Join(t.TempDir(), "mycat")
 	writeSourceManifest(t, src, "widget.yaml", portableWidget)
 
@@ -71,7 +71,7 @@ func TestCatalogAddDirSource(t *testing.T) {
 // schema rejects the whole add; nothing is installed.
 func TestCatalogAddRejectsNonSchemaManifest(t *testing.T) {
 	cfg := t.TempDir()
-	t.Setenv("LABCTL_CONFIG_DIR", cfg)
+	t.Setenv("ANYCTL_CONFIG_DIR", cfg)
 	src := filepath.Join(t.TempDir(), "badcat")
 	writeSourceManifest(t, src, "widget.yaml", portableWidget)
 	writeSourceManifest(t, src, "bad.yaml", "name: bad\nbogus_key: 1\nauth: { strategy: none }\n")
@@ -94,7 +94,7 @@ func TestCatalogAddRejectsBindingManifest(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			cfg := t.TempDir()
-			t.Setenv("LABCTL_CONFIG_DIR", cfg)
+			t.Setenv("ANYCTL_CONFIG_DIR", cfg)
 			src := filepath.Join(t.TempDir(), "boundcat")
 			writeSourceManifest(t, src, "bound.yaml", body)
 
@@ -112,7 +112,7 @@ func TestCatalogAddRejectsBindingManifest(t *testing.T) {
 // TestCatalogAddNoManifests: a source dir with no *.yaml is a usage error.
 func TestCatalogAddNoManifests(t *testing.T) {
 	cfg := t.TempDir()
-	t.Setenv("LABCTL_CONFIG_DIR", cfg)
+	t.Setenv("ANYCTL_CONFIG_DIR", cfg)
 	src := t.TempDir() // empty
 
 	var out, errb bytes.Buffer
@@ -127,11 +127,11 @@ func TestCatalogAddNoManifests(t *testing.T) {
 // TestCatalogAddCrossCatalogCollision: adding a second catalog that defines a
 // service already provided by an installed catalog now SUCCEEDS — both catalogs
 // install, each addressable via its qualified "<catalog>:<service>" selector
-// (`labctl svc <catalog>:<service>`), while the bare name is ambiguous and
-// reported by `list`/`labctl svc <name>` rather than silently picked.
+// (`anyctl svc <catalog>:<service>`), while the bare name is ambiguous and
+// reported by `list`/`anyctl svc <name>` rather than silently picked.
 func TestCatalogAddCrossCatalogCollision(t *testing.T) {
 	cfg := t.TempDir()
-	t.Setenv("LABCTL_CONFIG_DIR", cfg)
+	t.Setenv("ANYCTL_CONFIG_DIR", cfg)
 	srcA := filepath.Join(t.TempDir(), "acat")
 	writeSourceManifest(t, srcA, "widget.yaml", portableWidget)
 	srcB := filepath.Join(t.TempDir(), "bcat")
@@ -160,8 +160,8 @@ func TestCatalogAddCrossCatalogCollision(t *testing.T) {
 		t.Errorf("list output should show both qualified forms:\n%s", out.String())
 	}
 
-	// The bare name is ambiguous: both `labctl svc widget` (no subcommand) and
-	// `labctl svc widget list` (with one) must error with the qualify message.
+	// The bare name is ambiguous: both `anyctl svc widget` (no subcommand) and
+	// `anyctl svc widget list` (with one) must error with the qualify message.
 	for _, args := range [][]string{{"svc", "widget"}, {"svc", "widget", "list"}} {
 		out.Reset()
 		errb.Reset()
@@ -189,7 +189,7 @@ func TestCatalogAddCrossCatalogCollision(t *testing.T) {
 // forms) for the bare name instead of a misleading "unknown service".
 func TestLintDoctorQualifiedAndAmbiguousSelector(t *testing.T) {
 	cfg := t.TempDir()
-	t.Setenv("LABCTL_CONFIG_DIR", cfg)
+	t.Setenv("ANYCTL_CONFIG_DIR", cfg)
 	srcA := filepath.Join(t.TempDir(), "acat")
 	writeSourceManifest(t, srcA, "widget.yaml", portableWidget)
 	srcB := filepath.Join(t.TempDir(), "bcat")
@@ -226,7 +226,7 @@ func TestLintDoctorQualifiedAndAmbiguousSelector(t *testing.T) {
 // TestCatalogRemove: remove deletes the catalog; removing a missing one errors.
 func TestCatalogRemove(t *testing.T) {
 	cfg := t.TempDir()
-	t.Setenv("LABCTL_CONFIG_DIR", cfg)
+	t.Setenv("ANYCTL_CONFIG_DIR", cfg)
 	src := filepath.Join(t.TempDir(), "mycat")
 	writeSourceManifest(t, src, "widget.yaml", portableWidget)
 
@@ -255,7 +255,7 @@ func TestCatalogRemove(t *testing.T) {
 // manifest.
 func TestCatalogUpdateDirSource(t *testing.T) {
 	cfg := t.TempDir()
-	t.Setenv("LABCTL_CONFIG_DIR", cfg)
+	t.Setenv("ANYCTL_CONFIG_DIR", cfg)
 	src := filepath.Join(t.TempDir(), "mycat")
 	writeSourceManifest(t, src, "widget.yaml", portableWidget)
 
@@ -292,7 +292,7 @@ commands:
 // pipeline `catalog add --openapi` uses, picking up an upstream spec change.
 func TestCatalogUpdateOpenAPISource(t *testing.T) {
 	cfg := t.TempDir()
-	t.Setenv("LABCTL_CONFIG_DIR", cfg)
+	t.Setenv("ANYCTL_CONFIG_DIR", cfg)
 
 	specPath := filepath.Join(t.TempDir(), "petstore.yaml")
 	if err := os.WriteFile(specPath, []byte(openapiPetstoreFixture), 0o600); err != nil {
@@ -368,7 +368,7 @@ security:
 // (the existing per-catalog firstErr pattern).
 func TestCatalogUpdateBulkWithOpenAPISource(t *testing.T) {
 	cfg := t.TempDir()
-	t.Setenv("LABCTL_CONFIG_DIR", cfg)
+	t.Setenv("ANYCTL_CONFIG_DIR", cfg)
 
 	dirSrc := filepath.Join(t.TempDir(), "dircat")
 	writeSourceManifest(t, dirSrc, "widget.yaml", portableWidget)
@@ -420,7 +420,7 @@ commands:
 // failure shape as a git remote that has gone away.
 func TestCatalogUpdateOpenAPIMovedFileErrors(t *testing.T) {
 	cfg := t.TempDir()
-	t.Setenv("LABCTL_CONFIG_DIR", cfg)
+	t.Setenv("ANYCTL_CONFIG_DIR", cfg)
 
 	specPath := filepath.Join(t.TempDir(), "petstore.yaml")
 	if err := os.WriteFile(specPath, []byte(openapiPetstoreFixture), 0o600); err != nil {
@@ -450,7 +450,7 @@ func TestCatalogUpdateOpenAPIMovedFileErrors(t *testing.T) {
 // a valid git URL is a usage error (no process spawned).
 func TestCatalogAddRejectsInvalidGitURL(t *testing.T) {
 	cfg := t.TempDir()
-	t.Setenv("LABCTL_CONFIG_DIR", cfg)
+	t.Setenv("ANYCTL_CONFIG_DIR", cfg)
 	for _, src := range []string{"ext::sh -c whoami", "-oProxyCommand=evil", "not a url"} {
 		t.Run(src, func(t *testing.T) {
 			var out, errb bytes.Buffer
@@ -490,7 +490,7 @@ func TestCatalogAddGitSource(t *testing.T) {
 	gitInit("commit", "--quiet", "-m", "init")
 
 	cfg := t.TempDir()
-	t.Setenv("LABCTL_CONFIG_DIR", cfg)
+	t.Setenv("ANYCTL_CONFIG_DIR", cfg)
 	var out, errb bytes.Buffer
 	if code := Run([]string{"catalog", "add", "file://" + repo, "--name", "gitcat"}, &out, &errb); code != agentsafety.ExitOK {
 		t.Fatalf("git add exit = %d, want 0 (stderr: %s)", code, errb.String())
@@ -512,7 +512,7 @@ func TestCatalogAddGitSource(t *testing.T) {
 // segment, the user is told to pass --name and nothing is installed.
 func TestCatalogAddInferredNameInvalid(t *testing.T) {
 	cfg := t.TempDir()
-	t.Setenv("LABCTL_CONFIG_DIR", cfg)
+	t.Setenv("ANYCTL_CONFIG_DIR", cfg)
 	src := filepath.Join(t.TempDir(), "Bad.Name")
 	writeSourceManifest(t, src, "widget.yaml", portableWidget)
 

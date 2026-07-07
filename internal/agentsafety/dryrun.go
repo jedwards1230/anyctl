@@ -5,8 +5,8 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/jedwards1230/labctl/internal/manifest"
-	"github.com/jedwards1230/labctl/internal/transport"
+	"github.com/jedwards1230/anyctl/internal/manifest"
+	"github.com/jedwards1230/anyctl/internal/transport"
 )
 
 // MergeAuthPreview adds a redacted line for the credential the auth strategy

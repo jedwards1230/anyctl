@@ -6,14 +6,14 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/jedwards1230/labctl/internal/agentsafety"
-	"github.com/jedwards1230/labctl/internal/manifest"
+	"github.com/jedwards1230/anyctl/internal/agentsafety"
+	"github.com/jedwards1230/anyctl/internal/manifest"
 	"github.com/spf13/cobra"
 )
 
-// defaultConfigYAML is the minimal config.yaml `labctl init` provisions. It is a
+// defaultConfigYAML is the minimal config.yaml `anyctl init` provisions. It is a
 // generic, portable header (no homelab specifics) mirroring examples/config.yaml.
-const defaultConfigYAML = `# labctl global config. Every field is optional; these are the defaults.
+const defaultConfigYAML = `# anyctl global config. Every field is optional; these are the defaults.
 # Unknown top-level keys are an error (strict decoding) — a typo is rejected at
 # load time rather than silently ignored.
 version: 1
@@ -33,11 +33,11 @@ secrets:
 # The legacy single-resolver ` + "`secret:`" + ` block is a still-supported deprecated alias.
 `
 
-// defaultProfileYAML is the commented profile.yaml stub `labctl init` provisions.
+// defaultProfileYAML is the commented profile.yaml stub `anyctl init` provisions.
 // A profile binds portable manifests to THIS machine's endpoints and secret refs.
 // It is the SOLE binding mechanism: a manifest carries the portable shape only —
 // an in-manifest base_url or secret ref is rejected by `lint`.
-const defaultProfileYAML = `# labctl per-user profile: binds portable manifests to THIS machine's endpoints
+const defaultProfileYAML = `# anyctl per-user profile: binds portable manifests to THIS machine's endpoints
 # and credentials. This is the only place a base_url or secret ref may live — a
 # manifest carries the portable shape only (an in-manifest base_url/ref is
 # rejected). Precedence at resolution time: env override > profile.
@@ -52,9 +52,9 @@ services:
   #       ref: "op://VAULT/ITEM/FIELD"
 `
 
-// cmdInit has two modes. Bare ` + "`labctl init`" + ` provisions the config dir
+// cmdInit has two modes. Bare ` + "`anyctl init`" + ` provisions the config dir
 // (config.yaml + services/ + profile.yaml), creating only what is missing.
-// ` + "`labctl init <service>`" + ` scaffolds a portable starter manifest for a new
+// ` + "`anyctl init <service>`" + ` scaffolds a portable starter manifest for a new
 // service, printing to stdout by default or writing to --output (refusing to
 // clobber unless --force).
 func (r *runner) cmdInit() *cobra.Command {
@@ -71,8 +71,8 @@ func (r *runner) cmdInit() *cobra.Command {
 			"the schema (commands + auth strategy + secret slots); the machine-specific\n" +
 			"base_url and secret refs go in profile.yaml (shown in a trailing comment).\n" +
 			"It prints to stdout by default; use -o to write it to a file. The output\n" +
-			"validates cleanly (`labctl lint <file>`).\n\n" +
-			"To edit an *existing* embedded service, use `labctl catalog edit <name>`\n" +
+			"validates cleanly (`anyctl lint <file>`).\n\n" +
+			"To edit an *existing* embedded service, use `anyctl catalog edit <name>`\n" +
 			"(it seeds the complete manifest, not a blank starter).",
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -115,7 +115,7 @@ func (r *runner) scaffoldService(name, auth, outPath string, force bool) error {
 // provisionConfigDir creates the config dir scaffold idempotently: the dir,
 // services/, a minimal config.yaml, and a commented profile.yaml. It clobbers
 // nothing that already exists and prints one line per action to stderr (stdout
-// stays data-only). Honors --config-dir / LABCTL_CONFIG_DIR.
+// stays data-only). Honors --config-dir / ANYCTL_CONFIG_DIR (legacy LABCTL_CONFIG_DIR).
 func (r *runner) provisionConfigDir() error {
 	dir := r.configDir()
 	if err := r.ensureDir(dir); err != nil {

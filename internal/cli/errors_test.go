@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/jedwards1230/labctl/internal/agentsafety"
-	"github.com/jedwards1230/labctl/internal/transport"
+	"github.com/jedwards1230/anyctl/internal/agentsafety"
+	"github.com/jedwards1230/anyctl/internal/transport"
 )
 
 func TestReportErrorPlain(t *testing.T) {

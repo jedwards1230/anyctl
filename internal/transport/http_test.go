@@ -10,9 +10,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jedwards1230/labctl/internal/auth"
-	"github.com/jedwards1230/labctl/internal/manifest"
-	"github.com/jedwards1230/labctl/internal/template"
+	"github.com/jedwards1230/anyctl/internal/auth"
+	"github.com/jedwards1230/anyctl/internal/manifest"
+	"github.com/jedwards1230/anyctl/internal/template"
 )
 
 func noAuthApplier() auth.Applier {

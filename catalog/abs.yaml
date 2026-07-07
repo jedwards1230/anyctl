@@ -4,7 +4,7 @@ env_prefix: ABS
 
 # Auth note: the authenticated commands need a durable Bearer token stored as an
 # `api_token` field (or set ABS_TOKEN). Minting a token requires a POST /login
-# flow that labctl does not implement yet — so only `status` (unauthenticated)
+# flow that anyctl does not implement yet — so only `status` (unauthenticated)
 # executes until you supply a token. Add an `api_token` ref in profile.yaml (or
 # set ABS_TOKEN) and libraries/me/users light up.
 auth:

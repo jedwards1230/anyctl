@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/jedwards1230/labctl/internal/agentsafety"
+	"github.com/jedwards1230/anyctl/internal/agentsafety"
 )
 
 // svcManifest is a minimal no-auth PORTABLE radarr manifest used by the
@@ -23,13 +23,13 @@ commands:
 `
 
 // TestSvcResolvesServiceCommand confirms a service command resolves under the
-// `svc` parent: `labctl svc radarr list --dry-run` prints the resolved request
+// `svc` parent: `anyctl svc radarr list --dry-run` prints the resolved request
 // and exits 0 (no network, no secrets).
 func TestSvcResolvesServiceCommand(t *testing.T) {
 	dir := t.TempDir()
 	writeService(t, dir, "radarr", svcManifest)
 	bindBaseURL(t, dir, "radarr", "http://movies.example")
-	t.Setenv("LABCTL_CONFIG_DIR", dir)
+	t.Setenv("ANYCTL_CONFIG_DIR", dir)
 
 	var out, errb bytes.Buffer
 	if code := Run([]string{"svc", "radarr", "list", "--dry-run"}, &out, &errb); code != agentsafety.ExitOK {
@@ -45,7 +45,7 @@ func TestSvcAliasResolves(t *testing.T) {
 	dir := t.TempDir()
 	writeService(t, dir, "radarr", svcManifest)
 	bindBaseURL(t, dir, "radarr", "http://movies.example")
-	t.Setenv("LABCTL_CONFIG_DIR", dir)
+	t.Setenv("ANYCTL_CONFIG_DIR", dir)
 
 	var out, errb bytes.Buffer
 	if code := Run([]string{"s", "radarr", "list", "--dry-run"}, &out, &errb); code != agentsafety.ExitOK {
@@ -56,12 +56,12 @@ func TestSvcAliasResolves(t *testing.T) {
 	}
 }
 
-// TestSvcBareListsServices confirms bare `labctl svc` lists the configured
-// services (same content as `labctl list`) and does not error.
+// TestSvcBareListsServices confirms bare `anyctl svc` lists the configured
+// services (same content as `anyctl list`) and does not error.
 func TestSvcBareListsServices(t *testing.T) {
 	dir := t.TempDir()
 	writeService(t, dir, "radarr", svcManifest)
-	t.Setenv("LABCTL_CONFIG_DIR", dir)
+	t.Setenv("ANYCTL_CONFIG_DIR", dir)
 
 	var out, errb bytes.Buffer
 	if code := Run([]string{"svc"}, &out, &errb); code != agentsafety.ExitOK {
@@ -73,10 +73,10 @@ func TestSvcBareListsServices(t *testing.T) {
 	}
 }
 
-// TestSvcBareEmptyConfigGraceful confirms bare `labctl svc` with no local config
+// TestSvcBareEmptyConfigGraceful confirms bare `anyctl svc` with no local config
 // does not crash — it lists the embedded catalog (parity with `list`) and exits 0.
 func TestSvcBareEmptyConfigGraceful(t *testing.T) {
-	t.Setenv("LABCTL_CONFIG_DIR", t.TempDir())
+	t.Setenv("ANYCTL_CONFIG_DIR", t.TempDir())
 	var out, errb bytes.Buffer
 	if code := Run([]string{"svc"}, &out, &errb); code != agentsafety.ExitOK {
 		t.Fatalf("exit = %d, want 0 (stderr: %s)", code, errb.String())
@@ -87,12 +87,12 @@ func TestSvcBareEmptyConfigGraceful(t *testing.T) {
 }
 
 // TestServiceNotRegisteredAtRoot is the core guarantee of this refactor: a
-// service name is NOT a top-level command. `labctl radarr list` is an unknown
+// service name is NOT a top-level command. `anyctl radarr list` is an unknown
 // command (exit 2), and root --help advertises `svc` but never the service name.
 func TestServiceNotRegisteredAtRoot(t *testing.T) {
 	dir := t.TempDir()
 	writeService(t, dir, "radarr", svcManifest)
-	t.Setenv("LABCTL_CONFIG_DIR", dir)
+	t.Setenv("ANYCTL_CONFIG_DIR", dir)
 
 	// A bare service invocation at the root is now an unknown command.
 	var out, errb bytes.Buffer
@@ -117,7 +117,7 @@ func TestServiceNotRegisteredAtRoot(t *testing.T) {
 // TestRootBuiltinsStayAtRoot confirms the built-ins remain top-level commands
 // after the refactor (they are listed in root --help).
 func TestRootBuiltinsStayAtRoot(t *testing.T) {
-	t.Setenv("LABCTL_CONFIG_DIR", t.TempDir())
+	t.Setenv("ANYCTL_CONFIG_DIR", t.TempDir())
 	var out, errb bytes.Buffer
 	if code := Run([]string{"--help"}, &out, &errb); code != agentsafety.ExitOK {
 		t.Fatalf("--help exit = %d, want 0 (stderr: %s)", code, errb.String())

@@ -19,12 +19,12 @@ import (
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
 
-	"github.com/jedwards1230/labctl/internal/agentsafety"
-	"github.com/jedwards1230/labctl/internal/command"
-	"github.com/jedwards1230/labctl/internal/engine"
-	"github.com/jedwards1230/labctl/internal/manifest"
-	"github.com/jedwards1230/labctl/internal/mcpserver/views"
-	"github.com/jedwards1230/labctl/internal/output"
+	"github.com/jedwards1230/anyctl/internal/agentsafety"
+	"github.com/jedwards1230/anyctl/internal/command"
+	"github.com/jedwards1230/anyctl/internal/engine"
+	"github.com/jedwards1230/anyctl/internal/manifest"
+	"github.com/jedwards1230/anyctl/internal/mcpserver/views"
+	"github.com/jedwards1230/anyctl/internal/output"
 )
 
 // resultResourceURI is the URI of the single universal result View resource,
@@ -218,7 +218,7 @@ func boolPtr(b bool) *bool { return &b }
 // tested there); this glue only copies those hints onto the SDK struct plus the
 // Title and OpenWorldHint.
 //
-// Every tool sets OpenWorldHint=true: labctl tools call out to external/LAN
+// Every tool sets OpenWorldHint=true: anyctl tools call out to external/LAN
 // services, so the domain of interaction is open, not a closed in-process world.
 func buildAnnotations(svcName, cmdID string, c *command.Command) *mcp.ToolAnnotations {
 	hints := agentsafety.Hints(c.Write, c.Method)
@@ -365,7 +365,7 @@ func BuildServer(
 			registered[capturedName] = true
 		}
 
-		// Generic verbs: expose labctl's write capability (and the jsonrpc
+		// Generic verbs: expose anyctl's write capability (and the jsonrpc
 		// `call`) as per-service MCP tools, mirroring the CLI's verb dispatch.
 		registerVerbTools(srv, svc, prefix, cmds, opts, cfg, tracer, stderr, registered)
 	}

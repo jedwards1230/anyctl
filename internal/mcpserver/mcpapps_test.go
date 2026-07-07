@@ -12,9 +12,9 @@ import (
 	mcp "github.com/modelcontextprotocol/go-sdk/mcp"
 	"go.opentelemetry.io/otel/trace/noop"
 
-	"github.com/jedwards1230/labctl/internal/manifest"
-	"github.com/jedwards1230/labctl/internal/mcpserver"
-	"github.com/jedwards1230/labctl/internal/mcpserver/views"
+	"github.com/jedwards1230/anyctl/internal/manifest"
+	"github.com/jedwards1230/anyctl/internal/mcpserver"
+	"github.com/jedwards1230/anyctl/internal/mcpserver/views"
 )
 
 const resultResourceURI = "ui://labctl/result"

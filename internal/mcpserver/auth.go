@@ -8,22 +8,32 @@ import (
 	"net/http"
 	"os"
 	"strings"
+
+	"github.com/jedwards1230/anyctl/internal/compat"
 )
 
-// AuthTokenEnv is the environment variable that holds the bearer token used to
-// guard the streamable-HTTP /mcp endpoint. When unset or empty, HTTP auth is
-// disabled (default-off, backward-compatible). The token is never logged.
-const AuthTokenEnv = "LABCTL_MCP_AUTH_TOKEN"
+// AuthTokenEnv is the preferred environment variable that holds the bearer
+// token used to guard the streamable-HTTP /mcp endpoint. When unset or empty,
+// HTTP auth is disabled (default-off, backward-compatible). The token is never
+// logged.
+const AuthTokenEnv = "ANYCTL_MCP_AUTH_TOKEN"
+
+// LegacyAuthTokenEnv is the pre-rename name for AuthTokenEnv. It is still
+// honored (with a one-time deprecation warning) because it is the cross-repo
+// contract: the Helm chart and Ansible-managed workstation configs still set
+// LABCTL_MCP_AUTH_TOKEN, so honoring it lets the in-cluster pod and the
+// workstation run the anyctl binary without a lockstep edit on those repos.
+const LegacyAuthTokenEnv = "LABCTL_MCP_AUTH_TOKEN"
 
 // ResolveAuthToken returns the bearer token that should guard the /mcp
 // endpoint, or "" when auth is disabled.
 //
-// Precedence: --auth-token-file (when non-empty) wins over the
-// LABCTL_MCP_AUTH_TOKEN env var. If tokenFile is set but the file is
-// unreadable or empty the call fails with an error — an operator who asked
-// for file-based auth must not silently fall through to no-auth (fail-closed).
-// If tokenFile is empty, the trimmed value of LABCTL_MCP_AUTH_TOKEN is
-// returned; empty/unset means auth is disabled.
+// Precedence: --auth-token-file (when non-empty) wins over the env var. If
+// tokenFile is set but the file is unreadable or empty the call fails with an
+// error — an operator who asked for file-based auth must not silently fall
+// through to no-auth (fail-closed). If tokenFile is empty, the trimmed value of
+// ANYCTL_MCP_AUTH_TOKEN (or the legacy LABCTL_MCP_AUTH_TOKEN, with a one-time
+// deprecation warning) is returned; empty/unset means auth is disabled.
 func ResolveAuthToken(tokenFile string) (string, error) {
 	if tokenFile != "" {
 		data, err := os.ReadFile(tokenFile)
@@ -36,7 +46,7 @@ func ResolveAuthToken(tokenFile string) (string, error) {
 		}
 		return token, nil
 	}
-	return strings.TrimSpace(os.Getenv(AuthTokenEnv)), nil
+	return strings.TrimSpace(compat.Getenv(AuthTokenEnv, LegacyAuthTokenEnv)), nil
 }
 
 // isLoopbackAddr reports whether an http listen address (as passed to --http,
@@ -71,7 +81,7 @@ func isLoopbackAddr(addr string) bool {
 	return ip != nil && ip.IsLoopback()
 }
 
-// RequireAuth enforces labctl's secure-by-default policy for the
+// RequireAuth enforces anyctl's secure-by-default policy for the
 // streamable-HTTP transport: a non-loopback --http bind must have an auth
 // token configured (via LABCTL_MCP_AUTH_TOKEN or --auth-token-file) unless the
 // operator explicitly opts out with allowUnauthenticated. Loopback binds
@@ -86,7 +96,7 @@ func RequireAuth(addr, authToken string, allowUnauthenticated bool) error {
 		return nil
 	}
 	return fmt.Errorf(
-		"labctl mcp --http %s binds a non-loopback address (e.g., bare :PORT binds all interfaces) with no auth configured; "+
+		"anyctl mcp --http %s binds a non-loopback address (e.g., bare :PORT binds all interfaces) with no auth configured; "+
 			"set %s or pass --auth-token-file <path> to require bearer auth on /mcp, "+
 			"or pass --allow-unauthenticated to explicitly accept an unauthenticated non-loopback server (not recommended outside a trusted network)",
 		addr, AuthTokenEnv,
@@ -112,7 +122,7 @@ func bearerAuthMiddleware(token string, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		got := r.Header.Get("Authorization")
 		if subtle.ConstantTimeCompare([]byte(got), expectedBytes) != 1 {
-			w.Header().Set("WWW-Authenticate", `Bearer realm="labctl", error="invalid_token"`)
+			w.Header().Set("WWW-Authenticate", `Bearer realm="anyctl", error="invalid_token"`)
 			w.WriteHeader(http.StatusUnauthorized)
 			_, _ = io.WriteString(w, "unauthorized\n")
 			return

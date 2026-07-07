@@ -1,4 +1,4 @@
-module github.com/jedwards1230/labctl
+module github.com/jedwards1230/anyctl
 
 go 1.25.11
 

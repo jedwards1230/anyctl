@@ -1,7 +1,7 @@
-labctl-mcp is deployed.
+anyctl-mcp is deployed.
 
 MCP endpoint (streamable-HTTP):
-  http://{{ include "labctl-mcp.fullname" . }}.{{ .Release.Namespace }}.svc:{{ .Values.service.port }}{{ .Values.mcp.path }}
+  http://{{ include "anyctl-mcp.fullname" . }}.{{ .Release.Namespace }}.svc:{{ .Values.service.port }}{{ .Values.mcp.path }}
 
 Tool exposure:
   read-only : {{ .Values.mcp.readOnly }}
@@ -13,7 +13,7 @@ Endpoint auth (transport-layer):
 {{- if and (not .Values.mcp.auth.enabled) (not .Values.mcp.allowUnauthenticated) }}
 
 WARNING: mcp.http (":9000") is a non-loopback bind with neither mcp.auth.enabled
-nor mcp.allowUnauthenticated set. labctl mcp refuses to start in this
+nor mcp.allowUnauthenticated set. anyctl mcp refuses to start in this
 configuration (secure by default) — the container will CrashLoop. Set
 mcp.auth.enabled (with a token source) to require bearer auth, or
 mcp.allowUnauthenticated to explicitly accept an unauthenticated deploy.
@@ -23,7 +23,7 @@ NOTE: /mcp has no app-layer auth (mcp.allowUnauthenticated=true). Consider
 networkPolicy.enabled to restrict who can reach it.
 {{- end }}
 
-{{- $secretName := include "labctl-mcp.secretName" . }}
+{{- $secretName := include "anyctl-mcp.secretName" . }}
 {{- if not $secretName }}
 
 WARNING: no op service-account token configured (auth.existingSecret.name and

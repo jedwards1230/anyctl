@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/jedwards1230/labctl/catalog"
+	"github.com/jedwards1230/anyctl/catalog"
 )
 
 // wantCatalog is the set of services the embedded catalog must ship. A change to

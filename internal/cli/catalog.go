@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/jedwards1230/labctl/internal/agentsafety"
-	"github.com/jedwards1230/labctl/internal/manifest"
+	"github.com/jedwards1230/anyctl/internal/agentsafety"
+	"github.com/jedwards1230/anyctl/internal/manifest"
 	"github.com/spf13/cobra"
 )
 
@@ -77,7 +77,7 @@ func (r *runner) cmdCatalogShow() *cobra.Command {
 		Use:   "show <service>",
 		Short: "print an embedded manifest's YAML to stdout",
 		Long: "Print an embedded manifest's YAML to stdout.\n\n" +
-			"To seed a local override for live editing, use `labctl catalog edit <name>`\n" +
+			"To seed a local override for live editing, use `anyctl catalog edit <name>`\n" +
 			"(it copies the complete manifest into <config-dir>/services/<name>.yaml, where\n" +
 			"it shadows the embedded one at the next load — no recompile required).",
 		Args: cobra.ExactArgs(1),
@@ -85,7 +85,7 @@ func (r *runner) cmdCatalogShow() *cobra.Command {
 			r.curCommand = "catalog"
 			data, ok := manifest.CatalogManifest(args[0])
 			if !ok {
-				return agentsafety.NewUsageError(fmt.Sprintf("no embedded service %q (see `labctl catalog list`)", args[0]))
+				return agentsafety.NewUsageError(fmt.Sprintf("no embedded service %q (see `anyctl catalog list`)", args[0]))
 			}
 			_, _ = r.stdout.Write(data)
 			return nil
@@ -109,10 +109,10 @@ func (r *runner) cmdCatalogEdit() *cobra.Command {
 			"field-level merge — so a partial override would drop endpoints or fail\n" +
 			"validation. The complete manifest is written so it loads as-is.\n\n" +
 			"On success the absolute path written is printed to stdout (compose it, e.g.\n" +
-			"`$EDITOR $(labctl catalog edit authentik)`). An existing override is not\n" +
+			"`$EDITOR $(anyctl catalog edit authentik)`). An existing override is not\n" +
 			"clobbered without --force. With --edit, $VISUAL/$EDITOR is opened on the file\n" +
 			"after writing.\n\n" +
-			"When the manifest is right, `labctl catalog vendor <name>` promotes it back\n" +
+			"When the manifest is right, `anyctl catalog vendor <name>` promotes it back\n" +
 			"into the repo's catalog/ source tree to ship embedded.",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -134,7 +134,7 @@ func (r *runner) catalogEdit(name string, force, open bool) error {
 	}
 	data, ok := manifest.CatalogManifest(name)
 	if !ok {
-		return agentsafety.NewUsageError(fmt.Sprintf("no embedded service %q (see `labctl catalog list`)", name))
+		return agentsafety.NewUsageError(fmt.Sprintf("no embedded service %q (see `anyctl catalog list`)", name))
 	}
 	svcDir := filepath.Join(r.configDir(), "services")
 	if err := os.MkdirAll(svcDir, 0o755); err != nil {
@@ -155,7 +155,7 @@ func (r *runner) catalogEdit(name string, force, open bool) error {
 		if err := launchEditor(abs); err != nil {
 			// Opening the editor is best-effort sugar; the file is already
 			// written and its path printed, so warn rather than fail.
-			_, _ = fmt.Fprintf(r.stderr, "labctl: %v\n", err)
+			_, _ = fmt.Fprintf(r.stderr, "anyctl: %v\n", err)
 		}
 	}
 	return nil
@@ -170,9 +170,9 @@ func (r *runner) cmdCatalogVendor() *cobra.Command {
 		Use:   "vendor <service>",
 		Short: "promote a local override into the repo catalog/ source tree",
 		Long: "Promote a local override (<config-dir>/services/<name>.yaml — typically one\n" +
-			"seeded by `labctl catalog edit`) back into the repo's catalog/ source tree at\n" +
+			"seeded by `anyctl catalog edit`) back into the repo's catalog/ source tree at\n" +
 			"catalog/<name>.yaml, ready to commit and ship embedded in the next release.\n\n" +
-			"vendor is a maintainer command run from a labctl repo checkout. The running\n" +
+			"vendor is a maintainer command run from a anyctl repo checkout. The running\n" +
 			"binary can't know the repo path, so the destination is catalog/ relative to\n" +
 			"the current directory by default; pass --catalog-dir to point elsewhere.\n\n" +
 			"The override is validated before vendoring (it must be a well-formed portable\n" +
@@ -185,7 +185,7 @@ func (r *runner) cmdCatalogVendor() *cobra.Command {
 		},
 	}
 	cmd.Flags().BoolVar(&force, "force", false, "overwrite an existing catalog/<name>.yaml")
-	cmd.Flags().StringVar(&catalogDir, "catalog-dir", "catalog", "destination catalog/ dir in a labctl repo checkout (default: catalog/ relative to cwd; run from the repo root)")
+	cmd.Flags().StringVar(&catalogDir, "catalog-dir", "catalog", "destination catalog/ dir in a anyctl repo checkout (default: catalog/ relative to cwd; run from the repo root)")
 	return cmd
 }
 
@@ -197,7 +197,7 @@ func (r *runner) catalogVendor(name, catalogDir string, force bool) error {
 	src := filepath.Join(r.configDir(), "services", name+".yaml")
 	if _, statErr := os.Stat(src); statErr != nil {
 		if os.IsNotExist(statErr) {
-			return agentsafety.NewUsageError(fmt.Sprintf("no local override %s (run `labctl catalog edit %s` first)", src, name))
+			return agentsafety.NewUsageError(fmt.Sprintf("no local override %s (run `anyctl catalog edit %s` first)", src, name))
 		}
 		return fmt.Errorf("stat %s: %w", src, statErr)
 	}

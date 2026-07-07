@@ -1,4 +1,4 @@
-# labctl global config. Every field is optional; these are the defaults.
+# anyctl global config. Every field is optional; these are the defaults.
 # Unknown top-level keys are an error (strict decoding) — a typo is rejected at
 # load time rather than silently ignored.
 version: 1
@@ -19,6 +19,6 @@ secrets:
       # only (never argv, never logged). Exactly one of file | value | env.
       # auth:
       #   service_account_token:
-      #     file: ~/.config/labctl/sa-token
+      #     file: ~/.config/anyctl/sa-token
 
 # The legacy single-resolver `secret:` block is a still-supported deprecated alias.

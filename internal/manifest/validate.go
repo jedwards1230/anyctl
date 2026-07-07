@@ -6,7 +6,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/jedwards1230/labctl/internal/filter"
+	"github.com/jedwards1230/anyctl/internal/filter"
 )
 
 var validTransports = map[string]bool{
@@ -62,7 +62,7 @@ var validUISortDirs = map[string]bool{
 }
 
 // Validate checks a service manifest for internal consistency. It does not touch
-// the network or resolve secrets — purely structural (used by `labctl lint`). Any
+// the network or resolve secrets — purely structural (used by `anyctl lint`). Any
 // failure is wrapped in *ConfigError so callers classify it to the usage exit
 // code (2), regardless of entry point.
 //
@@ -220,7 +220,7 @@ func validateCommand(id string, c Command, s *Service) error {
 // data only — no base_url, no secret ref, no HTML/URLs — so it raises no
 // portability concern and is allowed in a portable manifest like output:/
 // pagination:. drilldown is intentionally NOT validated against the
-// service's command set: it SHOULD name a sibling command, but labctl has no
+// service's command set: it SHOULD name a sibling command, but anyctl has no
 // warning channel today (only Validate's hard pass/fail) and commands can be
 // declared in any order or inferred later from spec:, so a hard fail here
 // would be a false positive — any non-empty string is accepted.

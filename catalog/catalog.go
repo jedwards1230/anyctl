@@ -1,4 +1,4 @@
-// Package catalog holds the portable service manifests compiled into the labctl
+// Package catalog holds the portable service manifests compiled into the anyctl
 // binary via go:embed. They are the built-in catalog: a user's local
 // <config-dir>/services/<name>.yaml overrides the embedded manifest of the same
 // name, but absent any local manifest every service here is still available — so

@@ -5,7 +5,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/jedwards1230/labctl/internal/manifest"
+	"github.com/jedwards1230/anyctl/internal/manifest"
 )
 
 // opAuth lazily resolves a 1Password service-account token from its configured

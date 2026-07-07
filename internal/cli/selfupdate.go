@@ -14,22 +14,22 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jedwards1230/labctl/internal/agentsafety"
-	"github.com/jedwards1230/labctl/internal/transport"
+	"github.com/jedwards1230/anyctl/internal/agentsafety"
+	"github.com/jedwards1230/anyctl/internal/transport"
 	"github.com/spf13/cobra"
 )
 
 // selfUpdateRepo is the GitHub owner/repo self-update pulls release assets from.
-const selfUpdateRepo = "jedwards1230/labctl"
+const selfUpdateRepo = "jedwards1230/anyctl"
 
-// selfUpdateOpts holds the parsed flags for `labctl self-update`.
+// selfUpdateOpts holds the parsed flags for `anyctl self-update`.
 type selfUpdateOpts struct {
 	check   bool
 	version string // pinned tag (vX.Y.Z); empty → latest
 	force   bool
 }
 
-// selfUpdater resolves a labctl GitHub release for the running platform,
+// selfUpdater resolves a anyctl GitHub release for the running platform,
 // verifies the asset's sha256, and atomically replaces the running binary.
 // Every field is injectable so tests are fully hermetic (httptest apiBase, a
 // temp file as exePath) — it never has to touch the real GitHub API or the real
@@ -85,8 +85,8 @@ func (r *runner) cmdSelfUpdate() *cobra.Command {
 	var opts selfUpdateOpts
 	cmd := &cobra.Command{
 		Use:   "self-update",
-		Short: "update labctl to the latest GitHub release",
-		Long: "Download the matching GitHub release binary (labctl-{os}-{arch}), verify\n" +
+		Short: "update anyctl to the latest GitHub release",
+		Long: "Download the matching GitHub release binary (anyctl-{os}-{arch}), verify\n" +
 			"its sha256, and atomically replace the running binary in place. Use --check\n" +
 			"to compare versions without downloading. This is a CLI utility — it gates\n" +
 			"nothing on the service-execution path and never escalates privileges.",
@@ -123,7 +123,7 @@ func (u *selfUpdater) run(opts selfUpdateOpts) error {
 		return nil
 	}
 
-	assetName := fmt.Sprintf("labctl-%s-%s", u.goos, u.goarch)
+	assetName := fmt.Sprintf("anyctl-%s-%s", u.goos, u.goarch)
 	asset, ok := findAsset(rel.Assets, assetName)
 	if !ok {
 		// No binary for this platform is an environment problem (exit 2).
@@ -287,9 +287,9 @@ func (u *selfUpdater) resolveExe() (string, error) {
 // removes the temp file, leaving the target untouched — never a partial binary.
 func replaceBinary(exe string, data []byte) error {
 	dir := filepath.Dir(exe)
-	tmp, err := os.CreateTemp(dir, ".labctl-*.new")
+	tmp, err := os.CreateTemp(dir, ".anyctl-*.new")
 	if err != nil {
-		return fmt.Errorf("creating temp file in %s: %w (re-run with write access to that directory; labctl does not escalate privileges)", dir, err)
+		return fmt.Errorf("creating temp file in %s: %w (re-run with write access to that directory; anyctl does not escalate privileges)", dir, err)
 	}
 	tmpName := tmp.Name()
 	cleanup := func() { _ = os.Remove(tmpName) }
@@ -308,7 +308,7 @@ func replaceBinary(exe string, data []byte) error {
 	}
 	if err := os.Rename(tmpName, exe); err != nil {
 		cleanup()
-		return fmt.Errorf("replacing %s: %w (re-run with write access to that path; labctl does not escalate privileges)", exe, err)
+		return fmt.Errorf("replacing %s: %w (re-run with write access to that path; anyctl does not escalate privileges)", exe, err)
 	}
 	return nil
 }

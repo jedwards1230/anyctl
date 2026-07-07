@@ -7,8 +7,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/jedwards1230/labctl/internal/agentsafety"
-	"github.com/jedwards1230/labctl/internal/manifest"
+	"github.com/jedwards1230/anyctl/internal/agentsafety"
+	"github.com/jedwards1230/anyctl/internal/manifest"
 	"github.com/spf13/cobra"
 )
 
@@ -17,8 +17,8 @@ import (
 // `catalog add` enforces, with no network access, no config dir, and no
 // install/profile/cross-catalog interaction. It is what a third-party catalog
 // repo (and the validate-catalog GitHub Action) runs in CI to confirm its
-// manifests satisfy labctl's portable-manifest contract before anyone installs
-// them with `labctl catalog add`.
+// manifests satisfy anyctl's portable-manifest contract before anyone installs
+// them with `anyctl catalog add`.
 func (r *runner) cmdCatalogValidate() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "validate <dir>",
@@ -31,7 +31,7 @@ func (r *runner) cmdCatalogValidate() *cobra.Command {
 			"and no interaction with any installed or embedded catalog — it only inspects\n" +
 			"the files in <dir>. That makes it the check a third-party catalog repository\n" +
 			"runs in its own CI (see .github/actions/validate-catalog) to confirm its\n" +
-			"manifests satisfy labctl's contract before anyone runs `labctl catalog add`\n" +
+			"manifests satisfy anyctl's contract before anyone runs `anyctl catalog add`\n" +
 			"against the repo.\n\n" +
 			"Prints one line per manifest (\"ok\" or \"FAIL\" with the reason) and exits 0\n" +
 			"only if every manifest is valid and at least one was found.",

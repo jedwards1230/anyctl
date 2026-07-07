@@ -15,14 +15,14 @@ import (
 	"io"
 	"strings"
 
-	"github.com/jedwards1230/labctl/internal/auth"
-	"github.com/jedwards1230/labctl/internal/command"
-	"github.com/jedwards1230/labctl/internal/filter"
-	"github.com/jedwards1230/labctl/internal/manifest"
-	"github.com/jedwards1230/labctl/internal/output"
-	"github.com/jedwards1230/labctl/internal/secret"
-	"github.com/jedwards1230/labctl/internal/template"
-	"github.com/jedwards1230/labctl/internal/transport"
+	"github.com/jedwards1230/anyctl/internal/auth"
+	"github.com/jedwards1230/anyctl/internal/command"
+	"github.com/jedwards1230/anyctl/internal/filter"
+	"github.com/jedwards1230/anyctl/internal/manifest"
+	"github.com/jedwards1230/anyctl/internal/output"
+	"github.com/jedwards1230/anyctl/internal/secret"
+	"github.com/jedwards1230/anyctl/internal/template"
+	"github.com/jedwards1230/anyctl/internal/transport"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 )
@@ -125,11 +125,11 @@ func executePipeline(
 					// The on_error handler can't run (its endpoint won't resolve).
 					// Log that and surface the ORIGINAL step failure rather than
 					// silently continuing — a failed pipeline must not exit 0.
-					_, _ = fmt.Fprintf(stderr, "labctl: on_error step %q: resolve endpoint: %v\n", stepID, epErr)
+					_, _ = fmt.Fprintf(stderr, "anyctl: on_error step %q: resolve endpoint: %v\n", stepID, epErr)
 					return nil, fmt.Errorf("step %s: %w", stepID, stepErr)
 				}
 				if err := runStep(ctx, req, svc, *step.OnError, onErrEp, onErrEnv, accVars, stderr); err != nil {
-					_, _ = fmt.Fprintf(stderr, "labctl: on_error step %q failed: %v (continuing)\n", stepID, err)
+					_, _ = fmt.Fprintf(stderr, "anyctl: on_error step %q failed: %v (continuing)\n", stepID, err)
 				}
 				continue
 			}

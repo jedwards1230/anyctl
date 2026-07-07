@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/jedwards1230/labctl/internal/manifest"
+	"github.com/jedwards1230/anyctl/internal/manifest"
 )
 
 func TestTokenNilSourceInheritsSession(t *testing.T) {
@@ -33,8 +33,8 @@ func TestTokenValue(t *testing.T) {
 }
 
 func TestTokenEnv(t *testing.T) {
-	t.Setenv("LABCTL_TEST_SA", "env-token")
-	a := opAuth{src: &manifest.SecretSource{Env: "LABCTL_TEST_SA"}}
+	t.Setenv("ANYCTL_TEST_SA", "env-token")
+	a := opAuth{src: &manifest.SecretSource{Env: "ANYCTL_TEST_SA"}}
 	tok, err := a.token()
 	if err != nil {
 		t.Fatal(err)
@@ -45,8 +45,8 @@ func TestTokenEnv(t *testing.T) {
 }
 
 func TestTokenEnvEmptyIsAuthError(t *testing.T) {
-	t.Setenv("LABCTL_TEST_SA_EMPTY", "")
-	a := opAuth{src: &manifest.SecretSource{Env: "LABCTL_TEST_SA_EMPTY"}}
+	t.Setenv("ANYCTL_TEST_SA_EMPTY", "")
+	a := opAuth{src: &manifest.SecretSource{Env: "ANYCTL_TEST_SA_EMPTY"}}
 	_, err := a.token()
 	var authErr *AuthError
 	if !errors.As(err, &authErr) {

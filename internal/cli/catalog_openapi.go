@@ -9,16 +9,16 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jedwards1230/labctl/internal/agentsafety"
-	"github.com/jedwards1230/labctl/internal/manifest"
-	"github.com/jedwards1230/labctl/internal/transport"
+	"github.com/jedwards1230/anyctl/internal/agentsafety"
+	"github.com/jedwards1230/anyctl/internal/manifest"
+	"github.com/jedwards1230/anyctl/internal/transport"
 )
 
 // `catalog add --openapi <source>` materializes a portable manifest from an
 // OpenAPI 3.x document (URL or local file) and installs it as a single-service
 // named catalog — see catalog_install.go for the dir/git add path this sits
 // alongside. The spec is parsed once at add-time (internal/manifest's
-// GenerateManifestFromSpec); labctl does NOT vendor the spec file and does NOT
+// GenerateManifestFromSpec); anyctl does NOT vendor the spec file and does NOT
 // emit a `spec:` reference, so the installed manifest is self-contained like
 // any other portable manifest.
 

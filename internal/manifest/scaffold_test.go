@@ -6,12 +6,12 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/jedwards1230/labctl/internal/manifest"
+	"github.com/jedwards1230/anyctl/internal/manifest"
 )
 
 // TestScaffoldValidates writes the init output for every supported --auth scheme
 // to a temp file and loads/validates it, asserting no error. This is the
-// guarantee that `labctl init` output passes `labctl lint`.
+// guarantee that `anyctl init` output passes `anyctl lint`.
 func TestScaffoldValidates(t *testing.T) {
 	dir := t.TempDir()
 	for _, auth := range manifest.ScaffoldAuthSchemes {

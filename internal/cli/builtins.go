@@ -10,10 +10,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jedwards1230/labctl/internal/agentsafety"
-	"github.com/jedwards1230/labctl/internal/command"
-	"github.com/jedwards1230/labctl/internal/manifest"
-	"github.com/jedwards1230/labctl/internal/mcpserver"
+	"github.com/jedwards1230/anyctl/internal/agentsafety"
+	"github.com/jedwards1230/anyctl/internal/command"
+	"github.com/jedwards1230/anyctl/internal/manifest"
+	"github.com/jedwards1230/anyctl/internal/mcpserver"
 	"github.com/spf13/cobra"
 )
 
@@ -40,7 +40,7 @@ func (r *runner) cmdList(loaded *manifest.Loaded, loadErr error) *cobra.Command 
 }
 
 // listServices prints the configured services (name + optional description) to
-// stdout. Shared by the `list` builtin and bare `labctl svc`, so both stay in
+// stdout. Shared by the `list` builtin and bare `anyctl svc`, so both stay in
 // lockstep. An empty config dir is not an error.
 func (r *runner) listServices(loaded *manifest.Loaded, loadErr error) error {
 	if loadErr != nil {
@@ -211,7 +211,7 @@ func probeSkip(svc *manifest.Service) (string, bool) {
 	return "", false
 }
 
-// resolveHTTPAuth resolves the bearer token for --http and enforces labctl's
+// resolveHTTPAuth resolves the bearer token for --http and enforces anyctl's
 // secure-by-default policy (mcpserver.RequireAuth) before the server ever
 // binds a listener. Kept separate from cmdMCP's RunE so the auth-resolution +
 // policy-gate logic is unit-testable without starting a real HTTP server.
@@ -226,6 +226,20 @@ func resolveHTTPAuth(httpAddr, authTokenFile string, allowUnauthenticated bool) 
 		return "", err
 	}
 	return authToken, nil
+}
+
+// setAuthTokenEnvName reports the name of whichever MCP auth-token env var is
+// set (the preferred one first, then the legacy fallback), or "" when neither
+// is. Used only to name the var in the stdio warning; the actual token value is
+// resolved via mcpserver.ResolveAuthToken.
+func setAuthTokenEnvName() string {
+	if os.Getenv(mcpserver.AuthTokenEnv) != "" {
+		return mcpserver.AuthTokenEnv
+	}
+	if os.Getenv(mcpserver.LegacyAuthTokenEnv) != "" {
+		return mcpserver.LegacyAuthTokenEnv
+	}
+	return ""
 }
 
 func (r *runner) cmdMCP() *cobra.Command {
@@ -243,7 +257,7 @@ func (r *runner) cmdMCP() *cobra.Command {
 			"with the MCP endpoint at /mcp and a GET /healthz liveness probe — suitable\n" +
 			"for in-cluster deployment behind an MCP gateway.\n\n" +
 			"Bearer-token auth on the /mcp endpoint (transport-layer access control):\n" +
-			"set LABCTL_MCP_AUTH_TOKEN or pass --auth-token-file <path> to require an\n" +
+			"set ANYCTL_MCP_AUTH_TOKEN or pass --auth-token-file <path> to require an\n" +
 			"\"Authorization: Bearer <token>\" header on every /mcp request. GET /healthz\n" +
 			"remains unauthenticated (liveness probe). Only meaningful with --http;\n" +
 			"stdio transport ignores this setting.\n\n" +
@@ -283,8 +297,8 @@ func (r *runner) cmdMCP() *cobra.Command {
 			// token env var is set ambiently, so the operator isn't surprised the
 			// stdio endpoint is unauthenticated. Mirrors the hard --auth-token-file
 			// guard above, but env vars are often set ambiently so this only warns.
-			if os.Getenv(mcpserver.AuthTokenEnv) != "" && r.stderr != nil {
-				_, _ = fmt.Fprintf(r.stderr, "labctl mcp: warning: %s is set but has no effect over stdio (bearer auth only applies to --http)\n", mcpserver.AuthTokenEnv)
+			if envName := setAuthTokenEnvName(); envName != "" && r.stderr != nil {
+				_, _ = fmt.Fprintf(r.stderr, "anyctl mcp: warning: %s is set but has no effect over stdio (bearer auth only applies to --http)\n", envName)
 			}
 			return mcpserver.Serve(cmd.Context(), r.loaded, r.config, Version, r.tracer, r.stderr, opts)
 		},
@@ -300,9 +314,9 @@ func (r *runner) cmdMCP() *cobra.Command {
 func (r *runner) cmdVersion() *cobra.Command {
 	return &cobra.Command{
 		Use:   "version",
-		Short: "print the labctl version",
+		Short: "print the anyctl version",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			_, _ = fmt.Fprintln(r.stdout, "labctl", Version)
+			_, _ = fmt.Fprintln(r.stdout, "anyctl", Version)
 			return nil
 		},
 	}

@@ -5,14 +5,14 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/jedwards1230/labctl/schema"
+	"github.com/jedwards1230/anyctl/schema"
 	"github.com/santhosh-tekuri/jsonschema/v6"
 	"gopkg.in/yaml.v3"
 )
 
 // manifestSchemaURL is the $id the embedded schema is registered under so its
 // internal $ref/#/definitions resolve. It mirrors schema/schema_test.go.
-const manifestSchemaURL = "https://raw.githubusercontent.com/jedwards1230/labctl/main/schema/manifest.schema.json"
+const manifestSchemaURL = "https://raw.githubusercontent.com/jedwards1230/anyctl/main/schema/manifest.schema.json"
 
 var (
 	compiledSchemaOnce sync.Once
@@ -45,7 +45,7 @@ func manifestSchema() (*jsonschema.Schema, error) {
 }
 
 // SchemaValidate validates one manifest's raw bytes against the embedded draft-07
-// JSON Schema (the same schema `labctl schema` prints and editors consume). A
+// JSON Schema (the same schema `anyctl schema` prints and editors consume). A
 // schema violation is wrapped in *ConfigError (exit 2). yaml.v3 yields
 // map[string]interface{} keys, which the validator accepts.
 func SchemaValidate(data []byte) error {

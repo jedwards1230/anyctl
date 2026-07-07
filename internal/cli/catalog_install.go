@@ -10,8 +10,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jedwards1230/labctl/internal/agentsafety"
-	"github.com/jedwards1230/labctl/internal/manifest"
+	"github.com/jedwards1230/anyctl/internal/agentsafety"
+	"github.com/jedwards1230/anyctl/internal/manifest"
 	"github.com/spf13/cobra"
 )
 
@@ -20,7 +20,7 @@ import (
 // manifest is validated on add to be portable (no base_url, no secret ref), so an
 // installed catalog is inert until profile.yaml binds it. Precedence at load is
 // local services/ > installed catalogs > the embedded catalog. There is no
-// execution-time gating here: labctl stays an unopinionated executor.
+// execution-time gating here: anyctl stays an unopinionated executor.
 
 // gitURLSchemes are the transport schemes permitted for a git source URL. ext/fd
 // transport helpers (which can execute arbitrary commands) are excluded by both
@@ -151,7 +151,7 @@ func (r *runner) catalogAdd(source, name, ref string, force bool) error {
 		return agentsafety.NewUsageError("--ref only applies to a git source")
 	}
 
-	tmp, err := os.MkdirTemp("", "labctl-catalog-fetch-")
+	tmp, err := os.MkdirTemp("", "anyctl-catalog-fetch-")
 	if err != nil {
 		return fmt.Errorf("creating tempdir: %w", err)
 	}
@@ -237,7 +237,7 @@ func (r *runner) updateOne(configDir, name string) error {
 		return r.updateOneOpenAPI(configDir, meta)
 	}
 
-	tmp, err := os.MkdirTemp("", "labctl-catalog-fetch-")
+	tmp, err := os.MkdirTemp("", "anyctl-catalog-fetch-")
 	if err != nil {
 		return fmt.Errorf("creating tempdir: %w", err)
 	}

@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/jedwards1230/labctl/internal/agentsafety"
-	"github.com/jedwards1230/labctl/internal/manifest"
+	"github.com/jedwards1230/anyctl/internal/agentsafety"
+	"github.com/jedwards1230/anyctl/internal/manifest"
 )
 
 // TestCatalogEditSeedsFullCopy: `catalog edit <name>` writes the COMPLETE embedded
@@ -16,7 +16,7 @@ import (
 // wholesale replaces the embedded entry (no field-level merge).
 func TestCatalogEditSeedsFullCopy(t *testing.T) {
 	dir := t.TempDir()
-	t.Setenv("LABCTL_CONFIG_DIR", dir)
+	t.Setenv("ANYCTL_CONFIG_DIR", dir)
 
 	var out, errb bytes.Buffer
 	if code := Run([]string{"catalog", "edit", "authentik"}, &out, &errb); code != agentsafety.ExitOK {
@@ -46,7 +46,7 @@ func TestCatalogEditSeedsFullCopy(t *testing.T) {
 // --force (exit usage); with --force it is replaced by the embedded manifest.
 func TestCatalogEditRefusesClobber(t *testing.T) {
 	dir := t.TempDir()
-	t.Setenv("LABCTL_CONFIG_DIR", dir)
+	t.Setenv("ANYCTL_CONFIG_DIR", dir)
 	dest := filepath.Join(dir, "services", "authentik.yaml")
 	if err := os.MkdirAll(filepath.Dir(dest), 0o755); err != nil {
 		t.Fatal(err)
@@ -82,7 +82,7 @@ func TestCatalogEditRefusesClobber(t *testing.T) {
 // usage error (exit 2) with a 'no embedded service' diagnostic; nothing written.
 func TestCatalogEditUnknown(t *testing.T) {
 	dir := t.TempDir()
-	t.Setenv("LABCTL_CONFIG_DIR", dir)
+	t.Setenv("ANYCTL_CONFIG_DIR", dir)
 	var out, errb bytes.Buffer
 	if code := Run([]string{"catalog", "edit", "nope"}, &out, &errb); code != agentsafety.ExitUsage {
 		t.Fatalf("exit = %d, want %d (usage)", code, agentsafety.ExitUsage)
@@ -104,7 +104,7 @@ func TestCatalogEditRejectsUnsafeNames(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			cfg := t.TempDir()
 			outside := t.TempDir() // a sibling dir a traversal might try to reach
-			t.Setenv("LABCTL_CONFIG_DIR", cfg)
+			t.Setenv("ANYCTL_CONFIG_DIR", cfg)
 
 			var out, errb bytes.Buffer
 			if code := Run([]string{"catalog", "edit", name}, &out, &errb); code != agentsafety.ExitUsage {
@@ -122,7 +122,7 @@ func TestCatalogVendorRejectsUnsafeNames(t *testing.T) {
 	for _, name := range []string{"..", "../../etc/passwd", "a/b", "", ".", "/etc/passwd", "foo/../bar"} {
 		t.Run(name, func(t *testing.T) {
 			cfg := t.TempDir()
-			t.Setenv("LABCTL_CONFIG_DIR", cfg)
+			t.Setenv("ANYCTL_CONFIG_DIR", cfg)
 			catDir := t.TempDir()
 
 			var out, errb bytes.Buffer
@@ -155,7 +155,7 @@ func assertDirEmpty(t *testing.T, dir string) {
 // byte-for-byte matching the override, and prints its absolute path.
 func TestCatalogVendorRoundTrip(t *testing.T) {
 	cfg := t.TempDir()
-	t.Setenv("LABCTL_CONFIG_DIR", cfg)
+	t.Setenv("ANYCTL_CONFIG_DIR", cfg)
 	catDir := t.TempDir()
 
 	var out, errb bytes.Buffer
@@ -187,7 +187,7 @@ func TestCatalogVendorRoundTrip(t *testing.T) {
 // TestCatalogVendorMissingOverride: vendoring with no local override for the name
 // is a usage error (exit 2) that points the user at `catalog edit`.
 func TestCatalogVendorMissingOverride(t *testing.T) {
-	t.Setenv("LABCTL_CONFIG_DIR", t.TempDir())
+	t.Setenv("ANYCTL_CONFIG_DIR", t.TempDir())
 	catDir := t.TempDir()
 	var out, errb bytes.Buffer
 	if code := Run([]string{"catalog", "vendor", "authentik", "--catalog-dir", catDir}, &out, &errb); code != agentsafety.ExitUsage {
@@ -205,7 +205,7 @@ func TestCatalogVendorMissingOverride(t *testing.T) {
 // portable manifest may not carry a base_url) is rejected and never promoted.
 func TestCatalogVendorValidatesBeforeWriting(t *testing.T) {
 	cfg := t.TempDir()
-	t.Setenv("LABCTL_CONFIG_DIR", cfg)
+	t.Setenv("ANYCTL_CONFIG_DIR", cfg)
 	catDir := t.TempDir()
 	// An in-manifest base_url makes the manifest non-portable — structural
 	// Validate rejects it, so vendor must refuse it.
@@ -234,7 +234,7 @@ commands:
 // overwritten without --force; with --force it is replaced.
 func TestCatalogVendorRefusesClobber(t *testing.T) {
 	cfg := t.TempDir()
-	t.Setenv("LABCTL_CONFIG_DIR", cfg)
+	t.Setenv("ANYCTL_CONFIG_DIR", cfg)
 	catDir := t.TempDir()
 
 	var out, errb bytes.Buffer

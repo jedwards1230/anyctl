@@ -11,9 +11,9 @@ import (
 	mcp "github.com/modelcontextprotocol/go-sdk/mcp"
 	"go.opentelemetry.io/otel/trace/noop"
 
-	"github.com/jedwards1230/labctl/internal/command"
-	"github.com/jedwards1230/labctl/internal/manifest"
-	"github.com/jedwards1230/labctl/internal/output"
+	"github.com/jedwards1230/anyctl/internal/command"
+	"github.com/jedwards1230/anyctl/internal/manifest"
+	"github.com/jedwards1230/anyctl/internal/output"
 )
 
 // TestStructuredContentDegradeWhenFilteredFails covers the defensive

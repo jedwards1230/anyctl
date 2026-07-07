@@ -9,8 +9,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/jedwards1230/labctl/internal/agentsafety"
-	"github.com/jedwards1230/labctl/internal/manifest"
+	"github.com/jedwards1230/anyctl/internal/agentsafety"
+	"github.com/jedwards1230/anyctl/internal/manifest"
 )
 
 // validManifestBody is a PORTABLE manifest (no base_url) — it passes plain
@@ -31,7 +31,7 @@ commands:
 func TestLintValidService(t *testing.T) {
 	dir := t.TempDir()
 	writeService(t, dir, "radarr", validManifestBody)
-	t.Setenv("LABCTL_CONFIG_DIR", dir)
+	t.Setenv("ANYCTL_CONFIG_DIR", dir)
 
 	var out, errb bytes.Buffer
 	if code := Run([]string{"lint", "radarr"}, &out, &errb); code != agentsafety.ExitOK {
@@ -55,7 +55,7 @@ commands:
     method: GET
     path: /x
 `)
-	t.Setenv("LABCTL_CONFIG_DIR", dir)
+	t.Setenv("ANYCTL_CONFIG_DIR", dir)
 
 	var out, errb bytes.Buffer
 	code := Run([]string{"lint", "broken"}, &out, &errb)
@@ -74,7 +74,7 @@ func TestLintFilePath(t *testing.T) {
 	if err := os.WriteFile(path, []byte(validManifestBody), 0600); err != nil {
 		t.Fatal(err)
 	}
-	t.Setenv("LABCTL_CONFIG_DIR", t.TempDir()) // empty config dir
+	t.Setenv("ANYCTL_CONFIG_DIR", t.TempDir()) // empty config dir
 
 	var out, errb bytes.Buffer
 	if code := Run([]string{"lint", path}, &out, &errb); code != agentsafety.ExitOK {
@@ -89,7 +89,7 @@ func TestLintFilePath(t *testing.T) {
 func TestLintUnknownService(t *testing.T) {
 	dir := t.TempDir()
 	writeService(t, dir, "radarr", validManifestBody)
-	t.Setenv("LABCTL_CONFIG_DIR", dir)
+	t.Setenv("ANYCTL_CONFIG_DIR", dir)
 
 	var out, errb bytes.Buffer
 	if code := Run([]string{"lint", "nope"}, &out, &errb); code != agentsafety.ExitUsage {
@@ -101,7 +101,7 @@ func TestLintUnknownService(t *testing.T) {
 func TestListDescriptions(t *testing.T) {
 	dir := t.TempDir()
 	writeService(t, dir, "radarr", validManifestBody)
-	t.Setenv("LABCTL_CONFIG_DIR", dir)
+	t.Setenv("ANYCTL_CONFIG_DIR", dir)
 
 	var out, errb bytes.Buffer
 	if code := Run([]string{"list"}, &out, &errb); code != agentsafety.ExitOK {

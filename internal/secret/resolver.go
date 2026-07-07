@@ -12,7 +12,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/jedwards1230/labctl/internal/manifest"
+	"github.com/jedwards1230/anyctl/internal/manifest"
 )
 
 // Runner executes a resolver argv and returns its trimmed stdout. Injectable so

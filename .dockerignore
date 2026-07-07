@@ -5,6 +5,6 @@ worktrees
 deploy
 examples
 *.md
-labctl
+anyctl
 coverage.out
 .golangci.yml

@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/jedwards1230/labctl/catalog"
+	"github.com/jedwards1230/anyctl/catalog"
 )
 
 func writeConfig(t *testing.T, dir, body string) {

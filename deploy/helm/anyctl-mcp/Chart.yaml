@@ -1,6 +1,6 @@
 apiVersion: v2
-name: labctl-mcp
-description: Deploy labctl's MCP server (streamable-HTTP) as a network-reachable service.
+name: anyctl-mcp
+description: Deploy anyctl's MCP server (streamable-HTTP) as a network-reachable service.
 type: application
 # version / appVersion are overwritten at publish time from the release tag
 # (`helm package --version $VER --app-version $VER`). The committed values are
@@ -8,11 +8,11 @@ type: application
 version: 0.0.0
 appVersion: "0.0.0"
 keywords:
-  - labctl
+  - anyctl
   - mcp
   - homelab
-home: https://github.com/jedwards1230/labctl
+home: https://github.com/jedwards1230/anyctl
 sources:
-  - https://github.com/jedwards1230/labctl
+  - https://github.com/jedwards1230/anyctl
 maintainers:
   - name: jedwards1230

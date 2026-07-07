@@ -1,11 +1,11 @@
-# Default values for labctl-mcp.
+# Default values for anyctl-mcp.
 # A portable chart: homelab-specific bits (OnePasswordItem, redirect-lan ingress)
 # are opt-in via values, so the chart is reusable outside this homelab.
 
 replicaCount: 1
 
 image:
-  repository: ghcr.io/jedwards1230/labctl
+  repository: ghcr.io/jedwards1230/anyctl
   # tag defaults to .Chart.AppVersion when empty.
   tag: ""
   pullPolicy: IfNotPresent
@@ -14,9 +14,9 @@ imagePullSecrets: []
 nameOverride: ""
 fullnameOverride: ""
 
-# MCP server invocation. These map to `labctl mcp` flags.
+# MCP server invocation. These map to `anyctl mcp` flags.
 mcp:
-  # Listen address passed to `labctl mcp --http`. Host omitted = all interfaces.
+  # Listen address passed to `anyctl mcp --http`. Host omitted = all interfaces.
   http: ":9000"
   # HTTP path the streamable MCP handler is mounted at (informational; used for
   # the readiness/liveness note and any ingress path).
@@ -35,7 +35,7 @@ mcp:
   # (fail-closed).
   #
   # `mcp.http` (above) is a bare-port bind (":9000") — non-loopback, since a
-  # Deployment must accept traffic on the pod network — so labctl's
+  # Deployment must accept traffic on the pod network — so anyctl's
   # secure-by-default policy requires ONE of auth.enabled or
   # allowUnauthenticated below; leaving both at their defaults makes the
   # container refuse to start (intentional fail-closed, not a bug).
@@ -46,18 +46,18 @@ mcp:
       key: token
     onePasswordItem:
       # Set itemPath to render a OnePasswordItem CRD (1Password operator) holding
-      # the bearer token. e.g. vaults/homelab/items/k8s-mcp-gateway-labctl-mcp-auth
+      # the bearer token. e.g. vaults/homelab/items/k8s-mcp-gateway-anyctl-mcp-auth
       itemPath: ""
       key: token
-  # Explicit opt-out of labctl's secure-by-default requirement that a
+  # Explicit opt-out of anyctl's secure-by-default requirement that a
   # non-loopback --http bind have an auth token configured. Only set this when
   # network-layer controls (e.g. networkPolicy.enabled below, or an upstream
   # gateway) are the sole intended access boundary. Default false.
   allowUnauthenticated: false
 
-# Files rendered into LABCTL_CONFIG_DIR (/config) via a ConfigMap.
+# Files rendered into ANYCTL_CONFIG_DIR (/config) via a ConfigMap.
 # profileYaml is the per-environment binding (base_url + op:// secret refs);
-# service manifests themselves are embedded in the labctl binary.
+# service manifests themselves are embedded in the anyctl binary.
 config:
   configYaml: ""
   profileYaml: ""
@@ -85,7 +85,7 @@ auth:
     key: token
   onePasswordItem:
     # Set itemPath to render a OnePasswordItem CRD (1Password operator).
-    # e.g. vaults/homelab/items/k8s-mcp-gateway-labctl
+    # e.g. vaults/homelab/items/k8s-mcp-gateway-anyctl
     itemPath: ""
     # Key within the synced secret holding the token value.
     key: token
