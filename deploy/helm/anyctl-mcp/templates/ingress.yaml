@@ -2,9 +2,9 @@
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: {{ include "labctl-mcp.fullname" . }}
+  name: {{ include "anyctl-mcp.fullname" . }}
   labels:
-    {{- include "labctl-mcp.labels" . | nindent 4 }}
+    {{- include "anyctl-mcp.labels" . | nindent 4 }}
   {{- with .Values.ingress.annotations }}
   annotations:
     {{- toYaml . | nindent 4 }}
@@ -17,7 +17,7 @@ spec:
   tls:
     - hosts:
         - {{ .Values.ingress.host | quote }}
-      secretName: {{ include "labctl-mcp.fullname" . }}-tls
+      secretName: {{ include "anyctl-mcp.fullname" . }}-tls
   {{- end }}
   rules:
     - host: {{ .Values.ingress.host | quote }}
@@ -27,7 +27,7 @@ spec:
             pathType: Prefix
             backend:
               service:
-                name: {{ include "labctl-mcp.fullname" . }}
+                name: {{ include "anyctl-mcp.fullname" . }}
                 port:
                   name: http
 {{- end }}

@@ -1,4 +1,4 @@
-# golangci-lint configuration for labctl (schema v2).
+# golangci-lint configuration for anyctl (schema v2).
 #
 # Conservative by design: it enables the linters the codebase already passes
 # cleanly under the default "standard" set (errcheck, govet, ineffassign,

@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jedwards1230/labctl/internal/manifest"
+	"github.com/jedwards1230/anyctl/internal/manifest"
 )
 
 // opProvider builds a stub-backed op provider (no real `op` session).
@@ -59,7 +59,7 @@ func TestResolvedBinary_AbsolutePath(t *testing.T) {
 // TestResolvedBinary_NotOnPath verifies a command[0] that resolves to nothing
 // on $PATH surfaces an error (visibility only — no invocation is attempted).
 func TestResolvedBinary_NotOnPath(t *testing.T) {
-	p := newOnePassword(manifest.ProviderConfig{Scheme: "op", Command: []string{"labctl-definitely-not-a-real-binary", "read", "{ref}"}}, nil)
+	p := newOnePassword(manifest.ProviderConfig{Scheme: "op", Command: []string{"anyctl-definitely-not-a-real-binary", "read", "{ref}"}}, nil)
 	if _, err := p.ResolvedBinary(); err == nil {
 		t.Fatal("expected an error for a binary not on PATH")
 	}

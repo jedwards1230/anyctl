@@ -11,16 +11,17 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 
-	"github.com/jedwards1230/labctl/internal/agentsafety"
-	"github.com/jedwards1230/labctl/internal/command"
-	"github.com/jedwards1230/labctl/internal/engine"
-	"github.com/jedwards1230/labctl/internal/manifest"
-	"github.com/jedwards1230/labctl/internal/output"
-	"github.com/jedwards1230/labctl/internal/telemetry"
-	"github.com/jedwards1230/labctl/internal/transport"
+	"github.com/jedwards1230/anyctl/internal/agentsafety"
+	"github.com/jedwards1230/anyctl/internal/command"
+	"github.com/jedwards1230/anyctl/internal/engine"
+	"github.com/jedwards1230/anyctl/internal/manifest"
+	"github.com/jedwards1230/anyctl/internal/output"
+	"github.com/jedwards1230/anyctl/internal/telemetry"
+	"github.com/jedwards1230/anyctl/internal/transport"
 	"github.com/spf13/cobra"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
@@ -65,6 +66,7 @@ func Run(args []string, stdout, stderr io.Writer) int {
 	defer shutdown()
 
 	r := &runner{stdout: stdout, stderr: stderr, tracer: tracer}
+	warnLegacyArgv0(stderr)
 	root := r.newRoot()
 	root.SetArgs(args)
 	root.SetOut(stdout)
@@ -87,17 +89,30 @@ func Run(args []string, stdout, stderr io.Writer) int {
 	return agentsafety.ExitOK
 }
 
+// warnLegacyArgv0 prints a one-line deprecation notice when the binary is
+// invoked under its old name (e.g. via a `labctl` compatibility symlink). The
+// symlink itself is provisioned outside this repo (Ansible role / devcontainer);
+// this only surfaces the rename to anyone still calling the old name.
+func warnLegacyArgv0(stderr io.Writer) {
+	if stderr == nil || len(os.Args) == 0 {
+		return
+	}
+	if filepath.Base(os.Args[0]) == "labctl" {
+		_, _ = fmt.Fprintln(stderr, "anyctl: invoked as `labctl`; that name is deprecated — the binary is now `anyctl` (the labctl alias still works for now)")
+	}
+}
+
 func (r *runner) newRoot() *cobra.Command {
 	root := &cobra.Command{
-		Use:           "labctl",
+		Use:           "anyctl",
 		Short:         "Manifest-driven CLI for homelab service APIs",
-		Long:          "labctl executes one HTTP/RPC call against a service described by a YAML manifest.\nAdding a service is a manifest edit, never a recompile.",
+		Long:          "anyctl executes one HTTP/RPC call against a service described by a YAML manifest.\nAdding a service is a manifest edit, never a recompile.",
 		SilenceErrors: true,
 		SilenceUsage:  true,
 		Version:       Version,
 	}
 	pf := root.PersistentFlags()
-	pf.StringVar(&r.flags.configDir, "config-dir", "", "config dir (default: $XDG_CONFIG_HOME/labctl or ~/.config/labctl)")
+	pf.StringVar(&r.flags.configDir, "config-dir", "", "config dir (default: $XDG_CONFIG_HOME/anyctl or ~/.config/anyctl)")
 	pf.StringVar(&r.flags.filter, "filter", "", "jq filter over the response (overrides the command default)")
 	pf.BoolVar(&r.flags.raw, "raw", false, "print the raw response, no jq filtering")
 	pf.StringVar(&r.flags.query, "query", "", "extra query string appended to the request")
@@ -126,7 +141,7 @@ func (r *runner) newRoot() *cobra.Command {
 // newSvcCmd builds the `svc` parent command. Every manifest-derived service
 // command lives under it (never at the root), so a user-defined service can
 // never collide with a built-in. With no service given it lists the configured
-// services — the same content as `labctl list`.
+// services — the same content as `anyctl list`.
 func (r *runner) newSvcCmd(loaded *manifest.Loaded, loadErr error) *cobra.Command {
 	svcCmd := &cobra.Command{
 		Use:     "svc <service> [command]",
@@ -134,13 +149,13 @@ func (r *runner) newSvcCmd(loaded *manifest.Loaded, loadErr error) *cobra.Comman
 		Short:   "run a configured service's API commands",
 		Long: "Run a configured service's API commands.\n\n" +
 			"Each service is a manifest under services/; built-ins (init, lint, list,\n" +
-			"doctor, catalog, mcp, version, self-update) live at the top level. Bare `labctl svc`\n" +
-			"lists the configured services (same as `labctl list`).",
-		Example: "  labctl svc                      # list configured services\n" +
-			"  labctl svc radarr list          # a named command\n" +
-			"  labctl svc tdarr get /api/v2/status   # generic verb passthrough\n" +
-			"  labctl s radarr list            # `s` is an alias for `svc`",
-		// RunE handles bare `labctl svc` (list services) and an unknown service
+			"doctor, catalog, mcp, version, self-update) live at the top level. Bare `anyctl svc`\n" +
+			"lists the configured services (same as `anyctl list`).",
+		Example: "  anyctl svc                      # list configured services\n" +
+			"  anyctl svc radarr list          # a named command\n" +
+			"  anyctl svc tdarr get /api/v2/status   # generic verb passthrough\n" +
+			"  anyctl s radarr list            # `s` is an alias for `svc`",
+		// RunE handles bare `anyctl svc` (list services) and an unknown service
 		// argument (usage error). A known service routes to its own subcommand.
 		RunE: func(cmd *cobra.Command, args []string) error {
 			// A failed config load registered no services, so any service
@@ -158,13 +173,13 @@ func (r *runner) newSvcCmd(loaded *manifest.Loaded, loadErr error) *cobra.Comman
 	if loaded != nil {
 		// Every selector — bare names and every installed-catalog's qualified
 		// "<catalog>:<service>" form — gets a runnable cobra subcommand, so both
-		// `labctl svc foo` and `labctl svc cat:foo` dispatch.
+		// `anyctl svc foo` and `anyctl svc cat:foo` dispatch.
 		for _, name := range loaded.SortedServiceNames() {
 			svcCmd.AddCommand(r.newServiceCmd(name, loaded.Services[name]))
 		}
 		// A bare name more than one installed catalog defines (with no local
 		// override) has no entry in loaded.Services — register a stub so
-		// `labctl svc <name>` and `labctl svc <name> <cmd>` both surface the
+		// `anyctl svc <name>` and `anyctl svc <name> <cmd>` both surface the
 		// "qualify it" diagnostic instead of "unknown service/command".
 		for _, name := range sortedKeys(loaded.Ambiguous) {
 			svcCmd.AddCommand(r.newAmbiguousServiceCmd(loaded, name))
@@ -211,7 +226,7 @@ func (r *runner) newServiceCmd(selector string, svc *manifest.Service) *cobra.Co
 		Short: svc.Description,
 		Long:  serviceHelp(svc, cmds),
 		// RunE is invoked when cobra cannot find a matching subcommand (e.g.
-		// "labctl svc radarr bogus-cmd"). Any argument here is an unknown command,
+		// "anyctl svc radarr bogus-cmd"). Any argument here is an unknown command,
 		// so return agentsafety.NewUsageError (exit 2) instead of printing help and exiting 0.
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) > 0 {
@@ -328,9 +343,9 @@ func (r *runner) dispatch(svc *manifest.Service, c *command.Command, args []stri
 func (r *runner) startSpan(svc *manifest.Service, c *command.Command) (context.Context, trace.Span) {
 	ctx, span := r.tracer.Start(context.Background(), svc.Name+" "+c.ID)
 	attrs := []attribute.KeyValue{
-		attribute.String("labctl.service", svc.Name),
-		attribute.String("labctl.command", c.ID),
-		attribute.Bool("labctl.write", c.Write),
+		attribute.String("anyctl.service", svc.Name),
+		attribute.String("anyctl.command", c.ID),
+		attribute.Bool("anyctl.write", c.Write),
 	}
 	if svc.Transport == "jsonrpc-ws" {
 		attrs = append(attrs, attribute.String("rpc.method", c.Method))

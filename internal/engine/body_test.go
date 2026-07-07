@@ -6,9 +6,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/jedwards1230/labctl/internal/command"
-	"github.com/jedwards1230/labctl/internal/manifest"
-	"github.com/jedwards1230/labctl/internal/template"
+	"github.com/jedwards1230/anyctl/internal/command"
+	"github.com/jedwards1230/anyctl/internal/manifest"
+	"github.com/jedwards1230/anyctl/internal/template"
 )
 
 // TestResolveBodyInlineJSON verifies an inline body is template-expanded and

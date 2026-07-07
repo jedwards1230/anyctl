@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/jedwards1230/labctl/internal/manifest"
+	"github.com/jedwards1230/anyctl/internal/manifest"
 )
 
 func render(t *testing.T, body string, out manifest.Output, opts Options) string {

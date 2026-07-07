@@ -36,8 +36,8 @@ func TestEnabledWhenEndpointSet(t *testing.T) {
 
 func TestServiceName(t *testing.T) {
 	t.Setenv("OTEL_SERVICE_NAME", "")
-	if serviceName() != "labctl" {
-		t.Fatalf("default service name = %q, want labctl", serviceName())
+	if serviceName() != "anyctl" {
+		t.Fatalf("default service name = %q, want anyctl", serviceName())
 	}
 	t.Setenv("OTEL_SERVICE_NAME", "custom")
 	if serviceName() != "custom" {

@@ -1,12 +1,12 @@
-# labctl per-user profile. Binds the embedded catalog manifests to THIS machine's
+# anyctl per-user profile. Binds the embedded catalog manifests to THIS machine's
 # endpoints and credentials. The catalog ships in portable form (no base_url, no
 # secret ref); the bindings below complete every service it provides — note there
 # is NO services/ dir here, so this profile alone makes examples/ a working config.
 # Precedence at resolution time: env override > profile > manifest.
 #
 # These are placeholders — replace the example.com hosts, 192.0.2.x addresses,
-# and op://vault/... refs with your own before use. `labctl catalog list` shows
-# every embedded service; `labctl catalog show <name>` dumps one to fork locally.
+# and op://vault/... refs with your own before use. `anyctl catalog list` shows
+# every embedded service; `anyctl catalog show <name>` dumps one to fork locally.
 version: 1
 services:
   radarr:

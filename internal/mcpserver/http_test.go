@@ -12,7 +12,7 @@ import (
 	mcp "github.com/modelcontextprotocol/go-sdk/mcp"
 	"go.opentelemetry.io/otel/trace/noop"
 
-	"github.com/jedwards1230/labctl/internal/mcpserver"
+	"github.com/jedwards1230/anyctl/internal/mcpserver"
 )
 
 // TestHTTPHandlerRoundTrip stands up the streamable-HTTP handler in front of an

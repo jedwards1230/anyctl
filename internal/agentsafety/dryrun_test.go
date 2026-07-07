@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/jedwards1230/labctl/internal/manifest"
+	"github.com/jedwards1230/anyctl/internal/manifest"
 )
 
 // TestMergeAuthPreview covers the redacted auth-line synthesis per strategy,

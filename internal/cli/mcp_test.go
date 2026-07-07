@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/jedwards1230/labctl/internal/agentsafety"
+	"github.com/jedwards1230/anyctl/internal/agentsafety"
 )
 
 // ── resolveHTTPAuth (pure, no listener) ────────────────────────────────────
@@ -49,9 +49,9 @@ func TestResolveHTTPAuth(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			if tc.env != "" {
-				t.Setenv("LABCTL_MCP_AUTH_TOKEN", tc.env)
+				t.Setenv("ANYCTL_MCP_AUTH_TOKEN", tc.env)
 			} else {
-				t.Setenv("LABCTL_MCP_AUTH_TOKEN", "")
+				t.Setenv("ANYCTL_MCP_AUTH_TOKEN", "")
 			}
 			_, err := resolveHTTPAuth(tc.addr, tc.authTokenFile, tc.allowUnauthenticated)
 			if tc.wantErr && err == nil {
@@ -83,8 +83,8 @@ func TestResolveHTTPAuth_BadTokenFilePropagates(t *testing.T) {
 func TestMCPHTTPRefusesUnauthenticatedNonLoopback(t *testing.T) {
 	dir := t.TempDir()
 	writeService(t, dir, "radarr", validManifestBody)
-	t.Setenv("LABCTL_CONFIG_DIR", dir)
-	t.Setenv("LABCTL_MCP_AUTH_TOKEN", "")
+	t.Setenv("ANYCTL_CONFIG_DIR", dir)
+	t.Setenv("ANYCTL_MCP_AUTH_TOKEN", "")
 
 	var out, errb bytes.Buffer
 	code := Run([]string{"mcp", "--http", ":9000"}, &out, &errb)
@@ -92,7 +92,7 @@ func TestMCPHTTPRefusesUnauthenticatedNonLoopback(t *testing.T) {
 		t.Fatalf("exit = %d, want %d (usage); stderr: %s", code, agentsafety.ExitUsage, errb.String())
 	}
 	msg := errb.String()
-	for _, want := range []string{"LABCTL_MCP_AUTH_TOKEN", "--auth-token-file", "--allow-unauthenticated"} {
+	for _, want := range []string{"ANYCTL_MCP_AUTH_TOKEN", "--auth-token-file", "--allow-unauthenticated"} {
 		if !strings.Contains(msg, want) {
 			t.Errorf("stderr = %q, want it to mention %q", msg, want)
 		}
@@ -105,7 +105,7 @@ func TestMCPHTTPRefusesUnauthenticatedNonLoopback(t *testing.T) {
 func TestMCPAllowUnauthenticatedRequiresHTTP(t *testing.T) {
 	dir := t.TempDir()
 	writeService(t, dir, "radarr", validManifestBody)
-	t.Setenv("LABCTL_CONFIG_DIR", dir)
+	t.Setenv("ANYCTL_CONFIG_DIR", dir)
 
 	var out, errb bytes.Buffer
 	code := Run([]string{"mcp", "--allow-unauthenticated"}, &out, &errb)
@@ -122,7 +122,7 @@ func TestMCPAllowUnauthenticatedRequiresHTTP(t *testing.T) {
 func TestMCPHelpDocumentsSecureDefault(t *testing.T) {
 	dir := t.TempDir()
 	writeService(t, dir, "radarr", validManifestBody)
-	t.Setenv("LABCTL_CONFIG_DIR", dir)
+	t.Setenv("ANYCTL_CONFIG_DIR", dir)
 
 	var out, errb bytes.Buffer
 	if code := Run([]string{"mcp", "--help"}, &out, &errb); code != agentsafety.ExitOK {

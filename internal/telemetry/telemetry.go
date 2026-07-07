@@ -1,6 +1,6 @@
-// Package telemetry provides optional OpenTelemetry tracing for labctl. It is
+// Package telemetry provides optional OpenTelemetry tracing for anyctl. It is
 // off by default and pays ZERO cost unless the standard OTEL_* env configures an
-// OTLP endpoint — an unconfigured `labctl radarr list` stays curl-fast. When an
+// OTLP endpoint — an unconfigured `anyctl radarr list` stays curl-fast. When an
 // endpoint is set, each invocation emits one span (service, command, method,
 // status, duration) so back-to-back and parallel-agent calls are traceable in
 // Tempo. Shutdown flushes with a short timeout so a slow collector can never
@@ -41,7 +41,7 @@ func Enabled() bool {
 // telemetry never blocks or breaks a command (fail-open). version stamps the
 // resource's service.version.
 func Start(ctx context.Context, version string) (trace.Tracer, func()) {
-	noopTracer := noop.NewTracerProvider().Tracer("labctl")
+	noopTracer := noop.NewTracerProvider().Tracer("anyctl")
 	if !Enabled() {
 		return noopTracer, func() {}
 	}
@@ -66,7 +66,7 @@ func Start(ctx context.Context, version string) (trace.Tracer, func()) {
 		defer cancel()
 		_ = tp.Shutdown(ctx)
 	}
-	return tp.Tracer("labctl"), shutdown
+	return tp.Tracer("anyctl"), shutdown
 }
 
 // newExporter selects the OTLP protocol from OTEL_EXPORTER_OTLP_PROTOCOL
@@ -84,5 +84,5 @@ func serviceName() string {
 	if n := os.Getenv("OTEL_SERVICE_NAME"); n != "" {
 		return n
 	}
-	return "labctl"
+	return "anyctl"
 }

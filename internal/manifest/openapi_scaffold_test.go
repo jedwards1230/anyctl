@@ -458,7 +458,7 @@ func TestGenerateManifestFromSpecRejectsInjectionAttempts(t *testing.T) {
 			wantInField: func(svc *Service) string { return svc.Auth.Header },
 		},
 		{
-			// A securityScheme name labctl can't faithfully map (apiKey in
+			// A securityScheme name anyctl can't faithfully map (apiKey in
 			// query) falls back to {strategy: none} with an explanatory
 			// COMMENT that interpolates the scheme name — sanitizeForComment
 			// must strip the newlines so the comment can't smuggle active YAML.

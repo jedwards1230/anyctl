@@ -10,7 +10,7 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/jedwards1230/labctl/internal/agentsafety"
+	"github.com/jedwards1230/anyctl/internal/agentsafety"
 )
 
 // writeService writes a manifest into <dir>/services/<name>.yaml, creating the
@@ -72,7 +72,7 @@ commands:
       filter: map(.id)
 `)
 	bindBaseURL(t, dir, "radarr", srv.URL)
-	t.Setenv("LABCTL_CONFIG_DIR", dir)
+	t.Setenv("ANYCTL_CONFIG_DIR", dir)
 
 	var out, errb bytes.Buffer
 	if code := Run([]string{"svc", "radarr", "list"}, &out, &errb); code != agentsafety.ExitOK {
@@ -110,7 +110,7 @@ func TestDispatchSecretFailureExit3(t *testing.T) {
 	// config.yaml: a secret resolver command that cannot run.
 	if err := os.WriteFile(filepath.Join(dir, "config.yaml"), []byte(`
 secret:
-  command: ["labctl-test-no-such-op-binary"]
+  command: ["anyctl-test-no-such-op-binary"]
 `), 0600); err != nil {
 		t.Fatal(err)
 	}
@@ -135,7 +135,7 @@ services:
       api_key:
         ref: op://vault/Radarr/api_key
 `)
-	t.Setenv("LABCTL_CONFIG_DIR", dir)
+	t.Setenv("ANYCTL_CONFIG_DIR", dir)
 
 	var out, errb bytes.Buffer
 	if code := Run([]string{"svc", "radarr", "list"}, &out, &errb); code != agentsafety.ExitAuth {
@@ -168,7 +168,7 @@ commands:
       filter: map(.id)
 `)
 	bindBaseURL(t, dir, "radarr", srv.URL)
-	t.Setenv("LABCTL_CONFIG_DIR", dir)
+	t.Setenv("ANYCTL_CONFIG_DIR", dir)
 
 	var out, errb bytes.Buffer
 	if code := Run([]string{"-o", "raw", "svc", "radarr", "list"}, &out, &errb); code != agentsafety.ExitOK {
@@ -200,7 +200,7 @@ commands:
       filter: map(.id)
 `)
 	bindBaseURL(t, dir, "radarr", srv.URL)
-	t.Setenv("LABCTL_CONFIG_DIR", dir)
+	t.Setenv("ANYCTL_CONFIG_DIR", dir)
 
 	var out, errb bytes.Buffer
 	// Override map(.id) with a filter that extracts titles instead.
@@ -235,7 +235,7 @@ commands:
     path: /api/v3/movie
 `)
 	bindBaseURL(t, dir, "radarr", srv.URL)
-	t.Setenv("LABCTL_CONFIG_DIR", dir)
+	t.Setenv("ANYCTL_CONFIG_DIR", dir)
 
 	var out, errb bytes.Buffer
 	if code := Run([]string{"svc", "radarr", "list"}, &out, &errb); code != agentsafety.ExitHTTP {
@@ -264,7 +264,7 @@ commands:
       filter: map(.id)
 `)
 	bindBaseURL(t, dir, "radarr", srv.URL)
-	t.Setenv("LABCTL_CONFIG_DIR", dir)
+	t.Setenv("ANYCTL_CONFIG_DIR", dir)
 
 	var out, errb bytes.Buffer
 	if code := Run([]string{"svc", "radarr", "list"}, &out, &errb); code != agentsafety.ExitDecode {
@@ -294,7 +294,7 @@ commands:
     path: /api/v3/movie
 `)
 	bindBaseURL(t, dir, "radarr", srv.URL)
-	t.Setenv("LABCTL_CONFIG_DIR", dir)
+	t.Setenv("ANYCTL_CONFIG_DIR", dir)
 
 	var out, errb bytes.Buffer
 	if code := Run([]string{"--dry-run", "svc", "radarr", "list"}, &out, &errb); code != agentsafety.ExitOK {
@@ -337,7 +337,7 @@ commands:
 `)
 	// Profile binds a base_url that would fail if used; the env override must win.
 	bindBaseURL(t, dir, "radarr", "http://127.0.0.1:1")
-	t.Setenv("LABCTL_CONFIG_DIR", dir)
+	t.Setenv("ANYCTL_CONFIG_DIR", dir)
 	t.Setenv("RADARR_URL", srv.URL)
 
 	var out, errb bytes.Buffer

@@ -4,14 +4,14 @@ import (
 	"bytes"
 	"testing"
 
-	"github.com/jedwards1230/labctl/catalog"
-	"github.com/jedwards1230/labctl/internal/manifest"
-	"github.com/jedwards1230/labctl/schema"
+	"github.com/jedwards1230/anyctl/catalog"
+	"github.com/jedwards1230/anyctl/internal/manifest"
+	"github.com/jedwards1230/anyctl/schema"
 	"github.com/santhosh-tekuri/jsonschema/v6"
 	"gopkg.in/yaml.v3"
 )
 
-const schemaURL = "https://raw.githubusercontent.com/jedwards1230/labctl/main/schema/manifest.schema.json"
+const schemaURL = "https://raw.githubusercontent.com/jedwards1230/anyctl/main/schema/manifest.schema.json"
 
 // compileSchema compiles the embedded draft-07 schema once per test. The schema
 // JSON is added as a resource under its $id so $ref/#/definitions resolve.
@@ -59,7 +59,7 @@ func goValidate(src []byte) error {
 // embedded catalog manifest must validate clean against the schema AND pass the
 // Go structural Validate. (internal/manifest/testdata/petstore.yaml is excluded
 // on purpose — it is an OpenAPI 3.0 document used as a spec: inference fixture,
-// not a labctl manifest, so it would correctly fail this schema.)
+// not a anyctl manifest, so it would correctly fail this schema.)
 func TestCatalogManifestsConformToSchema(t *testing.T) {
 	sch := compileSchema(t)
 	names := catalog.Names()

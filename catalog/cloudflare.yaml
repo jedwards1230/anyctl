@@ -29,7 +29,7 @@ commands:
     query: "per_page=50"
     output: { filter: ".result | map({id,name,status,plan:.plan.name})" }
   dns:
-    help: "DNS records for a zone — pass the zone id: labctl svc cloudflare dns <zone_id>"
+    help: "DNS records for a zone — pass the zone id: anyctl svc cloudflare dns <zone_id>"
     method: GET
     path: /zones/{arg0}/dns_records
     query: "per_page=100"

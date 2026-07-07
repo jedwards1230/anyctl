@@ -1,7 +1,7 @@
-# views/ — labctl MCP Apps result View
+# views/ — anyctl MCP Apps result View
 
 A small Vite + TypeScript, vanilla-JS (no framework) project that builds the
-single self-contained HTML file labctl serves as its universal MCP Apps
+single self-contained HTML file anyctl serves as its universal MCP Apps
 result View: a shape-adaptive table / record / tree renderer for any read
 tool's `structuredContent`. See `internal/mcpserver/views/views.go` for how
 the Go side embeds and serves it, and the MCP section of the repo
@@ -34,8 +34,8 @@ npm run dev      # vite dev server, for iterating on src/ with HMR
 npm run watch    # vite build --watch, rebuilds result.html on save
 ```
 
-For an end-to-end loop against a live `labctl mcp --http` server, set
-`LABCTL_VIEWS_DIR=$PWD` (mirrors `LABCTL_CONFIG_DIR`) so the Go binary reads
+For an end-to-end loop against a live `anyctl mcp --http` server, set
+`ANYCTL_VIEWS_DIR=$PWD` (mirrors `ANYCTL_CONFIG_DIR`) so the Go binary reads
 `result.html` straight off disk instead of the embedded copy — no Go rebuild
 needed while iterating on `views/`.
 
@@ -44,7 +44,7 @@ needed while iterating on `views/`.
 - `result.html` — the Vite entry point (named to match the build's output
   filename — no postbuild rename needed).
 - `src/main.ts` — MCP Apps SDK lifecycle: registers `ontoolresult` and the
-  host-theme handlers before `app.connect()`, extracts the labctl result
+  host-theme handlers before `app.connect()`, extracts the anyctl result
   wrapper from `structuredContent` (falling back to text content, then to a
   plain empty state — never throws to a blank screen).
 - `src/render.ts` — pure, host-agnostic shape-adaptive renderer (table /
@@ -52,7 +52,7 @@ needed while iterating on `views/`.
   drilldown feature instead of depending on the SDK directly, so it can be
   exercised by other harnesses without a real MCP Apps host.
 - `src/types.ts` — the `LabctlPayload`/`UiHints` types mirroring the Go-side
-  `structuredContent` wrapper (`{ result, labctl: { service, command, title,
+  `structuredContent` wrapper (`{ result, anyctl: { service, command, title,
   ui } }`).
 - `src/style.css` — styling via CSS custom properties the host sets
   (`applyHostStyleVariables`), each with a sane standalone fallback.

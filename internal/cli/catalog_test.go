@@ -5,13 +5,13 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/jedwards1230/labctl/internal/agentsafety"
+	"github.com/jedwards1230/anyctl/internal/agentsafety"
 )
 
-// TestCatalogList: `labctl catalog list` prints the embedded services with their
+// TestCatalogList: `anyctl catalog list` prints the embedded services with their
 // descriptions, independent of any local config.
 func TestCatalogList(t *testing.T) {
-	t.Setenv("LABCTL_CONFIG_DIR", t.TempDir())
+	t.Setenv("ANYCTL_CONFIG_DIR", t.TempDir())
 	var out, errb bytes.Buffer
 	if code := Run([]string{"catalog", "list"}, &out, &errb); code != agentsafety.ExitOK {
 		t.Fatalf("exit = %d, want 0 (stderr: %s)", code, errb.String())
@@ -24,10 +24,10 @@ func TestCatalogList(t *testing.T) {
 	}
 }
 
-// TestCatalogShow: `labctl catalog show <name>` dumps the embedded YAML, and the
+// TestCatalogShow: `anyctl catalog show <name>` dumps the embedded YAML, and the
 // output is a valid manifest (carries the name:, no leaked base_url).
 func TestCatalogShow(t *testing.T) {
-	t.Setenv("LABCTL_CONFIG_DIR", t.TempDir())
+	t.Setenv("ANYCTL_CONFIG_DIR", t.TempDir())
 	var out, errb bytes.Buffer
 	if code := Run([]string{"catalog", "show", "radarr"}, &out, &errb); code != agentsafety.ExitOK {
 		t.Fatalf("exit = %d, want 0 (stderr: %s)", code, errb.String())
@@ -40,7 +40,7 @@ func TestCatalogShow(t *testing.T) {
 
 // TestCatalogShowUnknown: an unknown service is a usage error (exit 2).
 func TestCatalogShowUnknown(t *testing.T) {
-	t.Setenv("LABCTL_CONFIG_DIR", t.TempDir())
+	t.Setenv("ANYCTL_CONFIG_DIR", t.TempDir())
 	var out, errb bytes.Buffer
 	if code := Run([]string{"catalog", "show", "nope"}, &out, &errb); code != agentsafety.ExitUsage {
 		t.Fatalf("exit = %d, want %d (usage)", code, agentsafety.ExitUsage)
@@ -56,7 +56,7 @@ func TestCatalogShowUnknown(t *testing.T) {
 func TestListShowsOverrideMarker(t *testing.T) {
 	dir := t.TempDir()
 	writeService(t, dir, "radarr", svcManifest)
-	t.Setenv("LABCTL_CONFIG_DIR", dir)
+	t.Setenv("ANYCTL_CONFIG_DIR", dir)
 
 	var out, errb bytes.Buffer
 	if code := Run([]string{"list"}, &out, &errb); code != agentsafety.ExitOK {

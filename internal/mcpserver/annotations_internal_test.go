@@ -3,7 +3,7 @@ package mcpserver
 import (
 	"testing"
 
-	"github.com/jedwards1230/labctl/internal/command"
+	"github.com/jedwards1230/anyctl/internal/command"
 )
 
 // TestBuildAnnotations asserts the derived MCP annotations for representative
@@ -75,7 +75,7 @@ func TestBuildAnnotations(t *testing.T) {
 			if ann.ReadOnlyHint != tc.wantReadOnly {
 				t.Errorf("ReadOnlyHint = %v, want %v", ann.ReadOnlyHint, tc.wantReadOnly)
 			}
-			// OpenWorldHint is true on every tool (labctl calls external services).
+			// OpenWorldHint is true on every tool (anyctl calls external services).
 			if ann.OpenWorldHint == nil || !*ann.OpenWorldHint {
 				t.Errorf("OpenWorldHint = %v, want true", ann.OpenWorldHint)
 			}

@@ -1,7 +1,7 @@
 package cli
 
 import (
-	"github.com/jedwards1230/labctl/schema"
+	"github.com/jedwards1230/anyctl/schema"
 	"github.com/spf13/cobra"
 )
 
@@ -15,7 +15,7 @@ func (r *runner) cmdSchema() *cobra.Command {
 		Long: "Print the JSON Schema (draft-07) describing a portable service manifest.\n\n" +
 			"Pipe it to a file and wire it into your editor via a yaml-language-server\n" +
 			"modeline at the top of a manifest:\n\n" +
-			"  labctl schema > manifest.schema.json\n" +
+			"  anyctl schema > manifest.schema.json\n" +
 			"  # then add this as the first line of services/<name>.yaml:\n" +
 			"  # yaml-language-server: $schema=./manifest.schema.json\n\n" +
 			"It describes the PORTABLE manifest shape only — base_url and secret refs\n" +

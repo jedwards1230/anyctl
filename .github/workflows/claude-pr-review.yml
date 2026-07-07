@@ -28,7 +28,7 @@ jobs:
       extra_plugins: |
         go-quality@jedwards1230-plugins
       focus: |
-        labctl is a single Go binary: a manifest-driven CLI that drives HTTP/RPC
+        anyctl is a single Go binary: a manifest-driven CLI that drives HTTP/RPC
         homelab service APIs. It compiles in ZERO service-specific logic — a
         service is one services/<name>.yaml manifest. Core principle: it is an
         unopinionated executor (gates nothing) — do NOT suggest adding

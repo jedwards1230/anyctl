@@ -15,14 +15,14 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/jedwards1230/labctl/internal/agentsafety"
-	"github.com/jedwards1230/labctl/internal/auth"
-	"github.com/jedwards1230/labctl/internal/command"
-	"github.com/jedwards1230/labctl/internal/filter"
-	"github.com/jedwards1230/labctl/internal/manifest"
-	"github.com/jedwards1230/labctl/internal/secret"
-	"github.com/jedwards1230/labctl/internal/template"
-	"github.com/jedwards1230/labctl/internal/transport"
+	"github.com/jedwards1230/anyctl/internal/agentsafety"
+	"github.com/jedwards1230/anyctl/internal/auth"
+	"github.com/jedwards1230/anyctl/internal/command"
+	"github.com/jedwards1230/anyctl/internal/filter"
+	"github.com/jedwards1230/anyctl/internal/manifest"
+	"github.com/jedwards1230/anyctl/internal/secret"
+	"github.com/jedwards1230/anyctl/internal/template"
+	"github.com/jedwards1230/anyctl/internal/transport"
 )
 
 // maxPages guards against infinite loops in cursor/page-number pagination.

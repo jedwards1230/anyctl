@@ -1,8 +1,8 @@
-{{- define "labctl-mcp.name" -}}
+{{- define "anyctl-mcp.name" -}}
 {{- default .Chart.Name .Values.nameOverride | trunc 63 | trimSuffix "-" -}}
 {{- end -}}
 
-{{- define "labctl-mcp.fullname" -}}
+{{- define "anyctl-mcp.fullname" -}}
 {{- if .Values.fullnameOverride -}}
 {{- .Values.fullnameOverride | trunc 63 | trimSuffix "-" -}}
 {{- else -}}
@@ -15,23 +15,23 @@
 {{- end -}}
 {{- end -}}
 
-{{- define "labctl-mcp.labels" -}}
-app.kubernetes.io/name: {{ include "labctl-mcp.name" . }}
+{{- define "anyctl-mcp.labels" -}}
+app.kubernetes.io/name: {{ include "anyctl-mcp.name" . }}
 app.kubernetes.io/instance: {{ .Release.Name }}
 app.kubernetes.io/component: mcp-server
-app.kubernetes.io/part-of: labctl
+app.kubernetes.io/part-of: anyctl
 app.kubernetes.io/managed-by: {{ .Release.Service }}
 {{- if .Chart.AppVersion }}
 app.kubernetes.io/version: {{ .Chart.AppVersion | quote }}
 {{- end }}
 {{- end -}}
 
-{{- define "labctl-mcp.selectorLabels" -}}
-app.kubernetes.io/name: {{ include "labctl-mcp.name" . }}
+{{- define "anyctl-mcp.selectorLabels" -}}
+app.kubernetes.io/name: {{ include "anyctl-mcp.name" . }}
 app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end -}}
 
-{{- define "labctl-mcp.image" -}}
+{{- define "anyctl-mcp.image" -}}
 {{- $tag := .Values.image.tag | default .Chart.AppVersion -}}
 {{- printf "%s:%s" .Values.image.repository $tag -}}
 {{- end -}}
@@ -41,15 +41,15 @@ Resolve the secret name holding the op service-account token. When a
 OnePasswordItem itemPath is set, the operator syncs a secret named after this
 release; otherwise an existingSecret name must be supplied.
 */}}
-{{- define "labctl-mcp.secretName" -}}
+{{- define "anyctl-mcp.secretName" -}}
 {{- if .Values.auth.onePasswordItem.itemPath -}}
-{{- printf "%s-op-token" (include "labctl-mcp.fullname" .) -}}
+{{- printf "%s-op-token" (include "anyctl-mcp.fullname" .) -}}
 {{- else -}}
 {{- .Values.auth.existingSecret.name -}}
 {{- end -}}
 {{- end -}}
 
-{{- define "labctl-mcp.secretKey" -}}
+{{- define "anyctl-mcp.secretKey" -}}
 {{- if .Values.auth.onePasswordItem.itemPath -}}
 {{- .Values.auth.onePasswordItem.key -}}
 {{- else -}}
@@ -63,15 +63,15 @@ the /mcp endpoint). When mcp.auth.onePasswordItem.itemPath is set, the operator
 syncs a secret named after this release; otherwise mcp.auth.existingSecret.name
 must be supplied. Empty result signals "no source configured".
 */}}
-{{- define "labctl-mcp.mcpAuthSecretName" -}}
+{{- define "anyctl-mcp.mcpAuthSecretName" -}}
 {{- if .Values.mcp.auth.onePasswordItem.itemPath -}}
-{{- printf "%s-mcp-auth-token" (include "labctl-mcp.fullname" .) -}}
+{{- printf "%s-mcp-auth-token" (include "anyctl-mcp.fullname" .) -}}
 {{- else -}}
 {{- .Values.mcp.auth.existingSecret.name -}}
 {{- end -}}
 {{- end -}}
 
-{{- define "labctl-mcp.mcpAuthSecretKey" -}}
+{{- define "anyctl-mcp.mcpAuthSecretKey" -}}
 {{- if .Values.mcp.auth.onePasswordItem.itemPath -}}
 {{- .Values.mcp.auth.onePasswordItem.key -}}
 {{- else -}}

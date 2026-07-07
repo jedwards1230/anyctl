@@ -13,7 +13,7 @@ import (
 	mcp "github.com/modelcontextprotocol/go-sdk/mcp"
 	"go.opentelemetry.io/otel/trace/noop"
 
-	"github.com/jedwards1230/labctl/internal/mcpserver"
+	"github.com/jedwards1230/anyctl/internal/mcpserver"
 )
 
 // ── ResolveAuthToken ──────────────────────────────────────────────────────────
@@ -62,7 +62,7 @@ func TestResolveAuthToken_MissingFile(t *testing.T) {
 }
 
 // TestResolveAuthToken_EnvFallback verifies that when tokenFile is empty the
-// env var LABCTL_MCP_AUTH_TOKEN is used (trimmed).
+// env var ANYCTL_MCP_AUTH_TOKEN is used (trimmed).
 func TestResolveAuthToken_EnvFallback(t *testing.T) {
 	t.Setenv(mcpserver.AuthTokenEnv, "  envtoken  ")
 
@@ -72,6 +72,37 @@ func TestResolveAuthToken_EnvFallback(t *testing.T) {
 	}
 	if got != "envtoken" {
 		t.Errorf("token = %q, want \"envtoken\"", got)
+	}
+}
+
+// TestResolveAuthToken_LegacyEnvFallback verifies the cross-repo back-compat
+// contract: when only the legacy LABCTL_MCP_AUTH_TOKEN is set (the name the
+// Helm chart and workstation configs still use), it is honored.
+func TestResolveAuthToken_LegacyEnvFallback(t *testing.T) {
+	t.Setenv(mcpserver.AuthTokenEnv, "")
+	t.Setenv(mcpserver.LegacyAuthTokenEnv, "  legacytoken  ")
+
+	got, err := mcpserver.ResolveAuthToken("")
+	if err != nil {
+		t.Fatalf("ResolveAuthToken: %v", err)
+	}
+	if got != "legacytoken" {
+		t.Errorf("token = %q, want \"legacytoken\" (legacy env honored)", got)
+	}
+}
+
+// TestResolveAuthToken_PrefersNewEnv verifies the new name wins when both the
+// new and legacy env vars are set.
+func TestResolveAuthToken_PrefersNewEnv(t *testing.T) {
+	t.Setenv(mcpserver.AuthTokenEnv, "newtoken")
+	t.Setenv(mcpserver.LegacyAuthTokenEnv, "legacytoken")
+
+	got, err := mcpserver.ResolveAuthToken("")
+	if err != nil {
+		t.Fatalf("ResolveAuthToken: %v", err)
+	}
+	if got != "newtoken" {
+		t.Errorf("token = %q, want \"newtoken\" (new env preferred)", got)
 	}
 }
 

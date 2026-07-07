@@ -11,9 +11,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/jedwards1230/labctl/internal/agentsafety"
-	"github.com/jedwards1230/labctl/internal/manifest"
-	"github.com/jedwards1230/labctl/internal/transport"
+	"github.com/jedwards1230/anyctl/internal/agentsafety"
+	"github.com/jedwards1230/anyctl/internal/manifest"
+	"github.com/jedwards1230/anyctl/internal/transport"
 )
 
 const openapiPetstoreFixture = `openapi: "3.0.3"
@@ -42,7 +42,7 @@ security:
 // installed service resolves through the real loader, with the right auth.
 func TestCatalogAddOpenAPILocalFile(t *testing.T) {
 	cfg := t.TempDir()
-	t.Setenv("LABCTL_CONFIG_DIR", cfg)
+	t.Setenv("ANYCTL_CONFIG_DIR", cfg)
 
 	specPath := filepath.Join(t.TempDir(), "petstore.yaml")
 	if err := os.WriteFile(specPath, []byte(openapiPetstoreFixture), 0o600); err != nil {
@@ -97,7 +97,7 @@ func TestCatalogAddOpenAPILocalFile(t *testing.T) {
 // document declares info.title.
 func TestCatalogAddOpenAPIInfersName(t *testing.T) {
 	cfg := t.TempDir()
-	t.Setenv("LABCTL_CONFIG_DIR", cfg)
+	t.Setenv("ANYCTL_CONFIG_DIR", cfg)
 
 	specPath := filepath.Join(t.TempDir(), "spec.yaml")
 	if err := os.WriteFile(specPath, []byte(openapiPetstoreFixture), 0o600); err != nil {
@@ -117,7 +117,7 @@ func TestCatalogAddOpenAPIInfersName(t *testing.T) {
 // requires --name with a clear error, and installs nothing.
 func TestCatalogAddOpenAPINoTitleRequiresName(t *testing.T) {
 	cfg := t.TempDir()
-	t.Setenv("LABCTL_CONFIG_DIR", cfg)
+	t.Setenv("ANYCTL_CONFIG_DIR", cfg)
 
 	const noTitle = `openapi: "3.0.3"
 info: { version: "1.0" }
@@ -144,7 +144,7 @@ paths: {}
 // --openapi (ref is git-only).
 func TestCatalogAddOpenAPIRefIncompatible(t *testing.T) {
 	cfg := t.TempDir()
-	t.Setenv("LABCTL_CONFIG_DIR", cfg)
+	t.Setenv("ANYCTL_CONFIG_DIR", cfg)
 
 	specPath := filepath.Join(t.TempDir(), "spec.yaml")
 	if err := os.WriteFile(specPath, []byte(openapiPetstoreFixture), 0o600); err != nil {
@@ -166,7 +166,7 @@ func TestCatalogAddOpenAPIFromHTTPServer(t *testing.T) {
 	defer srv.Close()
 
 	cfg := t.TempDir()
-	t.Setenv("LABCTL_CONFIG_DIR", cfg)
+	t.Setenv("ANYCTL_CONFIG_DIR", cfg)
 
 	var out, errb bytes.Buffer
 	if code := Run([]string{"catalog", "add", srv.URL + "/openapi.yaml", "--openapi", "--name", "petstore"}, &out, &errb); code != agentsafety.ExitOK {
@@ -295,7 +295,7 @@ func TestFetchOpenAPIURLNetworkError(t *testing.T) {
 // code is 5 (network), not the generic agentsafety.ExitGeneral fallback.
 func TestCatalogAddOpenAPINetworkErrorExitCode(t *testing.T) {
 	cfg := t.TempDir()
-	t.Setenv("LABCTL_CONFIG_DIR", cfg)
+	t.Setenv("ANYCTL_CONFIG_DIR", cfg)
 
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -331,7 +331,7 @@ func TestFetchOpenAPIURLRedirectCap(t *testing.T) {
 // non-http(s) scheme (e.g. file:// — an attempted local-file read via
 // redirect) is rejected by the CheckRedirect scheme guard rather than
 // followed, so a malicious/compromised OpenAPI endpoint can't use a 3xx to
-// make labctl read an arbitrary local file.
+// make anyctl read an arbitrary local file.
 func TestFetchOpenAPIURLRejectsNonHTTPRedirect(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Location", "file:///etc/passwd")

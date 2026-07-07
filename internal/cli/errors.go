@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/jedwards1230/labctl/internal/agentsafety"
-	"github.com/jedwards1230/labctl/internal/transport"
+	"github.com/jedwards1230/anyctl/internal/agentsafety"
+	"github.com/jedwards1230/anyctl/internal/transport"
 )
 
 // errorEnvelope is the --json-errors structure.

@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/jedwards1230/labctl/catalog"
+	"github.com/jedwards1230/anyctl/catalog"
 )
 
 // examplesDir resolves the repo's examples/ config dir relative to this test

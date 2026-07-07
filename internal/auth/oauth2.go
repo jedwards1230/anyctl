@@ -14,8 +14,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/jedwards1230/labctl/internal/manifest"
-	"github.com/jedwards1230/labctl/internal/template"
+	"github.com/jedwards1230/anyctl/internal/manifest"
+	"github.com/jedwards1230/anyctl/internal/template"
 )
 
 // tokenCacheEntry is the on-disk format for a cached access token.
@@ -24,16 +24,16 @@ type tokenCacheEntry struct {
 	ExpiresAt   time.Time `json:"expires_at"`
 }
 
-// cacheDir returns the labctl cache directory, honoring XDG_CACHE_HOME.
+// cacheDir returns the anyctl cache directory, honoring XDG_CACHE_HOME.
 func cacheDir() string {
 	if d := os.Getenv("XDG_CACHE_HOME"); d != "" {
-		return filepath.Join(d, "labctl")
+		return filepath.Join(d, "anyctl")
 	}
 	home, err := os.UserHomeDir()
 	if err != nil {
-		return filepath.Join(".cache", "labctl")
+		return filepath.Join(".cache", "anyctl")
 	}
-	return filepath.Join(home, ".cache", "labctl")
+	return filepath.Join(home, ".cache", "anyctl")
 }
 
 // cacheFileName returns the cache file path keyed by SHA-256 of the client ID,
@@ -237,7 +237,7 @@ func fetchOAuth2Token(ctx context.Context, a manifest.Auth, env template.Env, di
 
 	if err := writeCache(cachePath, result.AccessToken, result.ExpiresIn); err != nil {
 		// Cache write failure is non-fatal — proceed with the token in memory.
-		_, _ = fmt.Fprintf(os.Stderr, "labctl: oauth2 cache write: %v\n", err)
+		_, _ = fmt.Fprintf(os.Stderr, "anyctl: oauth2 cache write: %v\n", err)
 	}
 
 	return result.AccessToken, nil

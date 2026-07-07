@@ -1,4 +1,4 @@
-// Package agentsafety consolidates labctl's agent-safety machinery — secret
+// Package agentsafety consolidates anyctl's agent-safety machinery — secret
 // scrubbing, dry-run preview rendering, the exit-code taxonomy + classifier,
 // the tool-annotation policy, and mutation audit logging — into one SDK-light
 // package shared by the engine, the CLI, and the MCP server.

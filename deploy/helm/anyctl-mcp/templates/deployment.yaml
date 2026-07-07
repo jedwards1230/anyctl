@@ -1,18 +1,18 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "labctl-mcp.fullname" . }}
+  name: {{ include "anyctl-mcp.fullname" . }}
   labels:
-    {{- include "labctl-mcp.labels" . | nindent 4 }}
+    {{- include "anyctl-mcp.labels" . | nindent 4 }}
 spec:
   replicas: {{ .Values.replicaCount }}
   selector:
     matchLabels:
-      {{- include "labctl-mcp.selectorLabels" . | nindent 6 }}
+      {{- include "anyctl-mcp.selectorLabels" . | nindent 6 }}
   template:
     metadata:
       labels:
-        {{- include "labctl-mcp.selectorLabels" . | nindent 8 }}
+        {{- include "anyctl-mcp.selectorLabels" . | nindent 8 }}
         {{- with .Values.podLabels }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
@@ -34,8 +34,8 @@ spec:
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
       containers:
-        - name: labctl-mcp
-          image: {{ include "labctl-mcp.image" . | quote }}
+        - name: anyctl-mcp
+          image: {{ include "anyctl-mcp.image" . | quote }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           args:
             - mcp
@@ -56,16 +56,16 @@ spec:
               containerPort: {{ .Values.service.port }}
               protocol: TCP
           env:
-            {{- $secretName := include "labctl-mcp.secretName" . }}
+            {{- $secretName := include "anyctl-mcp.secretName" . }}
             {{- if $secretName }}
             - name: {{ .Values.auth.env }}
               valueFrom:
                 secretKeyRef:
                   name: {{ $secretName }}
-                  key: {{ include "labctl-mcp.secretKey" . }}
+                  key: {{ include "anyctl-mcp.secretKey" . }}
             {{- end }}
             {{- if .Values.mcp.auth.enabled }}
-            {{- $mcpAuthSecret := include "labctl-mcp.mcpAuthSecretName" . }}
+            {{- $mcpAuthSecret := include "anyctl-mcp.mcpAuthSecretName" . }}
             {{- if not $mcpAuthSecret }}
             {{- fail "mcp.auth.enabled=true requires a token source: set mcp.auth.existingSecret.name or mcp.auth.onePasswordItem.itemPath" }}
             {{- end }}
@@ -73,7 +73,7 @@ spec:
               valueFrom:
                 secretKeyRef:
                   name: {{ $mcpAuthSecret }}
-                  key: {{ include "labctl-mcp.mcpAuthSecretKey" . }}
+                  key: {{ include "anyctl-mcp.mcpAuthSecretKey" . }}
             {{- end }}
           livenessProbe:
             httpGet:
@@ -93,7 +93,7 @@ spec:
             {{- toYaml .Values.securityContext | nindent 12 }}
           volumeMounts:
             - name: home
-              mountPath: /home/labctl
+              mountPath: /home/anyctl
             - name: tmp
               mountPath: /tmp
             {{- if or .Values.config.configYaml .Values.config.profileYaml }}
@@ -114,12 +114,12 @@ spec:
         {{- if or .Values.config.configYaml .Values.config.profileYaml }}
         - name: config
           configMap:
-            name: {{ include "labctl-mcp.fullname" . }}-config
+            name: {{ include "anyctl-mcp.fullname" . }}-config
         {{- end }}
         {{- if .Values.config.servicesYaml }}
         - name: services
           configMap:
-            name: {{ include "labctl-mcp.fullname" . }}-services
+            name: {{ include "anyctl-mcp.fullname" . }}-services
         {{- end }}
       {{- with .Values.nodeSelector }}
       nodeSelector:

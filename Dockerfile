@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 #
-# labctl runtime image. Bundles the 1Password `op` CLI because labctl resolves
+# anyctl runtime image. Bundles the 1Password `op` CLI because anyctl resolves
 # `op://` secret refs by shelling out to `op` (with OP_SERVICE_ACCOUNT_TOKEN).
 # Built multi-arch (linux/amd64, linux/arm64) by the release workflow.
 #
@@ -17,7 +17,7 @@ ARG VERSION=dev
 ARG TARGETOS
 ARG TARGETARCH
 RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
-    go build -trimpath -ldflags "-s -w -X main.version=${VERSION}" -o /out/labctl .
+    go build -trimpath -ldflags "-s -w -X main.version=${VERSION}" -o /out/anyctl .
 
 # Pinned to a digest (not the mutable trixie-slim tag) so rebuilds are
 # reproducible and don't silently drift onto a different base.
@@ -41,16 +41,16 @@ RUN set -eux; \
     op --version; \
     apt-get purge -y --auto-remove curl gnupg; \
     rm -rf /var/lib/apt/lists/*
-COPY --from=build /out/labctl /usr/local/bin/labctl
-# labctl reads config.yaml + profile.yaml from LABCTL_CONFIG_DIR; service
+COPY --from=build /out/anyctl /usr/local/bin/anyctl
+# anyctl reads config.yaml + profile.yaml from ANYCTL_CONFIG_DIR; service
 # manifests are embedded in the binary. HOME holds op/oauth2 caches (kept
 # separate from the read-only config mount so a read-only root fs still works).
-ENV LABCTL_CONFIG_DIR=/config \
-    HOME=/home/labctl
-RUN useradd -u 10001 -r -m -d /home/labctl -s /usr/sbin/nologin labctl \
+ENV ANYCTL_CONFIG_DIR=/config \
+    HOME=/home/anyctl
+RUN useradd -u 10001 -r -m -d /home/anyctl -s /usr/sbin/nologin anyctl \
     && mkdir -p /config && chown 10001 /config
 USER 10001
-WORKDIR /home/labctl
+WORKDIR /home/anyctl
 EXPOSE 9000
-ENTRYPOINT ["labctl"]
+ENTRYPOINT ["anyctl"]
 CMD ["mcp", "--http", ":9000"]

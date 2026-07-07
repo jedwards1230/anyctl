@@ -230,7 +230,7 @@ func TestValidateJSONRPCParams(t *testing.T) {
 // TestValidateUI covers the optional ui: hint block (Phase 2): a portable
 // manifest with a valid block (or none at all) passes, a bad view/sort.dir
 // value is rejected, and an arbitrary drilldown string is accepted leniently
-// (labctl has no warning channel, so a forward/cross reference is not a hard
+// (anyctl has no warning channel, so a forward/cross reference is not a hard
 // failure).
 func TestValidateUI(t *testing.T) {
 	mk := func(ui UI) *Service {

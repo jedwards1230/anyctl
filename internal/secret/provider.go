@@ -17,7 +17,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/jedwards1230/labctl/internal/manifest"
+	"github.com/jedwards1230/anyctl/internal/manifest"
 )
 
 // Provider resolves secret references for a single URI scheme.

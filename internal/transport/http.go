@@ -14,7 +14,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jedwards1230/labctl/internal/auth"
+	"github.com/jedwards1230/anyctl/internal/auth"
 )
 
 // HTTPRequest is a fully-resolved HTTP call (no templates remain).

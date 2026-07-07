@@ -10,9 +10,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/jedwards1230/labctl/internal/command"
-	"github.com/jedwards1230/labctl/internal/manifest"
-	"github.com/jedwards1230/labctl/internal/output"
+	"github.com/jedwards1230/anyctl/internal/command"
+	"github.com/jedwards1230/anyctl/internal/manifest"
+	"github.com/jedwards1230/anyctl/internal/output"
 )
 
 // newPipelineSvc builds a minimal service pointing at baseURL, with the given

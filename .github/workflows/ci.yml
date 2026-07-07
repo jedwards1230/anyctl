@@ -1,4 +1,4 @@
-# CI for labctl: format check, vet, test (race + coverage), and a build smoke
+# CI for anyctl: format check, vet, test (race + coverage), and a build smoke
 # test. Runs on PRs and pushes to main.
 name: CI
 

@@ -6,13 +6,13 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/jedwards1230/labctl/internal/agentsafety"
+	"github.com/jedwards1230/anyctl/internal/agentsafety"
 )
 
-// TestSchemaCommand: `labctl schema` emits the embedded JSON Schema as valid JSON
+// TestSchemaCommand: `anyctl schema` emits the embedded JSON Schema as valid JSON
 // containing the draft-07 $schema declaration.
 func TestSchemaCommand(t *testing.T) {
-	t.Setenv("LABCTL_CONFIG_DIR", t.TempDir())
+	t.Setenv("ANYCTL_CONFIG_DIR", t.TempDir())
 	var out, errb bytes.Buffer
 	if code := Run([]string{"schema"}, &out, &errb); code != agentsafety.ExitOK {
 		t.Fatalf("exit = %d, want 0 (stderr: %s)", code, errb.String())

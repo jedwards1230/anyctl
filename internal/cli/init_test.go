@@ -7,14 +7,14 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/jedwards1230/labctl/internal/agentsafety"
-	"github.com/jedwards1230/labctl/internal/manifest"
+	"github.com/jedwards1230/anyctl/internal/agentsafety"
+	"github.com/jedwards1230/anyctl/internal/manifest"
 )
 
-// TestInitStdout confirms `labctl init <svc>` prints a validating manifest to
+// TestInitStdout confirms `anyctl init <svc>` prints a validating manifest to
 // stdout by default.
 func TestInitStdout(t *testing.T) {
-	t.Setenv("LABCTL_CONFIG_DIR", t.TempDir())
+	t.Setenv("ANYCTL_CONFIG_DIR", t.TempDir())
 	var out, errb bytes.Buffer
 	if code := Run([]string{"init", "demo"}, &out, &errb); code != agentsafety.ExitOK {
 		t.Fatalf("exit = %d, want 0 (stderr: %s)", code, errb.String())
@@ -30,7 +30,7 @@ func TestInitStdout(t *testing.T) {
 // TestInitOutputFileAndForce confirms -o writes a file, refuses to clobber, and
 // honors --force.
 func TestInitOutputFileAndForce(t *testing.T) {
-	t.Setenv("LABCTL_CONFIG_DIR", t.TempDir())
+	t.Setenv("ANYCTL_CONFIG_DIR", t.TempDir())
 	path := filepath.Join(t.TempDir(), "demo.yaml")
 
 	var out, errb bytes.Buffer
@@ -65,7 +65,7 @@ func TestInitOutputFileAndForce(t *testing.T) {
 
 // TestInitUnknownAuth confirms a bad --auth scheme is a usage error.
 func TestInitUnknownAuth(t *testing.T) {
-	t.Setenv("LABCTL_CONFIG_DIR", t.TempDir())
+	t.Setenv("ANYCTL_CONFIG_DIR", t.TempDir())
 	var out, errb bytes.Buffer
 	if code := Run([]string{"init", "demo", "--auth", "nope"}, &out, &errb); code != agentsafety.ExitUsage {
 		t.Fatalf("bad auth exit = %d, want %d (stderr: %s)", code, agentsafety.ExitUsage, errb.String())
@@ -76,7 +76,7 @@ func TestInitUnknownAuth(t *testing.T) {
 // validates it — proving scaffolds pass the lint gate end-to-end.
 func TestInitOutputValidatesViaLint(t *testing.T) {
 	cfgDir := t.TempDir()
-	t.Setenv("LABCTL_CONFIG_DIR", cfgDir)
+	t.Setenv("ANYCTL_CONFIG_DIR", cfgDir)
 	path := filepath.Join(cfgDir, "scaffold.yaml")
 	for _, auth := range []string{"none", "bearer", "ws-login"} {
 		t.Run(auth, func(t *testing.T) {
@@ -93,12 +93,12 @@ func TestInitOutputValidatesViaLint(t *testing.T) {
 	}
 }
 
-// TestInitProvisionsConfigDir confirms bare `labctl init` provisions the config
+// TestInitProvisionsConfigDir confirms bare `anyctl init` provisions the config
 // dir (config.yaml + services/ + profile.yaml) and is idempotent — a second run
 // clobbers nothing and still exits 0.
 func TestInitProvisionsConfigDir(t *testing.T) {
 	dir := t.TempDir()
-	t.Setenv("LABCTL_CONFIG_DIR", dir)
+	t.Setenv("ANYCTL_CONFIG_DIR", dir)
 
 	var out, errb bytes.Buffer
 	if code := Run([]string{"init"}, &out, &errb); code != agentsafety.ExitOK {
@@ -155,7 +155,7 @@ func TestInitProvisionsConfigDir(t *testing.T) {
 // 0) but fails `lint --strict` (exit 2), which enforces completeness.
 func TestLintStrictPortable(t *testing.T) {
 	cfgDir := t.TempDir()
-	t.Setenv("LABCTL_CONFIG_DIR", cfgDir)
+	t.Setenv("ANYCTL_CONFIG_DIR", cfgDir)
 	// A portable manifest file: no base_url, an unbound secret slot.
 	path := filepath.Join(cfgDir, "portable.yaml")
 	const portable = `name: portable
@@ -209,7 +209,7 @@ services:
   complete:
     base_url: http://127.0.0.1:1
 `)
-	t.Setenv("LABCTL_CONFIG_DIR", dir)
+	t.Setenv("ANYCTL_CONFIG_DIR", dir)
 
 	var out, errb bytes.Buffer
 	if code := Run([]string{"doctor"}, &out, &errb); code != agentsafety.ExitOK {
@@ -225,7 +225,7 @@ services:
 	}
 }
 
-// TestMCPUnknownServiceErrors confirms `labctl mcp --service <unknown>` fails
+// TestMCPUnknownServiceErrors confirms `anyctl mcp --service <unknown>` fails
 // fast with a usage error rather than serving an empty tool set.
 func TestMCPUnknownServiceErrors(t *testing.T) {
 	dir := t.TempDir()
@@ -237,7 +237,7 @@ func TestMCPUnknownServiceErrors(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(svcDir, "radarr.yaml"), manifestYAML, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	t.Setenv("LABCTL_CONFIG_DIR", dir)
+	t.Setenv("ANYCTL_CONFIG_DIR", dir)
 	var out, errb bytes.Buffer
 	if code := Run([]string{"mcp", "--service", "nonexistent"}, &out, &errb); code != agentsafety.ExitUsage {
 		t.Fatalf("mcp unknown service exit = %d, want %d (stderr: %s)", code, agentsafety.ExitUsage, errb.String())

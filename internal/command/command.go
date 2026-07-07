@@ -8,7 +8,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/jedwards1230/labctl/internal/manifest"
+	"github.com/jedwards1230/anyctl/internal/manifest"
 )
 
 // Command is one invokable operation against a service.
