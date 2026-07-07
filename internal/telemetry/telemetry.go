@@ -25,6 +25,8 @@ import (
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/trace"
 	"go.opentelemetry.io/otel/trace/noop"
+
+	"github.com/jedwards1230/anyctl/internal/brand"
 )
 
 // flushTimeout bounds how long shutdown waits on the collector before giving up.
@@ -41,7 +43,7 @@ func Enabled() bool {
 // telemetry never blocks or breaks a command (fail-open). version stamps the
 // resource's service.version.
 func Start(ctx context.Context, version string) (trace.Tracer, func()) {
-	noopTracer := noop.NewTracerProvider().Tracer("anyctl")
+	noopTracer := noop.NewTracerProvider().Tracer(brand.Name)
 	if !Enabled() {
 		return noopTracer, func() {}
 	}
@@ -66,7 +68,7 @@ func Start(ctx context.Context, version string) (trace.Tracer, func()) {
 		defer cancel()
 		_ = tp.Shutdown(ctx)
 	}
-	return tp.Tracer("anyctl"), shutdown
+	return tp.Tracer(brand.Name), shutdown
 }
 
 // newExporter selects the OTLP protocol from OTEL_EXPORTER_OTLP_PROTOCOL
@@ -84,5 +86,5 @@ func serviceName() string {
 	if n := os.Getenv("OTEL_SERVICE_NAME"); n != "" {
 		return n
 	}
-	return "anyctl"
+	return brand.Name
 }

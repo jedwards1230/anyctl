@@ -9,19 +9,21 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/jedwards1230/anyctl/internal/brand"
 )
 
 // CatalogMetaFile is the per-catalog metadata file anyctl writes into each
 // installed catalog dir. It records where the catalog came from (a dir or a git
 // URL, pinned to a commit) so `catalog update` can re-fetch and `catalog
 // installed` can report provenance. It is NOT a manifest and the loader ignores it.
-const CatalogMetaFile = ".anyctl-catalog.json"
+const CatalogMetaFile = "." + brand.Name + "-catalog.json"
 
 // LegacyCatalogMetaFile is the pre-rename marker name written by labctl. It is
 // still accepted on read so a catalog installed by an old binary keeps its
 // provenance; `catalog update` re-stages the dir and writes CatalogMetaFile,
 // so the legacy marker naturally ages out on the next update.
-const LegacyCatalogMetaFile = ".labctl-catalog.json"
+const LegacyCatalogMetaFile = "." + brand.LegacyName + "-catalog.json"
 
 // CatalogMeta is the provenance record for one installed catalog.
 type CatalogMeta struct {

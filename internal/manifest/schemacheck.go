@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/jedwards1230/anyctl/internal/brand"
 	"github.com/jedwards1230/anyctl/schema"
 	"github.com/santhosh-tekuri/jsonschema/v6"
 	"gopkg.in/yaml.v3"
@@ -12,7 +13,7 @@ import (
 
 // manifestSchemaURL is the $id the embedded schema is registered under so its
 // internal $ref/#/definitions resolve. It mirrors schema/schema_test.go.
-const manifestSchemaURL = "https://raw.githubusercontent.com/jedwards1230/anyctl/main/schema/manifest.schema.json"
+const manifestSchemaURL = "https://raw.githubusercontent.com/" + brand.Repo + "/main/schema/manifest.schema.json"
 
 var (
 	compiledSchemaOnce sync.Once

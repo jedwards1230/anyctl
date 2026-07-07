@@ -7,13 +7,14 @@ import (
 	"strings"
 
 	"github.com/jedwards1230/anyctl/internal/agentsafety"
+	"github.com/jedwards1230/anyctl/internal/brand"
 	"github.com/jedwards1230/anyctl/internal/manifest"
 	"github.com/spf13/cobra"
 )
 
 // defaultConfigYAML is the minimal config.yaml `anyctl init` provisions. It is a
 // generic, portable header (no homelab specifics) mirroring examples/config.yaml.
-const defaultConfigYAML = `# anyctl global config. Every field is optional; these are the defaults.
+var defaultConfigYAML = fmt.Sprintf(`# %s global config. Every field is optional; these are the defaults.
 # Unknown top-level keys are an error (strict decoding) — a typo is rejected at
 # load time rather than silently ignored.
 version: 1
@@ -30,14 +31,14 @@ secrets:
       scheme: op
       command: ["op", "read", "{ref}"]   # {ref} ← the op:// URI
 
-# The legacy single-resolver ` + "`secret:`" + ` block is a still-supported deprecated alias.
-`
+# The legacy single-resolver `+"`secret:`"+` block is a still-supported deprecated alias.
+`, brand.Name)
 
 // defaultProfileYAML is the commented profile.yaml stub `anyctl init` provisions.
 // A profile binds portable manifests to THIS machine's endpoints and secret refs.
 // It is the SOLE binding mechanism: a manifest carries the portable shape only —
 // an in-manifest base_url or secret ref is rejected by `lint`.
-const defaultProfileYAML = `# anyctl per-user profile: binds portable manifests to THIS machine's endpoints
+var defaultProfileYAML = fmt.Sprintf(`# %s per-user profile: binds portable manifests to THIS machine's endpoints
 # and credentials. This is the only place a base_url or secret ref may live — a
 # manifest carries the portable shape only (an in-manifest base_url/ref is
 # rejected). Precedence at resolution time: env override > profile.
@@ -50,7 +51,7 @@ services:
   #   secrets:
   #     api_key:
   #       ref: "op://VAULT/ITEM/FIELD"
-`
+`, brand.Name)
 
 // cmdInit has two modes. Bare ` + "`anyctl init`" + ` provisions the config dir
 // (config.yaml + services/ + profile.yaml), creating only what is missing.
@@ -71,8 +72,8 @@ func (r *runner) cmdInit() *cobra.Command {
 			"the schema (commands + auth strategy + secret slots); the machine-specific\n" +
 			"base_url and secret refs go in profile.yaml (shown in a trailing comment).\n" +
 			"It prints to stdout by default; use -o to write it to a file. The output\n" +
-			"validates cleanly (`anyctl lint <file>`).\n\n" +
-			"To edit an *existing* embedded service, use `anyctl catalog edit <name>`\n" +
+			fmt.Sprintf("validates cleanly (`%s lint <file>`).\n\n", brand.Name) +
+			fmt.Sprintf("To edit an *existing* embedded service, use `%s catalog edit <name>`\n", brand.Name) +
 			"(it seeds the complete manifest, not a blank starter).",
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {

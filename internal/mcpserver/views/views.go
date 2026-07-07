@@ -18,6 +18,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/jedwards1230/anyctl/internal/brand"
 	"github.com/jedwards1230/anyctl/internal/compat"
 )
 
@@ -39,7 +40,7 @@ var embeddedResultHTML []byte
 // server-construction time, matching "read at server-build time" in the
 // dev-loop contract.
 func ResultHTML() []byte {
-	if dir := compat.Getenv("ANYCTL_VIEWS_DIR", "LABCTL_VIEWS_DIR"); dir != "" {
+	if dir := compat.Getenv(brand.EnvPrefix+"VIEWS_DIR", brand.LegacyEnvPrefix+"VIEWS_DIR"); dir != "" {
 		if b, err := os.ReadFile(filepath.Join(dir, "result.html")); err == nil {
 			return b
 		}

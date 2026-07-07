@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/jedwards1230/anyctl/internal/agentsafety"
+	"github.com/jedwards1230/anyctl/internal/brand"
 	"github.com/jedwards1230/anyctl/internal/manifest"
 	"github.com/spf13/cobra"
 )
@@ -151,7 +152,7 @@ func (r *runner) catalogAdd(source, name, ref string, force bool) error {
 		return agentsafety.NewUsageError("--ref only applies to a git source")
 	}
 
-	tmp, err := os.MkdirTemp("", "anyctl-catalog-fetch-")
+	tmp, err := os.MkdirTemp("", brand.Name+"-catalog-fetch-")
 	if err != nil {
 		return fmt.Errorf("creating tempdir: %w", err)
 	}
@@ -237,7 +238,7 @@ func (r *runner) updateOne(configDir, name string) error {
 		return r.updateOneOpenAPI(configDir, meta)
 	}
 
-	tmp, err := os.MkdirTemp("", "anyctl-catalog-fetch-")
+	tmp, err := os.MkdirTemp("", brand.Name+"-catalog-fetch-")
 	if err != nil {
 		return fmt.Errorf("creating tempdir: %w", err)
 	}

@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/jedwards1230/anyctl/internal/agentsafety"
+	"github.com/jedwards1230/anyctl/internal/brand"
 	"github.com/jedwards1230/anyctl/internal/manifest"
 	"github.com/spf13/cobra"
 )
@@ -31,7 +32,7 @@ func (r *runner) cmdCatalogValidate() *cobra.Command {
 			"and no interaction with any installed or embedded catalog — it only inspects\n" +
 			"the files in <dir>. That makes it the check a third-party catalog repository\n" +
 			"runs in its own CI (see .github/actions/validate-catalog) to confirm its\n" +
-			"manifests satisfy anyctl's contract before anyone runs `anyctl catalog add`\n" +
+			fmt.Sprintf("manifests satisfy %s's contract before anyone runs `%s catalog add`\n", brand.Name, brand.Name) +
 			"against the repo.\n\n" +
 			"Prints one line per manifest (\"ok\" or \"FAIL\" with the reason) and exits 0\n" +
 			"only if every manifest is valid and at least one was found.",

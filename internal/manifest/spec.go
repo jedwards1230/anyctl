@@ -43,6 +43,8 @@ import (
 
 	"github.com/pb33f/libopenapi"
 	v3 "github.com/pb33f/libopenapi/datamodel/high/v3"
+
+	"github.com/jedwards1230/anyctl/internal/brand"
 )
 
 // specCacheTTL is the freshness window for a cached remote spec. A cached spec
@@ -131,13 +133,13 @@ func fetchURL(u string) ([]byte, error) {
 // specCacheDir returns the anyctl spec cache dir, honoring XDG_CACHE_HOME.
 func specCacheDir() string {
 	if d := os.Getenv("XDG_CACHE_HOME"); d != "" {
-		return filepath.Join(d, "anyctl", "specs")
+		return filepath.Join(d, brand.Name, "specs")
 	}
 	home, err := os.UserHomeDir()
 	if err != nil {
-		return filepath.Join(".cache", "anyctl", "specs")
+		return filepath.Join(".cache", brand.Name, "specs")
 	}
-	return filepath.Join(home, ".cache", "anyctl", "specs")
+	return filepath.Join(home, ".cache", brand.Name, "specs")
 }
 
 // specCachePath is the cache file for a spec URL: <cacheDir>/<sha256(url)>.json.
