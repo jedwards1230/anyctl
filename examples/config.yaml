@@ -20,5 +20,3 @@ secrets:
       # auth:
       #   service_account_token:
       #     file: ~/.config/anyctl/sa-token
-
-# The legacy single-resolver `secret:` block is a still-supported deprecated alias.

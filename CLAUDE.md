@@ -33,7 +33,7 @@ internal/
   template/   {secret.X}/{env.X}/{arg.N}/{var} expansion (JSON braces pass through)
   secret/     scheme-dispatched Provider interface (op:// → 1Password) + env override
               + idioms + cache; op provider injects OP_SERVICE_ACCOUNT_TOKEN into
-              its subprocess only (never argv/log); legacy `secret:` block normalized
+              its subprocess only (never argv/log)
   auth/       apply none/header-key/bearer/basic/oauth2-client-credentials/ws-login to a request
   transport/  http (curl-equivalent) + jsonrpc-ws; error extraction, typed errors→exit codes
   output/     gojq filter + render modes (json/raw/scalar)
@@ -49,161 +49,96 @@ per invocation; the now-shipped MCP server reuses the same provider and emits
 one span per tool call (`<svc>_<command>`). Metrics remain future work.
 
 **Two faces, one executor**: the CLI and the MCP server (stdio or
-streamable-HTTP) both drive `engine.Execute`, so behavior is identical. The MCP
-face reaches parity with the CLI on agent-safety: every tool takes an optional
-`dry_run` boolean (previews the request, no network — reusing the CLI's
-preview/redaction); error results are structured (`IsError` + text fallback +
-`StructuredContent {error,class,status}` from the shared exit-code classifier);
-and each WRITE call emits one JSON mutation audit record to stderr. It still
-gates nothing — no write-confirmation or elicitation (a later PR).
+streamable-HTTP) both drive `engine.Execute`, so behavior is identical. On the
+MCP face every tool takes an optional `dry_run` (previews, no network), error
+results are structured (`IsError` + text fallback + `StructuredContent
+{error,class,status}`), and each WRITE call emits one JSON mutation audit record
+to stderr. It still gates nothing.
 
-## Status / roadmap
+## Capabilities (all shipped)
 
-Phase 1 (done): http transport; none/header-key/bearer/basic auth; scheme-dispatched
-secrets-provider interface (op:// → 1Password provider, with optional
-service-account-token env injection into the `op` subprocess) + env override;
-generic verbs; gojq output; XDG load; `list`/`lint`/`doctor`/`self-update` (sha256-verified
-in-place binary update from the GitHub release). Adding a provider is
-three edits in `internal/secret/provider.go` (new `Provider`, a config block, a
-`NewRegistry` case) — dispatch is by URI scheme, so no engine/cli changes.
+- **Transports**: `http` (curl-equivalent) + `jsonrpc-ws` (ws-login; truenas,
+  sunshine execute fully).
+- **Auth**: none / header-key / bearer / basic / oauth2-client-credentials
+  (on-disk token cache) / ws-login.
+- **Secrets**: scheme-dispatched providers (`op://` → 1Password, optional
+  service-account-token injected into the `op` subprocess only) + `<PREFIX>_<SECRET>`
+  env override. Adding a backend is three edits in `internal/secret/provider.go`
+  (new `Provider`, config block, `NewRegistry` case) — no engine/cli changes.
+- **Commands**: hand-written `commands:` or OpenAPI inference (`spec:` +
+  `spec_filter:` via libopenapi); composed `steps:` pipelines
+  (extract/when/confirm/on_error); gojq output.
+- **Builtins**: `list`/`lint`/`doctor`/`schema`/`init`/`self-update` (sha256-verified
+  in-place update from the GitHub release).
+- **MCP server** (`anyctl mcp`, stdio or `--http :9000` with `/mcp` + `GET /healthz`):
+  a non-loopback `--http` bind refuses to start without a bearer token
+  (`ANYCTL_MCP_AUTH_TOKEN` / `--auth-token-file`) unless `--allow-unauthenticated`;
+  loopback needs none.
 
-Phase 2+3 (done): `jsonrpc-ws` transport + ws-login auth; oauth2-client-credentials
-with on-disk token cache; OpenAPI inference via libopenapi (`spec:` + `spec_filter:`);
-composed multi-step pipelines (`steps:` with extract/when/confirm/on_error); MCP
-server (`anyctl mcp`) over stdio (default) or streamable-HTTP (`--http :9000`,
-MCP endpoint at `/mcp`, `GET /healthz` probe — for in-cluster gateway federation).
-Secure by default: a `--http` bind to a non-loopback address refuses to start
-without a bearer token (`ANYCTL_MCP_AUTH_TOKEN` or `--auth-token-file`) unless
-`--allow-unauthenticated` explicitly opts out; a loopback bind (127.0.0.1/::1/
-localhost) needs no token. The `truenas` and `sunshine` manifests execute fully.
+## Catalogs
 
-Embedded catalog (done): 15 portable manifests (top-level `catalog/`) are
-compiled into the binary via `//go:embed`, so consumers no longer vendor copies.
-A manifest is plain YAML and editing one is **rebuild-free** — the binary just
-ships sane defaults. The authoring loop:
+Three sources, highest wins: local `services/<name>.yaml` > installed catalog
+(`catalogs/*/`) > the embedded floor (top-level `catalog/`, 15 manifests
+`//go:embed`'d). A manifest is plain YAML, so editing is **rebuild-free**.
 
-- `anyctl catalog list` / `catalog show <name>` — inspect/dump the embedded manifests.
-- `anyctl catalog edit <name>` — seed the **full** embedded manifest into
-  `<config-dir>/services/<name>.yaml`, where it shadows the embedded one at the
-  next load. Iterate live (no recompile). A FULL copy is seeded, not a sparse
-  patch, because a local override **wholesale replaces** the embedded entry
+- `catalog list`/`show <name>` — inspect/dump embedded manifests.
+- `catalog edit <name>` — seed the **full** embedded manifest into
+  `services/<name>.yaml` (shadows embedded at next load). A FULL copy, not a
+  patch, because a local override wholesale replaces the embedded entry
   (validated standalone, no field-level merge — see `decodeService`/`Validate` in
-  `load.go`); a partial override would drop endpoints or fail validation. Refuses
-  to clobber without `--force`; prints the absolute path; `--edit` opens
-  `$VISUAL`/`$EDITOR`.
-- `anyctl catalog vendor <name> [--catalog-dir catalog]` — promote an edited
-  override back into a repo checkout's `catalog/` source tree to commit and ship
-  embedded. Validates first (structural `Validate` — a portable manifest, no
-  `base_url`/secret `ref`), so a broken manifest is never promoted; refuses to
-  clobber without `--force`. `--catalog-dir` is required because the running
-  binary can't know the repo path.
+  `load.go`). `--force` to clobber; `--edit` opens `$VISUAL`/`$EDITOR`.
+- `catalog vendor <name> --catalog-dir catalog` — promote an edited override back
+  into a repo checkout's `catalog/` to ship embedded. Validates first;
+  `--catalog-dir` required (the binary can't know the repo path).
+- `catalog add <source> [--name --ref --force]` — install a dir or git repo of
+  portable manifests. Validates every `*.yaml` (schema + portability) fail-closed,
+  installs atomically. Git pinned to its commit SHA in `.anyctl-catalog.json`;
+  fetches shell to system `git` with `ext`/`fd` blocked, URL after `--`.
+  `--openapi <url|file>` materializes one manifest from an OpenAPI 3.x doc
+  (operations → `commands:`, `securitySchemes` best-effort → `auth:`, un-mappable
+  → `strategy: none`; spec parsed once, not vendored).
+  Impl: `internal/manifest/openapi_scaffold.go`, `internal/cli/catalog_openapi.go`.
+- `catalog update [name]` / `remove <name>` / `installed`.
+- `catalog validate <dir>` — the SAME fail-closed gate `catalog add` runs
+  (`ValidatePortableManifest` + duplicate-name check), read-only and
+  config-dir-free (per-file `ok`/`FAIL`, exit 0/2). What a third-party catalog
+  repo runs in CI. Impl: `internal/cli/catalog_validate.go`.
 
-Named, installable catalogs (done): beyond the single embedded catalog, install
-**named** catalogs of portable manifests into `<config-dir>/catalogs/<name>/` from
-a directory or a git repo:
+**Two installed catalogs MAY share a service name** — both install; each stays
+addressable as `<catalog>:<service>`. The bare name becomes ambiguous:
+`Loaded.Lookup` returns a `*ConfigError` (exit 2) listing both qualified forms
+(never silently picks). The MCP server names a tool from the *selector*, so a
+colliding install **renames** the first catalog's tools to
+`<catalog>-<service>_<command>` (`internal/mcpserver/mcpserver.go`'s
+`selectorToolPrefix`) — inherent to disambiguation. Store API:
+`internal/manifest/catalogstore.go`; add-gate: `internal/manifest/schemacheck.go`;
+CLI: `internal/cli/catalog_install.go`. `.github/actions/validate-catalog` is the
+composite action third-party repos point CI at; `examples/catalog/` (singular) is
+the reference catalog.
 
-- `anyctl catalog add <source> [--name --ref --force]` — fetch a dir or git URL,
-  validate every top-level `*.yaml` against the schema AND structural `Validate`
-  (portability: no `base_url`/secret `ref`) fail-closed, then install atomically
-  (stage in a temp dir, swap into place). A git source is pinned to its resolved
-  commit SHA in `.anyctl-catalog.json`. Git fetches shell to the system `git` with
-  `ext`/`fd` transports blocked and the URL after `--` (no shell). `--openapi
-  <url|file>` materializes a single-service portable manifest from an OpenAPI
-  3.x document instead (operations → `commands:`, `securitySchemes` inferred
-  into `auth:` on a best-effort basis, un-mappable auth falls back to `auth: {
-  strategy: none }` with an explanatory comment; `servers[]` is never carried
-  over; the spec is parsed once at add-time and not vendored — no `spec:`
-  reference is kept). Implementation: `internal/manifest/openapi_scaffold.go`
-  + `internal/cli/catalog_openapi.go`.
-- `anyctl catalog update [name]` / `remove <name>` / `installed`.
-- `anyctl catalog validate <dir>` — the SAME fail-closed gate `catalog add`
-  runs (`ValidatePortableManifest` + intra-dir duplicate-name check), exposed
-  read-only and config-dir-free: no network, no install, no profile/catalog
-  interaction — just a per-file `ok`/`FAIL` report and exit 0/2. This is what a
-  third-party catalog repo runs in its own CI (see the `validate-catalog`
-  composite action below) before anyone runs `catalog add` against it.
-  Implementation: `internal/cli/catalog_validate.go`.
-- **Resolution precedence (highest wins):** local `services/<name>.yaml` >
-  installed catalogs (`catalogs/*/`, sorted) > embedded floor. `OriginOf` returns
-  the dynamic `catalog:<name>` for an installed-catalog service; a local file
-  shadowing one is `override`. **Two installed catalogs MAY define the same
-  service name** — both install (no load error); each stays addressable via its
-  qualified `<catalog>:<service>` selector (`Loaded.Services` keys every
-  installed-catalog service both ways — bare AND qualified — except a bare name
-  more than one catalog defines, which is dropped from `Services` and recorded in
-  `Loaded.Ambiguous` instead). `Loaded.Lookup` on an ambiguous bare name is a
-  `*ConfigError` (exit 2) listing both qualified forms — anyctl never silently
-  picks one. The MCP server derives a tool's name from the *selector*
-  (`<catalog>-<service>_<command>` once qualified, `:` sanitized to `-`), so
-  installing a second catalog that collides with an existing name **renames**
-  the first catalog's tools from `<service>_<command>` to
-  `<catalog>-<service>_<command>` — inherent to disambiguation, not a bug, but
-  worth knowing (`internal/mcpserver/mcpserver.go`'s `selectorToolPrefix`).
-  The portability rule is the security boundary (enforced on add AND at load),
-  so a catalog is inert until `profile.yaml` binds it — no signing needed, no
-  execution-time gating added. Store API lives in
-  `internal/manifest/catalogstore.go`; the validate-on-add gate
-  (`SchemaValidate`/`ValidatePortableManifest`) in `internal/manifest/schemacheck.go`;
-  CLI handlers in `internal/cli/catalog_install.go`.
-- `.github/actions/validate-catalog` — a composite action a third-party catalog
-  repo points its own CI at (`uses:
-  jedwards1230/anyctl/.github/actions/validate-catalog@v1`): installs anyctl
-  (`go install …@<version>`, default `latest`) and runs `anyctl catalog
-  validate <path>` against it. `examples/catalog/` (singular — NOT
-  `examples/catalogs/`, which `Load` would scan as an installed catalog) is the
-  reference catalog both this action and `internal/manifest/example_catalog_test.go`
-  exercise in CI, with its own authoring/publishing README.
+## MCP Apps result View (read tools only)
 
-MCP Apps result View, Phase 1+2 (done, read tools only): every read tool
-(`!Write`, including the generic `<svc>_get` verb) carries
-`_meta.ui.resourceUri = "ui://labctl/result"`, an MCP Apps link to one
-universal table/record/tree HTML View registered ONCE on the server
-(`internal/mcpserver.BuildServer`) — zero per-service Go. The View itself is a
-single built HTML file (`internal/mcpserver/views/result.html`, built from the
-separate `views/` TS/Vite project and committed so plain `go build` needs no
-npm) `//go:embed`'d via `internal/mcpserver/views`, with `ANYCTL_VIEWS_DIR`
-overriding it from disk for the dev loop (mirrors `ANYCTL_CONFIG_DIR`). A read
-tool's `executeAndRender` populates `CallToolResult.StructuredContent`
-ADDITIVELY (the existing `TextContent` is unchanged — the fallback for
-non-Apps hosts and the headless/ContextForge agent path) with an object-root
-wrapper: `{"result": <jq-filtered value>, "labctl": {"service", "command",
-"title", "ui"}}`; `result` is computed by `output.Filtered`, which mirrors
-`output.Render`'s decode+jq path exactly so the structured value always
-matches the text. Write tools and dry-run never get the `_meta.ui` link or
-StructuredContent. A command can shape its own rendering with an optional
-`ui:` hint block (`manifest.UI`, sibling of `output:`) — `view`
-(table|record|tree), `columns`, `primary`, `badges`, `sort`, `drilldown` — DATA
-only (no HTML/URLs/secrets), so it stays portable and never trips
-`validateNoInManifestBinding`; absent, the View auto-detects by result shape.
-A write-confirmation View is a separate, later PR.
+Every read tool (`!Write`, incl. the generic `<svc>_get`) carries
+`_meta.ui.resourceUri = "ui://<FederationName>/result"` — one universal
+table/record/tree HTML View registered ONCE (`internal/mcpserver.BuildServer`),
+zero per-service Go. The View is a single built HTML file
+(`internal/mcpserver/views/result.html`, built from the `views/` TS/Vite project
+and committed so plain `go build` needs no npm) `//go:embed`'d, with
+`ANYCTL_VIEWS_DIR` overriding from disk for the dev loop. `executeAndRender`
+populates `CallToolResult.StructuredContent` ADDITIVELY (the `TextContent`
+fallback is unchanged): `{"result": <jq-filtered value>, "<FederationName>":
+{"service","command","title","ui"}}` (the wrapper key is `brand.FederationName`).
+Write tools and dry-run get neither the link
+nor StructuredContent. An optional per-command `ui:` hint block (`manifest.UI`,
+sibling of `output:` — `view`/`columns`/`primary`/`badges`/`sort`/`drilldown`) is
+DATA only (no HTML/URLs/secrets), so it stays portable; absent, the View
+auto-detects by shape. A write-confirmation View is a later PR.
 
-> **MCP wire surface stays `labctl` on purpose.** The binary, module, and CLI
-> renamed to `anyctl`, but the federated MCP surface did NOT: the MCP server
-> `Implementation.Name` is still `labctl`, the result-View resource URI is still
-> `ui://labctl/result`, and the StructuredContent wrapper key is still
-> `"labctl"`. The ContextForge gateway federates this server registered as
-> `labctl`, and the embedded result View reads the `labctl` key — changing either
-> would break federation and the View in lockstep. These strings are the one
-> place `labctl` is retained deliberately.
-
-## Back-compat shims (labctl → anyctl)
-
-The rename ships with fallbacks so downstream consumers cut over without a
-lockstep edit (`internal/compat`):
-
-- **Env vars**: `ANYCTL_CONFIG_DIR` / `ANYCTL_VIEWS_DIR` / `ANYCTL_MCP_AUTH_TOKEN`
-  are preferred; the legacy `LABCTL_*` names are still honored with a one-time
-  stderr deprecation warning. `LABCTL_MCP_AUTH_TOKEN` is the cross-repo contract
-  (the Helm chart and Ansible-managed workstation configs still set it), so the
-  fallback is what lets the K8s pod and workstations run the `anyctl` binary
-  unchanged.
-- **Config dir**: `ConfigDir()` resolves `ANYCTL_CONFIG_DIR` → `LABCTL_CONFIG_DIR`
-  → `$XDG_CONFIG_HOME/anyctl` → a read-fallback to `~/.config/labctl` when it
-  exists and `~/.config/anyctl` does not (one-time migration hint to stderr) →
-  else `~/.config/anyctl`.
-- **Catalog marker**: written as `.anyctl-catalog.json`; either it OR the legacy
-  `.labctl-catalog.json` is accepted on load, re-stamped to the new name on the
-  next `catalog update`.
+> **The MCP wire strings are a pinned constant (`brand.FederationName`).** The
+> MCP server name, the result-View resource URI, and the StructuredContent
+> wrapper key all read from it; the ContextForge gateway federates under that
+> exact string. Don't change it without updating the gateway in lockstep — it's
+> self-documented at its definition in `internal/brand/brand.go`.
 
 ## Conventions
 
