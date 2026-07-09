@@ -1,12 +1,12 @@
 /**
- * @file Universal labctl result View — entry point.
+ * @file Universal anyctl result View — entry point.
  *
  * Wires the MCP Apps SDK lifecycle to the shape-adaptive renderer in
  * render.ts. This is the only file that talks to the App SDK; render.ts
  * stays host-agnostic so it can also be exercised by manual/visual tests.
  *
  * Must degrade gracefully in every case: missing structuredContent, a
- * structuredContent shape that isn't the labctl wrapper, non-JSON text
+ * structuredContent shape that isn't the anyctl wrapper, non-JSON text
  * content, a host with no theme/style vars, or a thrown error anywhere in
  * the render path. Never leave the screen blank.
  */
@@ -20,13 +20,13 @@ import {
 } from "@modelcontextprotocol/ext-apps";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { renderErrorState, renderResult, renderTextResult, type RenderHost } from "./render";
-import { isLabctlPayload, type LabctlPayload } from "./types";
+import { isAnyctlPayload, type AnyctlPayload } from "./types";
 import "./style.css";
 
 const rootElement = document.getElementById("root");
 if (!rootElement) {
   // Should be impossible given result.html, but never throw to a blank tab.
-  throw new Error("labctl view: #root element missing from document");
+  throw new Error("anyctl view: #root element missing from document");
 }
 // Explicit annotation (rather than relying on closure narrowing, which TS
 // does not track) so every later closure sees HTMLElement, not the nullable type.
@@ -52,7 +52,7 @@ function applyHostContext(ctx: McpUiHostContext): void {
     }
   } catch (err) {
     // Theming is cosmetic — never let it block rendering the actual result.
-    console.error("labctl view: failed applying host context", err);
+    console.error("anyctl view: failed applying host context", err);
   }
 }
 
@@ -73,7 +73,7 @@ function tryParseJson(text: string): { parsed: true; value: unknown } | { parsed
 }
 
 // 1. Create app instance.
-const app = new App({ name: "labctl Result View", version: "1.0.0" });
+const app = new App({ name: "anyctl Result View", version: "1.0.0" });
 
 function makeHost(): RenderHost {
   return {
@@ -84,8 +84,8 @@ function makeHost(): RenderHost {
           return { ok: false, errorMessage: extractTextBlock(res) ?? `${name} returned an error.` };
         }
         const sc = res.structuredContent;
-        if (isLabctlPayload(sc)) {
-          return { ok: true, value: (sc as LabctlPayload).result };
+        if (isAnyctlPayload(sc)) {
+          return { ok: true, value: (sc as AnyctlPayload).result };
         }
         if (sc !== undefined && sc !== null) {
           return { ok: true, value: sc };
@@ -112,9 +112,9 @@ function handleToolResult(result: CallToolResult): void {
 
     const structured = result.structuredContent;
 
-    if (isLabctlPayload(structured)) {
-      const payload = structured as LabctlPayload;
-      renderResult(root, payload.result, payload.labctl?.ui, payload.labctl?.title, makeHost());
+    if (isAnyctlPayload(structured)) {
+      const payload = structured as AnyctlPayload;
+      renderResult(root, payload.result, payload.anyctl?.ui, payload.anyctl?.title, makeHost());
       return;
     }
 
@@ -152,7 +152,7 @@ app.ontoolcancelled = () => {
 };
 
 app.onerror = (err) => {
-  console.error("labctl view: MCP Apps error", err);
+  console.error("anyctl view: MCP Apps error", err);
 };
 
 app.onhostcontextchanged = (ctx) => {
@@ -171,6 +171,6 @@ app
     }
   })
   .catch((err: unknown) => {
-    console.error("labctl view: failed to connect to host", err);
+    console.error("anyctl view: failed to connect to host", err);
     renderErrorState(root, err);
   });

@@ -1,5 +1,5 @@
 /**
- * @file Pure, host-agnostic rendering logic for the universal labctl result
+ * @file Pure, host-agnostic rendering logic for the universal anyctl result
  * View: shape-adaptive table / record / tree renderers.
  *
  * Nothing in this module talks to the MCP Apps SDK directly — it only needs

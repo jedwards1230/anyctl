@@ -10,21 +10,12 @@ import (
 	"strings"
 
 	"github.com/jedwards1230/anyctl/internal/brand"
-	"github.com/jedwards1230/anyctl/internal/compat"
 )
 
-// AuthTokenEnv is the preferred environment variable that holds the bearer
-// token used to guard the streamable-HTTP /mcp endpoint. When unset or empty,
-// HTTP auth is disabled (default-off, backward-compatible). The token is never
-// logged.
+// AuthTokenEnv is the environment variable that holds the bearer token used to
+// guard the streamable-HTTP /mcp endpoint. When unset or empty, HTTP auth is
+// disabled (default-off, backward-compatible). The token is never logged.
 const AuthTokenEnv = brand.EnvPrefix + "MCP_AUTH_TOKEN"
-
-// LegacyAuthTokenEnv is the pre-rename name for AuthTokenEnv. It is still
-// honored (with a one-time deprecation warning) because it is the cross-repo
-// contract: the Helm chart and Ansible-managed workstation configs still set
-// LABCTL_MCP_AUTH_TOKEN, so honoring it lets the in-cluster pod and the
-// workstation run the anyctl binary without a lockstep edit on those repos.
-const LegacyAuthTokenEnv = brand.LegacyEnvPrefix + "MCP_AUTH_TOKEN"
 
 // ResolveAuthToken returns the bearer token that should guard the /mcp
 // endpoint, or "" when auth is disabled.
@@ -33,8 +24,7 @@ const LegacyAuthTokenEnv = brand.LegacyEnvPrefix + "MCP_AUTH_TOKEN"
 // tokenFile is set but the file is unreadable or empty the call fails with an
 // error — an operator who asked for file-based auth must not silently fall
 // through to no-auth (fail-closed). If tokenFile is empty, the trimmed value of
-// ANYCTL_MCP_AUTH_TOKEN (or the legacy LABCTL_MCP_AUTH_TOKEN, with a one-time
-// deprecation warning) is returned; empty/unset means auth is disabled.
+// ANYCTL_MCP_AUTH_TOKEN is returned; empty/unset means auth is disabled.
 func ResolveAuthToken(tokenFile string) (string, error) {
 	if tokenFile != "" {
 		data, err := os.ReadFile(tokenFile)
@@ -47,7 +37,7 @@ func ResolveAuthToken(tokenFile string) (string, error) {
 		}
 		return token, nil
 	}
-	return strings.TrimSpace(compat.Getenv(AuthTokenEnv, LegacyAuthTokenEnv)), nil
+	return strings.TrimSpace(os.Getenv(AuthTokenEnv)), nil
 }
 
 // isLoopbackAddr reports whether an http listen address (as passed to --http,
@@ -84,7 +74,7 @@ func isLoopbackAddr(addr string) bool {
 
 // RequireAuth enforces anyctl's secure-by-default policy for the
 // streamable-HTTP transport: a non-loopback --http bind must have an auth
-// token configured (via LABCTL_MCP_AUTH_TOKEN or --auth-token-file) unless the
+// token configured (via ANYCTL_MCP_AUTH_TOKEN or --auth-token-file) unless the
 // operator explicitly opts out with allowUnauthenticated. Loopback binds
 // (127.0.0.1, ::1, localhost) are unaffected — matches the existing implicit
 // local-trust model, no auth requirement there.

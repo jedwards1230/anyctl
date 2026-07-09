@@ -1,9 +1,9 @@
 {
-  "name": "labctl-mcp-app-view",
+  "name": "anyctl-mcp-app-view",
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "Universal adaptive result View for labctl's MCP Apps integration (table/record/tree renderer)",
+  "description": "Universal adaptive result View for anyctl's MCP Apps integration (table/record/tree renderer)",
   "scripts": {
     "build": "tsc --noEmit && vite build",
     "watch": "vite build --watch",

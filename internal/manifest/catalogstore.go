@@ -19,12 +19,6 @@ import (
 // installed` can report provenance. It is NOT a manifest and the loader ignores it.
 const CatalogMetaFile = "." + brand.Name + "-catalog.json"
 
-// LegacyCatalogMetaFile is the pre-rename marker name written by labctl. It is
-// still accepted on read so a catalog installed by an old binary keeps its
-// provenance; `catalog update` re-stages the dir and writes CatalogMetaFile,
-// so the legacy marker naturally ages out on the next update.
-const LegacyCatalogMetaFile = "." + brand.LegacyName + "-catalog.json"
-
 // CatalogMeta is the provenance record for one installed catalog.
 type CatalogMeta struct {
 	Name      string    `json:"name"`
@@ -60,16 +54,10 @@ func ValidateName(name string) error {
 }
 
 // readMetaFile reads and parses the metadata file from a catalog dir. found is
-// false (with a nil error) when the file is simply absent. It accepts either the
-// current marker name or the legacy .labctl-catalog.json (preferring the current
-// one) so a catalog installed before the anyctl rename still reports provenance.
+// false (with a nil error) when the file is simply absent.
 func readMetaFile(catalogDir string) (meta CatalogMeta, found bool, err error) {
 	path := filepath.Join(catalogDir, CatalogMetaFile)
 	b, err := os.ReadFile(path)
-	if os.IsNotExist(err) {
-		path = filepath.Join(catalogDir, LegacyCatalogMetaFile)
-		b, err = os.ReadFile(path)
-	}
 	if err != nil {
 		if os.IsNotExist(err) {
 			return CatalogMeta{}, false, nil

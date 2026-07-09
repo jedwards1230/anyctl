@@ -1,5 +1,5 @@
 /**
- * @file Types for the labctl tool-result seam.
+ * @file Types for the anyctl tool-result seam.
  *
  * This mirrors (but does not import) the Go-side wrapper produced by
  * `executeAndRender` in internal/mcpserver. See the build contract for the
@@ -8,7 +8,7 @@
  * ```json
  * {
  *   "result": <array | object | scalar | null>,
- *   "labctl": {
+ *   "anyctl": {
  *     "service": "radarr", "command": "list", "title": "Radarr: library list",
  *     "ui": { "view": "table", "columns": ["id","title"], "primary": "title",
  *             "badges": {"monitored":"bool","hasFile":"bool"},
@@ -34,20 +34,20 @@ export interface UiHints {
   drilldown?: string;
 }
 
-export interface LabctlMeta {
+export interface AnyctlMeta {
   service?: string;
   command?: string;
   title?: string;
   ui?: UiHints | null;
 }
 
-export interface LabctlPayload {
+export interface AnyctlPayload {
   result: unknown;
-  labctl?: LabctlMeta | null;
+  anyctl?: AnyctlMeta | null;
 }
 
 /** Type guard: does this look like our wrapper object (vs. some other/older shape)? */
-export function isLabctlPayload(value: unknown): value is LabctlPayload {
+export function isAnyctlPayload(value: unknown): value is AnyctlPayload {
   return (
     typeof value === "object" &&
     value !== null &&

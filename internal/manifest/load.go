@@ -9,12 +9,10 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/jedwards1230/anyctl/catalog"
 	"github.com/jedwards1230/anyctl/internal/brand"
-	"github.com/jedwards1230/anyctl/internal/compat"
 	"gopkg.in/yaml.v3"
 )
 
@@ -122,14 +120,9 @@ func (l *Loaded) CanonicalNames() []string {
 }
 
 // ConfigDir resolves the anyctl config directory, honoring (in order):
-// ANYCTL_CONFIG_DIR, the legacy LABCTL_CONFIG_DIR (with a one-time deprecation
-// warning), $XDG_CONFIG_HOME/anyctl, a read-only fallback to the legacy
-// ~/.config/labctl directory when it exists and ~/.config/anyctl does not, and
-// finally ~/.config/anyctl. The legacy directory fallback lets a workstation
-// that predates the rename keep working; a one-time stderr hint points at the
-// `mv` that migrates it.
+// ANYCTL_CONFIG_DIR, $XDG_CONFIG_HOME/anyctl, and finally ~/.config/anyctl.
 func ConfigDir() string {
-	if d := compat.Getenv(brand.EnvPrefix+"CONFIG_DIR", brand.LegacyEnvPrefix+"CONFIG_DIR"); d != "" {
+	if d := os.Getenv(brand.EnvPrefix + "CONFIG_DIR"); d != "" {
 		return d
 	}
 	if xdg := os.Getenv("XDG_CONFIG_HOME"); xdg != "" {
@@ -139,30 +132,7 @@ func ConfigDir() string {
 	if err != nil {
 		return filepath.Join(".config", brand.ConfigDirName)
 	}
-	newDir := filepath.Join(home, ".config", brand.ConfigDirName)
-	if legacy := filepath.Join(home, ".config", brand.LegacyConfigDirName); dirExists(legacy) && !dirExists(newDir) {
-		warnLegacyConfigDir(legacy, newDir)
-		return legacy
-	}
-	return newDir
-}
-
-// dirExists reports whether path exists and is a directory.
-func dirExists(path string) bool {
-	info, err := os.Stat(path)
-	return err == nil && info.IsDir()
-}
-
-// legacyConfigDirWarnedOnce ensures the legacy-config-dir migration hint is
-// printed at most once per process.
-var legacyConfigDirWarnedOnce sync.Once
-
-func warnLegacyConfigDir(legacy, newDir string) {
-	legacyConfigDirWarnedOnce.Do(func() {
-		_, _ = fmt.Fprintf(os.Stderr,
-			"%s: using legacy config dir %s; migrate with `mv %s %s`\n",
-			brand.Name, legacy, legacy, newDir)
-	})
+	return filepath.Join(home, ".config", brand.ConfigDirName)
 }
 
 // Load reads and merges the config dir. A missing dir or missing config.yaml is
@@ -333,7 +303,7 @@ func loadInstalledCatalogs(l *Loaded, profile *Profile) error {
 		names := make([]string, 0, len(files))
 		for _, f := range files {
 			if f.IsDir() || !isYAML(f.Name()) {
-				continue // ignore the catalog marker (.anyctl-catalog.json / legacy .labctl-catalog.json) and any non-YAML
+				continue // ignore the catalog marker (.anyctl-catalog.json) and any non-YAML
 			}
 			names = append(names, f.Name())
 		}

@@ -28,7 +28,7 @@ mcp:
   # Optional bearer-token auth on the /mcp endpoint. This is TRANSPORT-LAYER
   # access control (who may reach the endpoint at all) — an app-layer boundary
   # that complements networkPolicy, NOT per-tool policy gating. When enabled
-  # the token is injected as the LABCTL_MCP_AUTH_TOKEN env var; callers must
+  # the token is injected as the ANYCTL_MCP_AUTH_TOKEN env var; callers must
   # then send `Authorization: Bearer <token>`. GET /healthz always stays
   # unauthenticated. Pick exactly one token source (existingSecret or
   # onePasswordItem); enabling without a source is a hard render error

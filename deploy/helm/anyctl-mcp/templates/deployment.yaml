@@ -69,7 +69,7 @@ spec:
             {{- if not $mcpAuthSecret }}
             {{- fail "mcp.auth.enabled=true requires a token source: set mcp.auth.existingSecret.name or mcp.auth.onePasswordItem.itemPath" }}
             {{- end }}
-            - name: LABCTL_MCP_AUTH_TOKEN
+            - name: ANYCTL_MCP_AUTH_TOKEN
               valueFrom:
                 secretKeyRef:
                   name: {{ $mcpAuthSecret }}

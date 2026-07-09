@@ -38,32 +38,6 @@ func TestResultHTMLViewsDirOverride(t *testing.T) {
 	}
 }
 
-// TestResultHTMLLegacyViewsDirOverride proves the legacy LABCTL_VIEWS_DIR name
-// still overrides the embedded copy (back-compat), and that the new name wins
-// when both are set.
-func TestResultHTMLLegacyViewsDirOverride(t *testing.T) {
-	legacyDir := t.TempDir()
-	legacyWant := "<!doctype html><html><body>legacy</body></html>"
-	if err := os.WriteFile(filepath.Join(legacyDir, "result.html"), []byte(legacyWant), 0o644); err != nil {
-		t.Fatalf("write legacy override: %v", err)
-	}
-	t.Setenv("ANYCTL_VIEWS_DIR", "")
-	t.Setenv("LABCTL_VIEWS_DIR", legacyDir)
-	if got := string(ResultHTML()); got != legacyWant {
-		t.Errorf("ResultHTML() = %q, want legacy override %q", got, legacyWant)
-	}
-
-	newDir := t.TempDir()
-	newWant := "<!doctype html><html><body>new</body></html>"
-	if err := os.WriteFile(filepath.Join(newDir, "result.html"), []byte(newWant), 0o644); err != nil {
-		t.Fatalf("write new override: %v", err)
-	}
-	t.Setenv("ANYCTL_VIEWS_DIR", newDir)
-	if got := string(ResultHTML()); got != newWant {
-		t.Errorf("ResultHTML() = %q, want new override %q (new name preferred)", got, newWant)
-	}
-}
-
 // TestResultHTMLViewsDirMissingFileFallsBack proves an unreadable override
 // (dir set but no result.html in it) falls back to the embedded copy rather
 // than erroring or serving an empty body.

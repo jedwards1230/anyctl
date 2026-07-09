@@ -17,7 +17,7 @@ import (
 	"github.com/jedwards1230/anyctl/internal/mcpserver/views"
 )
 
-const resultResourceURI = "ui://labctl/result"
+const resultResourceURI = "ui://anyctl/result"
 
 // toolMetaResourceURI extracts _meta.ui.resourceUri from a tool's Meta map (a
 // map[string]any after the JSON round-trip over the in-memory transport), or
@@ -41,7 +41,7 @@ func toolMetaResourceURI(t *testing.T, meta mcp.Meta) (string, bool) {
 
 // TestUIMetaOnReadAndWriteTools proves the MCP Apps wiring contract: every
 // read tool (named command and the generic GET verb) carries
-// _meta.ui.resourceUri == ui://labctl/result, and no write tool (named POST
+// _meta.ui.resourceUri == ui://anyctl/result, and no write tool (named POST
 // command or any generic write verb) carries it.
 func TestUIMetaOnReadAndWriteTools(t *testing.T) {
 	loaded := filterLoaded() // svc_a: read "read" (GET /r); svc_b: write "create" (POST /c)
@@ -105,7 +105,7 @@ func TestResultResourceRegisteredAndReadable(t *testing.T) {
 		}
 	}
 	if found == nil {
-		t.Fatal("ui://labctl/result not found in resources/list")
+		t.Fatal("ui://anyctl/result not found in resources/list")
 	}
 	if found.MIMEType != views.ResultMIMEType {
 		t.Errorf("resource MIMEType = %q, want %q", found.MIMEType, views.ResultMIMEType)
@@ -141,15 +141,15 @@ func jsonServer(t *testing.T, body string) *httptest.Server {
 }
 
 // structuredEnvelope mirrors the wrapper shape for test assertions:
-// { "result": ..., "labctl": { "service", "command", "title", "ui" } }.
+// { "result": ..., "anyctl": { "service", "command", "title", "ui" } }.
 type structuredEnvelope struct {
 	Result any `json:"result"`
-	Labctl struct {
+	Anyctl struct {
 		Service string `json:"service"`
 		Command string `json:"command"`
 		Title   string `json:"title"`
 		UI      any    `json:"ui"`
-	} `json:"labctl"`
+	} `json:"anyctl"`
 }
 
 // decodeStructured re-marshals a CallToolResult.StructuredContent (an `any`,
@@ -170,7 +170,7 @@ func decodeStructured(t *testing.T, sc any) structuredEnvelope {
 
 // TestStructuredContentWrapperShapeOnReadTool proves a read-tool call
 // populates StructuredContent with the documented object-root wrapper
-// (result + labctl.service/command/title/ui) ALONGSIDE the unchanged text
+// (result + anyctl.service/command/title/ui) ALONGSIDE the unchanged text
 // content, and that result is the SAME value the text rendering is derived
 // from.
 func TestStructuredContentWrapperShapeOnReadTool(t *testing.T) {
@@ -207,17 +207,17 @@ func TestStructuredContentWrapperShapeOnReadTool(t *testing.T) {
 	if gotResult["status"] != wantResult["status"] || gotResult["n"] != wantResult["n"] {
 		t.Errorf("result = %#v, want %#v", gotResult, wantResult)
 	}
-	if env.Labctl.Service != "testsvc" {
-		t.Errorf("labctl.service = %q, want testsvc", env.Labctl.Service)
+	if env.Anyctl.Service != "testsvc" {
+		t.Errorf("anyctl.service = %q, want testsvc", env.Anyctl.Service)
 	}
-	if env.Labctl.Command != "ping" {
-		t.Errorf("labctl.command = %q, want ping", env.Labctl.Command)
+	if env.Anyctl.Command != "ping" {
+		t.Errorf("anyctl.command = %q, want ping", env.Anyctl.Command)
 	}
-	if env.Labctl.Title == "" {
-		t.Error("labctl.title must not be empty")
+	if env.Anyctl.Title == "" {
+		t.Error("anyctl.title must not be empty")
 	}
-	if env.Labctl.UI != nil {
-		t.Errorf("labctl.ui = %v, want nil (no manifest ui: block)", env.Labctl.UI)
+	if env.Anyctl.UI != nil {
+		t.Errorf("anyctl.ui = %v, want nil (no manifest ui: block)", env.Anyctl.UI)
 	}
 }
 
@@ -291,7 +291,7 @@ func TestStructuredContentRawFlag(t *testing.T) {
 
 // TestStructuredContentCarriesManifestUIHints proves a command's ui: block
 // (threaded through command.FromManifest) ends up verbatim in
-// structuredContent.labctl.ui.
+// structuredContent.anyctl.ui.
 func TestStructuredContentCarriesManifestUIHints(t *testing.T) {
 	ts := jsonServer(t, `[{"id":1,"name":"a"},{"id":2,"name":"b"}]`)
 	loaded := &manifest.Loaded{
@@ -333,20 +333,20 @@ func TestStructuredContentCarriesManifestUIHints(t *testing.T) {
 		t.Fatalf("tool returned error: %v", result.Content)
 	}
 	env := decodeStructured(t, result.StructuredContent)
-	ui, ok := env.Labctl.UI.(map[string]any)
+	ui, ok := env.Anyctl.UI.(map[string]any)
 	if !ok {
-		t.Fatalf("labctl.ui type = %T, want map[string]any", env.Labctl.UI)
+		t.Fatalf("anyctl.ui type = %T, want map[string]any", env.Anyctl.UI)
 	}
 	if ui["view"] != "table" {
-		t.Errorf("labctl.ui.view = %v, want table", ui["view"])
+		t.Errorf("anyctl.ui.view = %v, want table", ui["view"])
 	}
 	cols, ok := ui["columns"].([]any)
 	if !ok || len(cols) != 2 || cols[0] != "id" || cols[1] != "name" {
-		t.Errorf("labctl.ui.columns = %v, want [id name]", ui["columns"])
+		t.Errorf("anyctl.ui.columns = %v, want [id name]", ui["columns"])
 	}
 	sort, ok := ui["sort"].(map[string]any)
 	if !ok || sort["by"] != "id" || sort["dir"] != "desc" {
-		t.Errorf("labctl.ui.sort = %v, want {by:id dir:desc}", ui["sort"])
+		t.Errorf("anyctl.ui.sort = %v, want {by:id dir:desc}", ui["sort"])
 	}
 }
 
