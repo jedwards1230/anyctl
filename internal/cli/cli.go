@@ -11,7 +11,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
 	"sort"
 	"strings"
 
@@ -67,7 +66,6 @@ func Run(args []string, stdout, stderr io.Writer) int {
 	defer shutdown()
 
 	r := &runner{stdout: stdout, stderr: stderr, tracer: tracer}
-	warnLegacyArgv0(stderr)
 	root := r.newRoot()
 	root.SetArgs(args)
 	root.SetOut(stdout)
@@ -88,19 +86,6 @@ func Run(args []string, stdout, stderr io.Writer) int {
 		return reportError(stderr, err, r.flags.jsonErrors, r.curService, r.curCommand)
 	}
 	return agentsafety.ExitOK
-}
-
-// warnLegacyArgv0 prints a one-line deprecation notice when the binary is
-// invoked under its old name (e.g. via a `labctl` compatibility symlink). The
-// symlink itself is provisioned outside this repo (Ansible role / devcontainer);
-// this only surfaces the rename to anyone still calling the old name.
-func warnLegacyArgv0(stderr io.Writer) {
-	if stderr == nil || len(os.Args) == 0 {
-		return
-	}
-	if filepath.Base(os.Args[0]) == brand.LegacyName {
-		_, _ = fmt.Fprintf(stderr, "%s: invoked as `%s`; that name is deprecated — the binary is now `%s` (the %s alias still works for now)\n", brand.Name, brand.LegacyName, brand.Name, brand.LegacyName)
-	}
 }
 
 // ex renders a cobra Example block: each line is prefixed with the two-space

@@ -210,7 +210,7 @@ type Command struct {
 // UI carries optional presentation hints for the MCP Apps universal result
 // View (Phase 2). Every field is optional; an absent block means "auto-detect
 // the renderer by result shape" — the View reads this from
-// structuredContent.labctl.ui. The block is DATA only (no HTML, no URLs, no
+// structuredContent.anyctl.ui. The block is DATA only (no HTML, no URLs, no
 // base_url, no secret refs), so it carries no portability concerns and stays
 // allowed in a portable manifest like every other presentation-only field.
 type UI struct {
@@ -229,7 +229,7 @@ type UISort struct {
 }
 
 // IsZero reports whether u carries no hints at all — the empty/default value.
-// Used to decide whether structuredContent.labctl.ui should be null (no
+// Used to decide whether structuredContent.anyctl.ui should be null (no
 // hints) or the hints object.
 func (u UI) IsZero() bool {
 	return u.View == "" && len(u.Columns) == 0 && u.Primary == "" &&

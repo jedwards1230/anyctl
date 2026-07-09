@@ -229,16 +229,12 @@ func resolveHTTPAuth(httpAddr, authTokenFile string, allowUnauthenticated bool) 
 	return authToken, nil
 }
 
-// setAuthTokenEnvName reports the name of whichever MCP auth-token env var is
-// set (the preferred one first, then the legacy fallback), or "" when neither
-// is. Used only to name the var in the stdio warning; the actual token value is
-// resolved via mcpserver.ResolveAuthToken.
+// setAuthTokenEnvName reports the name of the MCP auth-token env var when it is
+// set, or "" when it is not. Used only to name the var in the stdio warning; the
+// actual token value is resolved via mcpserver.ResolveAuthToken.
 func setAuthTokenEnvName() string {
 	if os.Getenv(mcpserver.AuthTokenEnv) != "" {
 		return mcpserver.AuthTokenEnv
-	}
-	if os.Getenv(mcpserver.LegacyAuthTokenEnv) != "" {
-		return mcpserver.LegacyAuthTokenEnv
 	}
 	return ""
 }

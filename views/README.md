@@ -51,7 +51,7 @@ needed while iterating on `views/`.
   record / tree). Takes a small `RenderHost` abstraction for the table
   drilldown feature instead of depending on the SDK directly, so it can be
   exercised by other harnesses without a real MCP Apps host.
-- `src/types.ts` — the `LabctlPayload`/`UiHints` types mirroring the Go-side
+- `src/types.ts` — the `AnyctlPayload`/`UiHints` types mirroring the Go-side
   `structuredContent` wrapper (`{ result, anyctl: { service, command, title,
   ui } }`).
 - `src/style.css` — styling via CSS custom properties the host sets

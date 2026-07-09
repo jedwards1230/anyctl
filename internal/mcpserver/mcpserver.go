@@ -115,11 +115,11 @@ func buildSchema(c *command.Command) json.RawMessage {
 	return b
 }
 
-// registerResultResource adds the single ui://labctl/result resource: the
+// registerResultResource adds the single ui://anyctl/result resource: the
 // built-in universal table/record/tree View, embedded once and served to
 // every read tool that links to it via _meta.ui.resourceUri. The HTML is read
-// once here (server-build time), per the LABCTL_VIEWS_DIR dev-loop contract
-// (mirrors LABCTL_CONFIG_DIR) — a server rebuilt with that env var set always
+// once here (server-build time), per the ANYCTL_VIEWS_DIR dev-loop contract
+// (mirrors ANYCTL_CONFIG_DIR) — a server rebuilt with that env var set always
 // picks up the latest build on disk without a Go rebuild.
 func registerResultResource(srv *mcp.Server) {
 	html := string(views.ResultHTML())
@@ -652,19 +652,19 @@ func executeAndRender(
 }
 
 // structuredResult is the OBJECT-ROOT StructuredContent wrapper for a
-// READ-tool result: { "result": <filtered value>, "labctl": {...} }. An
+// READ-tool result: { "result": <filtered value>, "anyctl": {...} }. An
 // object root (rather than a bare array/scalar) is required because some MCP
 // Apps hosts only accept an object as structuredContent.
 type structuredResult struct {
 	Result any `json:"result"`
-	// json key "labctl" is brand.FederationName (pinned); struct tags can't be constants.
-	Labctl structuredLabctl `json:"labctl"`
+	// json key "anyctl" is brand.FederationName (pinned); struct tags can't be constants.
+	Anyctl structuredMeta `json:"anyctl"`
 }
 
-// structuredLabctl is the labctl-specific metadata alongside the filtered
+// structuredMeta is the anyctl-specific metadata alongside the filtered
 // result: which service/command produced it, a human title, and the optional
 // manifest ui: hints (nil when the command/manifest declares none).
-type structuredLabctl struct {
+type structuredMeta struct {
 	Service string `json:"service"`
 	Command string `json:"command"`
 	Title   string `json:"title"`
@@ -691,7 +691,7 @@ func buildStructuredContent(svc *manifest.Service, c *command.Command, body []by
 	}
 	return &structuredResult{
 		Result: val,
-		Labctl: structuredLabctl{
+		Anyctl: structuredMeta{
 			Service: svc.Name,
 			Command: c.ID,
 			Title:   toolTitle(svc.Name, c.ID, c.Help),
@@ -701,7 +701,7 @@ func buildStructuredContent(svc *manifest.Service, c *command.Command, body []by
 }
 
 // uiHints converts a manifest ui: block into the value that goes into
-// structuredContent.labctl.ui: nil when the command declares no hints (the
+// structuredContent.anyctl.ui: nil when the command declares no hints (the
 // zero value — including every generic-verb tool, which has no manifest
 // command at all), otherwise the hints object itself.
 func uiHints(ui manifest.UI) any {

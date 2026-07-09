@@ -116,7 +116,7 @@ func (r *runner) scaffoldService(name, auth, outPath string, force bool) error {
 // provisionConfigDir creates the config dir scaffold idempotently: the dir,
 // services/, a minimal config.yaml, and a commented profile.yaml. It clobbers
 // nothing that already exists and prints one line per action to stderr (stdout
-// stays data-only). Honors --config-dir / ANYCTL_CONFIG_DIR (legacy LABCTL_CONFIG_DIR).
+// stays data-only). Honors --config-dir / ANYCTL_CONFIG_DIR.
 func (r *runner) provisionConfigDir() error {
 	dir := r.configDir()
 	if err := r.ensureDir(dir); err != nil {

@@ -13,13 +13,10 @@ func TestPinnedIdentities(t *testing.T) {
 		want string
 	}{
 		{"Name", Name, "anyctl"},
-		{"LegacyName", LegacyName, "labctl"},
 		{"EnvPrefix", EnvPrefix, "ANYCTL_"},
-		{"LegacyEnvPrefix", LegacyEnvPrefix, "LABCTL_"},
 		{"ConfigDirName", ConfigDirName, "anyctl"},
-		{"LegacyConfigDirName", LegacyConfigDirName, "labctl"},
 		{"Repo", Repo, "jedwards1230/anyctl"},
-		{"FederationName", FederationName, "labctl"},
+		{"FederationName", FederationName, "anyctl"},
 		{"TelemetryPrefix", TelemetryPrefix, "anyctl."},
 	}
 	for _, tc := range cases {

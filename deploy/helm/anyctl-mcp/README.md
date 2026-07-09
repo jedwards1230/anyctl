@@ -158,7 +158,7 @@ mcp:
 
 Enabling `mcp.auth.enabled` without a token source is a hard render error
 (fail-closed) rather than a silently-unauthenticated deploy. The token is
-injected as the `LABCTL_MCP_AUTH_TOKEN` env var — never passed on argv.
+injected as the `ANYCTL_MCP_AUTH_TOKEN` env var — never passed on argv.
 
 ## Federating into ContextForge
 
