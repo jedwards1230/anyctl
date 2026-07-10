@@ -1,14 +1,45 @@
 # golangci-lint configuration for anyctl (schema v2).
 #
-# Conservative by design: it enables the linters the codebase already passes
-# cleanly under the default "standard" set (errcheck, govet, ineffassign,
-# staticcheck, unused) plus a gofmt formatter check, mirroring the gates CI
-# already runs. Keep this in step with the installed golangci-lint v2 line.
+# The default "standard" set (errcheck, govet, ineffassign, staticcheck, unused)
+# plus a gofmt formatter check, and gosec for a security-focused pass. Keep this
+# in step with the installed golangci-lint v2 line.
 version: "2"
 
 linters:
   # "standard" = errcheck + govet + ineffassign + staticcheck + unused.
   default: standard
+  # gosec adds a security-focused static pass (weak crypto, unchecked file
+  # perms, command/SQL injection, integer overflow) on top of the standard set.
+  # Not in "standard" — enable it explicitly. Findings are either fixed or
+  # annotated with `//nolint:gosec // reason`.
+  enable:
+    - gosec
+  settings:
+    gosec:
+      # Two gosec rules are systematic false positives for a config-driven CLI
+      # whose whole job is reading user-pointed files — excluding them keeps the
+      # rest of gosec (secret marshal, integer overflow, command injection, exec
+      # perms, weak crypto) as real signal instead of drowning it:
+      #   G304 (file inclusion via variable) — every manifest/profile/spec/secret
+      #        read builds its path from the config dir + a validated name or a
+      #        file the user explicitly pointed us at. No web-facing untrusted
+      #        input flows into these paths.
+      #   G301 (dir perms > 0750) — the tool's own config subdirs are created
+      #        0755 by deliberate design (traversable dirs, 0600 on the sensitive
+      #        files inside: token cache, service manifests). A coherent model,
+      #        not an oversight.
+      excludes:
+        - G304
+        - G301
+  exclusions:
+    rules:
+      # gosec on test code is noise: fixtures carry fake credentials (G101),
+      # tests set relaxed temp-dir/file perms (G302/G306), spin up test HTTP
+      # servers hit by variable URL (G107), and shell out to git in sandboxed
+      # dirs (G204). Scan production code only.
+      - path: _test\.go
+        linters:
+          - gosec
 
 formatters:
   # gofmt is also gated as a standalone CI step; running it here keeps a single

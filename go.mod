@@ -2,6 +2,12 @@ module github.com/jedwards1230/anyctl
 
 go 1.25.7
 
+// GO-2026-5856 (crypto/tls) is fixed in go1.25.12; pin the build toolchain to
+// it without raising the language floor. GOTOOLCHAIN=auto contexts (release
+// build, the CI govulncheck scan, `go install` consumers) build with the
+// patched stdlib.
+toolchain go1.25.12
+
 require (
 	github.com/coder/websocket v1.8.15
 	github.com/itchyny/gojq v0.12.19

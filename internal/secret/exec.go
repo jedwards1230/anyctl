@@ -107,8 +107,8 @@ func runResolverCommand(ctx context.Context, argv []string, tok, desc string) (s
 	if len(argv) == 0 {
 		return "", fmt.Errorf("empty resolver command")
 	}
-	cmd := exec.CommandContext(ctx, argv[0], argv[1:]...)
-	cmd.Stderr = os.Stderr // let the tool print its own diagnostics (session expired, etc.)
+	cmd := exec.CommandContext(ctx, argv[0], argv[1:]...) //nolint:gosec // G204: argv is the manifest-configured secret resolver (e.g. `op`), not attacker input
+	cmd.Stderr = os.Stderr                                // let the tool print its own diagnostics (session expired, etc.)
 	if tok != "" {
 		// cmd.Env replaces the whole environment, so start from os.Environ().
 		cmd.Env = withToken(os.Environ(), tok)
