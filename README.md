@@ -78,6 +78,18 @@ That split is the whole model. Binding lives **only** in `profile.yaml` (or a
 A manifest that carries a `base_url` or secret `ref` is rejected by `anyctl lint`
 — it points you at the profile slot to use instead.
 
+Every manifest field is otherwise closed — an unknown key fails `anyctl lint`.
+The one exception is a reserved `annotations:` map (top-level and per-command):
+free-form consumer metadata that lets you annotate a manifest without forking it.
+anyctl never validates or reads it, and it never affects execution.
+
+```yaml
+name: radarr
+annotations:
+  owner: platform-team
+  tags: [media, critical]
+```
+
 Config lives under `$XDG_CONFIG_HOME/anyctl` (or `~/.config/anyctl`); override
 with `ANYCTL_CONFIG_DIR` or `--config-dir`:
 

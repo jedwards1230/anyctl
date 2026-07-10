@@ -88,6 +88,14 @@ type Service struct {
 	Output      Output              `yaml:"output"`
 	Commands    map[string]Command  `yaml:"commands"`
 
+	// Annotations is free-form consumer-defined metadata (owner, team, tags, …).
+	// It is the one reserved escape hatch against the otherwise-closed schema: a
+	// consumer can annotate a manifest without forking it or tripping
+	// additionalProperties. Like ui:, it is DATA only (no base_url, no secret
+	// ref, no HTML/URLs), so it raises no portability concern — and the executor
+	// ignores it entirely: it never affects which request runs.
+	Annotations map[string]any `yaml:"annotations,omitempty"`
+
 	// timeout resolved from global defaults at load time (not a YAML field).
 	Timeout string `yaml:"-"`
 }
@@ -210,6 +218,12 @@ type Command struct {
 	MCPIgnore  bool              `yaml:"mcp_ignore"`
 	UI         UI                `yaml:"ui"`    // MCP Apps result-View hints (Phase 2)
 	Steps      []Step            `yaml:"steps"` // non-empty = composed command (Phase 3)
+
+	// Annotations is free-form consumer-defined metadata for this command (owner,
+	// team, tags, …). Like the service-level annotations: (and ui:), it is DATA
+	// only, ignored by the executor, and the reserved escape hatch against the
+	// closed schema — it never affects execution.
+	Annotations map[string]any `yaml:"annotations,omitempty"`
 }
 
 // UI carries optional presentation hints for the MCP Apps universal result

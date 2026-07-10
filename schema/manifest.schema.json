@@ -2,7 +2,7 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "https://raw.githubusercontent.com/jedwards1230/anyctl/main/schema/manifest.schema.json",
   "title": "anyctl service manifest",
-  "description": "Schema for a PORTABLE anyctl service manifest — a services/<name>.yaml or an embedded catalog manifest. It describes what a service IS (commands, auth strategy, secret slots) and is identical for every user. It is NOT a profile: a portable manifest may NOT carry a base_url (service or endpoint) or a secret ref — those bind in profile.yaml. This schema is additive (an editor aid); the authoritative structural check is `anyctl lint` (manifest.Validate), which also enforces rules JSON Schema cannot express (undeclared secret references, jq validity, spec reachability, transport-dependent path requirements).",
+  "description": "Schema for a PORTABLE anyctl service manifest — a services/<name>.yaml or an embedded catalog manifest. It describes what a service IS (commands, auth strategy, secret slots) and is identical for every user. It is NOT a profile: a portable manifest may NOT carry a base_url (service or endpoint) or a secret ref — those bind in profile.yaml. Every object is closed (additionalProperties: false) EXCEPT the one reserved escape hatch, annotations: — a free-form metadata map (top-level and per-command) that consumers may add without forking the manifest, and which anyctl ignores entirely. This schema is additive (an editor aid); the authoritative structural check is `anyctl lint` (manifest.Validate), which also enforces rules JSON Schema cannot express (undeclared secret references, jq validity, spec reachability, transport-dependent path requirements).",
   "type": "object",
   "additionalProperties": false,
   "properties": {
@@ -55,6 +55,11 @@
       "type": "object",
       "additionalProperties": { "$ref": "#/definitions/command" },
       "description": "Named commands for this service."
+    },
+    "annotations": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "Free-form consumer-defined metadata (owner, team, tags, …). Reserved escape hatch: keys here are NOT validated and NEVER affect execution, so a consumer can annotate a manifest without forking it or tripping additionalProperties. anyctl ignores this block entirely."
     }
   },
   "definitions": {
@@ -286,6 +291,11 @@
           "type": "array",
           "items": { "$ref": "#/definitions/step" },
           "description": "Non-empty = composed (pipeline) command."
+        },
+        "annotations": {
+          "type": "object",
+          "additionalProperties": true,
+          "description": "Free-form consumer-defined metadata (owner, team, tags, …). Reserved escape hatch: keys here are NOT validated and NEVER affect execution, so a consumer can annotate a command without forking it or tripping additionalProperties. anyctl ignores this block entirely."
         }
       },
       "anyOf": [
