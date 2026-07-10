@@ -18,10 +18,22 @@ anyctl self-update --check    # report current vs latest, download nothing
 
 ## Quick start
 
+The fastest way to see it work needs no LAN and no secrets — the
+[`examples/quickstart/`](examples/quickstart/) config binds one hand-written
+manifest to the public, no-auth [httpbin.org](https://httpbin.org):
+
+```sh
+export ANYCTL_CONFIG_DIR="$PWD/examples/quickstart"
+anyctl svc httpbin get                # a real request against httpbin.org
+anyctl lint --strict httpbin          # confirm httpbin's base_url is bound
+```
+
+Then set up your own config dir:
+
 ```sh
 anyctl init                           # provision ~/.config/anyctl (config.yaml + profile.yaml)
 # bind a service in profile.yaml (see below), then:
-anyctl lint --strict                  # confirm base_url + secrets are bound
+anyctl lint --strict radarr           # confirm that one service's base_url + secrets are bound
 anyctl svc radarr status              # smoke-test the live endpoint
 anyctl svc radarr list --dry-run      # preview the resolved request, send nothing
 ```
@@ -77,9 +89,12 @@ with `ANYCTL_CONFIG_DIR` or `--config-dir`:
 └── catalogs/       # optional: installed named catalogs
 ```
 
-[`examples/`](examples/) is a profile-only config dir binding all 15 embedded
-services to placeholder hosts — try it with
-`ANYCTL_CONFIG_DIR=examples anyctl lint --strict`.
+The [`examples/`](examples/) dir has three ready-to-try configs:
+[`quickstart/`](examples/quickstart/) (one no-auth service, runs as-is),
+[`full/`](examples/full/) (a profile-only config binding all 15 embedded
+services to placeholder hosts — `ANYCTL_CONFIG_DIR=examples/full anyctl lint
+--strict`), and [`catalog/`](examples/catalog/) (a reference third-party
+catalog).
 
 ## Commands
 

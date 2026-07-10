@@ -11,8 +11,14 @@ is one `services/<name>.yaml` manifest; the binary compiles in **zero**
 service-specific logic. Adding/removing a service is a YAML edit, never a
 recompile. It replaces a set of bespoke per-service bash wrappers.
 
-Design docs (the *what/why* and *how*) live in `jedwards1230/home-orchestration`
-under `docs/projects/homelab-api-cli-prd.md` and `homelab-api-cli-plan.md`.
+**Design rationale.** A *manifest* is the portable description of what a service
+*is* — its commands, auth strategy, and secret slots — identical for every user.
+A *profile* is the per-machine binding — the `base_url`, secret refs, and any
+endpoint overrides that make a manifest usable *here*. The binary is an
+**unopinionated executor**: it resolves a manifest against a profile and runs
+exactly the request described, gating nothing except a step a manifest itself
+marks `confirm:`. That split (portable manifest / per-machine profile / neutral
+executor) is the whole model — everything below elaborates it.
 
 ## Core principle: unopinionated executor
 

@@ -1,0 +1,7 @@
+# anyctl global config. Every field is optional; these are the defaults.
+# The quickstart service (httpbin) needs no secrets, so there is no secret
+# provider block here — see examples/full/config.yaml for the op:// setup.
+version: 1
+defaults:
+  timeout: 60s      # per-request HTTP timeout
+  output: json      # json | raw | scalar

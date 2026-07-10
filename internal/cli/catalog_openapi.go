@@ -90,7 +90,7 @@ func (r *runner) catalogAddOpenAPI(source, name string, force bool) error {
 // untrusted remote input either way.
 //
 // Security posture: this intentionally does NOT add private-IP/SSRF blocking.
-// OpenAPI documents commonly live on the LAN in this homelab (the same reason
+// OpenAPI documents commonly live on a private LAN in self-hosted setups (the same reason
 // `catalog add <git-url>` and the `spec:` URL fetch don't block RFC1918
 // either) — the trust model is "a user fetching a URL they chose," not
 // "untrusted third party supplies the URL." The hardening here is a scheme

@@ -1,6 +1,6 @@
 # Contributing to anyctl
 
-`anyctl` is a manifest-driven Go CLI for homelab service APIs. All changes go through the workflow below.
+`anyctl` is a manifest-driven Go CLI for HTTP/RPC service APIs. All changes go through the workflow below.
 
 ## Prerequisites
 
@@ -30,10 +30,14 @@ go mod tidy && git diff --exit-code go.mod go.sum
 # Full build smoke test
 go build ./...
 
-# Try against the example manifests without installing
-ANYCTL_CONFIG_DIR="$PWD/examples" ./anyctl list
-ANYCTL_CONFIG_DIR="$PWD/examples" ./anyctl lint
-ANYCTL_CONFIG_DIR="$PWD/examples" ./anyctl --dry-run svc radarr list
+# Try the minimal quickstart (one no-auth service, runs against httpbin.org)
+ANYCTL_CONFIG_DIR="$PWD/examples/quickstart" ./anyctl lint
+ANYCTL_CONFIG_DIR="$PWD/examples/quickstart" ./anyctl --dry-run svc httpbin get
+
+# Try the full profile-only config binding all 15 embedded services
+ANYCTL_CONFIG_DIR="$PWD/examples/full" ./anyctl list
+ANYCTL_CONFIG_DIR="$PWD/examples/full" ./anyctl lint
+ANYCTL_CONFIG_DIR="$PWD/examples/full" ./anyctl --dry-run svc radarr list
 
 # Validate the reference catalog (read-only, no config dir needed)
 ./anyctl catalog validate examples/catalog

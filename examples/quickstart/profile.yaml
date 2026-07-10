@@ -1,0 +1,8 @@
+# anyctl per-user profile: binds the portable manifest(s) in services/ to THIS
+# machine's endpoints and credentials. Here it binds only httpbin's base_url —
+# httpbin.org needs no auth, so there are no secret refs to supply.
+# Precedence at resolution time: env override > profile.
+version: 1
+services:
+  httpbin:
+    base_url: https://httpbin.org

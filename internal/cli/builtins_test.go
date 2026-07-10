@@ -85,6 +85,60 @@ func TestLintFilePath(t *testing.T) {
 	}
 }
 
+// TestLintStrictAggregates: `lint --strict` (no argument) reports EVERY service's
+// completeness — not just the first alphabetical failure — so a user who has
+// bound only one service still sees the bound one pass and the unbound ones fail,
+// exiting 2. This is the fix for the old behavior that aborted on the first
+// unbound service (e.g. "abs") even when the user only cared about "radarr".
+func TestLintStrictAggregates(t *testing.T) {
+	dir := t.TempDir()
+	writeService(t, dir, "radarr", validManifestBody)
+	// A second portable service that stays unbound.
+	writeService(t, dir, "sonarr", `
+name: sonarr
+auth:
+  strategy: none
+commands:
+  list: { method: GET, path: /api/v3/series }
+`)
+	// Bind only radarr's base_url in the profile; sonarr stays incomplete.
+	bindBaseURL(t, dir, "radarr", "https://movies.example.com")
+	t.Setenv("ANYCTL_CONFIG_DIR", dir)
+
+	var out, errb bytes.Buffer
+	code := Run([]string{"lint", "--strict"}, &out, &errb)
+	if code != agentsafety.ExitUsage {
+		t.Fatalf("exit = %d, want %d (usage; some services incomplete)", code, agentsafety.ExitUsage)
+	}
+	// The bound service passes and the unbound one is reported — both appear, so
+	// the check did not stop at the first failure.
+	if !strings.Contains(out.String(), "ok radarr") {
+		t.Errorf("stdout missing 'ok radarr':\n%s", out.String())
+	}
+	if !strings.Contains(out.String(), "FAIL sonarr") {
+		t.Errorf("stdout missing 'FAIL sonarr' (should aggregate, not abort first):\n%s", out.String())
+	}
+}
+
+// TestLintStrictScopedPasses: `lint --strict <service>` exits 0 when that one
+// bound service is complete, even though other (embedded, unbound) services would
+// fail an unscoped `lint --strict`. This is the "verify just the one I bound"
+// path the `init` next-step hint promotes.
+func TestLintStrictScopedPasses(t *testing.T) {
+	dir := t.TempDir()
+	writeService(t, dir, "radarr", validManifestBody)
+	bindBaseURL(t, dir, "radarr", "https://movies.example.com")
+	t.Setenv("ANYCTL_CONFIG_DIR", dir)
+
+	var out, errb bytes.Buffer
+	if code := Run([]string{"lint", "--strict", "radarr"}, &out, &errb); code != agentsafety.ExitOK {
+		t.Fatalf("exit = %d, want 0 (radarr is bound; stderr: %s)", code, errb.String())
+	}
+	if !strings.Contains(out.String(), "ok radarr") {
+		t.Fatalf("stdout = %q, want 'ok radarr'", out.String())
+	}
+}
+
 // TestLintUnknownService: `lint <unknown>` is a usage error (exit 2).
 func TestLintUnknownService(t *testing.T) {
 	dir := t.TempDir()

@@ -1,4 +1,5 @@
 /anyctl
+/labctl
 /dist/
 *.test
 *.out

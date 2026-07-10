@@ -46,7 +46,7 @@ mcp:
       key: token
     onePasswordItem:
       # Set itemPath to render a OnePasswordItem CRD (1Password operator) holding
-      # the bearer token. e.g. vaults/homelab/items/k8s-mcp-gateway-anyctl-mcp-auth
+      # the bearer token. e.g. vaults/<vault>/items/<item>
       itemPath: ""
       key: token
   # Explicit opt-out of anyctl's secure-by-default requirement that a
@@ -85,7 +85,7 @@ auth:
     key: token
   onePasswordItem:
     # Set itemPath to render a OnePasswordItem CRD (1Password operator).
-    # e.g. vaults/homelab/items/k8s-mcp-gateway-anyctl
+    # e.g. vaults/<vault>/items/<item>
     itemPath: ""
     # Key within the synced secret holding the token value.
     key: token

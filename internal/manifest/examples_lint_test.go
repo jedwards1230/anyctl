@@ -8,23 +8,23 @@ import (
 	"github.com/jedwards1230/anyctl/catalog"
 )
 
-// examplesDir resolves the repo's examples/ config dir relative to this test
-// file's package directory (internal/manifest → ../../examples).
+// examplesDir resolves the repo's full example config dir relative to this test
+// file's package directory (internal/manifest → ../../examples/full).
 func examplesDir(t *testing.T) string {
 	t.Helper()
-	dir, err := filepath.Abs(filepath.Join("..", "..", "examples"))
+	dir, err := filepath.Abs(filepath.Join("..", "..", "examples", "full"))
 	if err != nil {
 		t.Fatalf("resolve examples dir: %v", err)
 	}
 	if _, err := os.Stat(filepath.Join(dir, "profile.yaml")); err != nil {
-		t.Fatalf("examples/profile.yaml not found at %s: %v", dir, err)
+		t.Fatalf("examples/full/profile.yaml not found at %s: %v", dir, err)
 	}
 	return dir
 }
 
-// TestExamplesLoadAndValidate turns the shipped examples/ config into a living
-// contract. examples/ carries NO services/ dir — it is profile-only — so every
-// service comes from the embedded catalog and examples/profile.yaml binds it.
+// TestExamplesLoadAndValidate turns the shipped examples/full config into a living
+// contract. examples/full carries NO services/ dir — it is profile-only — so every
+// service comes from the embedded catalog and examples/full/profile.yaml binds it.
 // This proves a consumer can drop their vendored manifests entirely: the catalog
 // plus a profile is a complete, working config.
 //
@@ -45,7 +45,7 @@ func TestExamplesLoadAndValidate(t *testing.T) {
 	// example set is a contract — assert it explicitly so a future change that
 	// loosens Load can't silently ship an invalid example config).
 	if err := ValidateConfig(&loaded.Config); err != nil {
-		t.Fatalf("ValidateConfig(examples/config.yaml): %v", err)
+		t.Fatalf("ValidateConfig(examples/full/config.yaml): %v", err)
 	}
 
 	// examples/ ships no local services, so every service is the embedded catalog.
@@ -68,10 +68,10 @@ func TestExamplesLoadAndValidate(t *testing.T) {
 			// cannot be re-run on `svc` here because the loaded service has been
 			// profile-merged and now carries base_url/refs, which the structural
 			// "no in-manifest binding" rule forbids. Load applies
-			// examples/profile.yaml, so the embedded catalog must also be COMPLETE
+			// examples/full/profile.yaml, so the embedded catalog must also be COMPLETE
 			// through it: every catalog manifest is portable (no base_url or secret
 			// ref) and bound to its endpoint and credentials via
-			// examples/profile.yaml. This proves the catalog+profile are a working
+			// examples/full/profile.yaml. This proves the catalog+profile are a working
 			// end-to-end config.
 			if err := ValidateComplete(svc); err != nil {
 				t.Fatalf("ValidateComplete(%s): %v", name, err)

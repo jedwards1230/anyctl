@@ -1,7 +1,8 @@
 // Package manifest defines the on-disk configuration model — a global
 // config.yaml plus one services/<name>.yaml per service — and loads it from the
 // XDG config dirs. The binary knows nothing service-specific; every service is a
-// manifest. See docs: the PRD/plan in jedwards1230/home-orchestration.
+// portable manifest (what a service is), bound to a machine by a separate
+// profile (base_url + secret refs) — see the CLAUDE.md design rationale.
 package manifest
 
 // Config is the global config.yaml. Every field has a sane zero-value default,

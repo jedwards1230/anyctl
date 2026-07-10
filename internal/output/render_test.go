@@ -131,7 +131,7 @@ func TestRenderXMLSunshineServerinfo(t *testing.T) {
 	// Sample trimmed from the real Sunshine /serverinfo endpoint.
 	xmlBody := `<?xml version="1.0" encoding="utf-8"?>
 <root status_code="200">
-  <hostname>desktop-1</hostname>
+  <hostname>example-host</hostname>
   <appversion>7.1.431.-1</appversion>
   <platform>windows</platform>
 </root>`
@@ -141,8 +141,8 @@ func TestRenderXMLSunshineServerinfo(t *testing.T) {
 		ResponseCodec: "xml",
 		Mode:          "scalar",
 	})
-	if got != "desktop-1\n" {
-		t.Fatalf("xml .root.hostname = %q, want %q", got, "desktop-1\n")
+	if got != "example-host\n" {
+		t.Fatalf("xml .root.hostname = %q, want %q", got, "example-host\n")
 	}
 
 	// Also verify appversion is reachable.

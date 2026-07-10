@@ -72,7 +72,11 @@ func (r *runner) cmdLint(loaded *manifest.Loaded, loadErr error) *cobra.Command 
 			"--strict also requires completeness: a base_url/endpoint and a bound\n" +
 			"ref/env for every declared secret (post profile-merge for a configured\n" +
 			"service, or the file as-is for a path argument). A portable manifest\n" +
-			"passes plain lint but fails --strict until a profile binds it.",
+			"passes plain lint but fails --strict until a profile binds it.\n\n" +
+			"With no argument, --strict reports EVERY service's completeness status\n" +
+			"and exits 2 if any is incomplete (it does not stop at the first). Pass a\n" +
+			"single service to scope the check to just that one — e.g. after binding\n" +
+			"one service, `lint --strict <that service>` confirms only it.",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			r.curCommand = "lint"
 			// A failed load (e.g. invalid config.yaml) surfaces its real
@@ -119,20 +123,37 @@ func (r *runner) cmdLint(loaded *manifest.Loaded, loadErr error) *cobra.Command 
 				_, _ = fmt.Fprintf(r.stdout, "ok %s\n", args[0])
 				return nil
 			}
-			for _, name := range loaded.CanonicalNames() {
-				// Structural validation already ran on the RAW manifest during Load
-				// (loadService → Validate), which aborts the whole load on failure —
-				// so a service present in `loaded` is structurally valid. Re-running
-				// Validate here would now wrongly reject it: the loaded service has
-				// been profile-merged and carries base_url/refs, which the structural
-				// rule forbids in a manifest. --strict adds the post-merge
-				// completeness check instead.
-				if strict {
-					if err := manifest.ValidateComplete(loaded.Services[name]); err != nil {
-						return fmt.Errorf("%s: %w", name, err)
-					}
+			// Structural validation already ran on the RAW manifest during Load
+			// (loadService → Validate), which aborts the whole load on failure —
+			// so a service present in `loaded` is structurally valid. Re-running
+			// Validate here would now wrongly reject it: the loaded service has
+			// been profile-merged and carries base_url/refs, which the structural
+			// rule forbids in a manifest. --strict adds the post-merge
+			// completeness check instead.
+			//
+			// --strict aggregates like `doctor`: it reports EVERY service's
+			// completeness status (not just the first failure), so a fresh user
+			// who has bound only one service sees which others are still unbound
+			// rather than a single error about an unrelated alphabetically-first
+			// service. It exits 2 if any service is incomplete.
+			names := loaded.CanonicalNames()
+			if !strict {
+				for _, name := range names {
+					_, _ = fmt.Fprintf(r.stdout, "ok %s\n", name)
+				}
+				return nil
+			}
+			var incomplete int
+			for _, name := range names {
+				if err := manifest.ValidateComplete(loaded.Services[name]); err != nil {
+					_, _ = fmt.Fprintf(r.stdout, "FAIL %s: %s\n", name, err)
+					incomplete++
+					continue
 				}
 				_, _ = fmt.Fprintf(r.stdout, "ok %s\n", name)
+			}
+			if incomplete > 0 {
+				return agentsafety.NewUsageError(fmt.Sprintf("%d of %d service(s) incomplete; bind them in profile.yaml", incomplete, len(names)))
 			}
 			return nil
 		},
