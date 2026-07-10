@@ -136,6 +136,7 @@ directory or git repo — into `catalogs/<name>/`:
 ```sh
 anyctl catalog add ./my-manifests                    # install a local dir (name = basename)
 anyctl catalog add https://git.example/team/cat.git --ref v1.2   # …or a git repo, pinned to a ref
+anyctl catalog add https://git.example/org/infra.git --path anyctl-catalog   # …or a subdirectory of a git repo
 anyctl catalog add ./openapi.json --openapi          # …or materialize one from an OpenAPI 3.x doc
 anyctl catalog installed                             # list installed catalogs
 anyctl catalog update [name]                         # re-fetch from the recorded source
@@ -150,7 +151,12 @@ the bare name then becomes ambiguous and you address each as
 A catalog carries no endpoints or credentials, so it's **inert until your
 profile binds it** — that's why catalogs need no signing. `catalog add`
 validates every manifest against the schema + portability rule before writing
-anything; a git source is pinned to its commit SHA for reproducibility.
+anything; a git source is pinned to its commit SHA for reproducibility. When a
+repo keeps its manifests in a subdirectory (rather than at the repo root), pass
+`--path <subdir>` to install from there — the subdir is recorded so `catalog
+update` re-fetches from the same place. `--path` is git-only (point a local dir
+source directly at the subdirectory instead) and must stay within the repo (no
+absolute path, no `..`).
 
 **Publishing your own:** any git repo or directory of portable manifests is a
 valid source. Check it against anyctl's contract before anyone installs it:
@@ -160,7 +166,8 @@ anyctl catalog validate ./my-manifests   # read-only schema + portability check,
 ```
 
 Wire that into CI with the bundled composite action
-(`jedwards1230/anyctl/.github/actions/validate-catalog@v1`).
+(`jedwards1230/anyctl/.github/actions/validate-catalog@v0.21.0` — pin to the
+current release tag; see the [releases](https://github.com/jedwards1230/anyctl/releases)).
 [`examples/catalog/`](examples/catalog/) is a minimal reference catalog.
 
 ## Secrets

@@ -36,10 +36,10 @@ var scpStyleURL = regexp.MustCompile(`^[A-Za-z0-9_.-]+@[A-Za-z0-9_.-]+:.+$`)
 var gitRefPattern = regexp.MustCompile(`^[A-Za-z0-9._/-]+$`)
 
 func (r *runner) cmdCatalogAdd() *cobra.Command {
-	var name, ref string
+	var name, ref, path string
 	var force, openapi bool
 	cmd := &cobra.Command{
-		Use:   "add <source> [--name <name>] [--ref <ref>] [--force] [--openapi]",
+		Use:   "add <source> [--name <name>] [--ref <ref>] [--path <subdir>] [--force] [--openapi]",
 		Short: "install a named catalog of portable manifests from a dir, git URL, or OpenAPI document",
 		Long: "Install a named catalog of portable manifests under\n" +
 			"<config-dir>/catalogs/<name>/. <source> is either an existing local directory,\n" +
@@ -50,13 +50,17 @@ func (r *runner) cmdCatalogAdd() *cobra.Command {
 			"manifest rejects the whole add. A git source is pinned to the resolved commit\n" +
 			"SHA, so an installed catalog is a reproducible, inert bundle until profile.yaml\n" +
 			"binds it.\n\n" +
+			"--path installs from a subdirectory of a git repo instead of its root — for a\n" +
+			"repo that keeps its catalog under, say, anyctl-catalog/. The subdir is recorded\n" +
+			"so `catalog update` re-fetches from the same place. It must be a relative path\n" +
+			"within the clone (no absolute path, no `..` escaping the repo) and is git-only.\n\n" +
 			"--openapi materializes a single-service portable manifest from the document:\n" +
 			"its operations become commands: and its security schemes are inferred into an\n" +
 			"auth: block on a best-effort basis (anything that can't be faithfully mapped\n" +
 			"falls back to `auth: { strategy: none }` with a comment explaining what to wire\n" +
 			"by hand). The spec is parsed once at add-time; it is NOT vendored and no spec:\n" +
-			"reference is kept — the installed manifest stands alone. --ref does not apply\n" +
-			"to an --openapi source (it is git-only).\n\n" +
+			"reference is kept — the installed manifest stands alone. --ref and --path do not\n" +
+			"apply to an --openapi source (they are git-only).\n\n" +
 			"The catalog name defaults to the dir/repo basename (a trailing .git is\n" +
 			"stripped) — or, with --openapi, the document's info.title, slugified. Pass\n" +
 			"--name to override, or if the inferred name is not a valid single path segment.\n" +
@@ -69,13 +73,17 @@ func (r *runner) cmdCatalogAdd() *cobra.Command {
 				if ref != "" {
 					return agentsafety.NewUsageError("--ref is git-only and cannot be combined with --openapi")
 				}
+				if path != "" {
+					return agentsafety.NewUsageError("--path is git-only and cannot be combined with --openapi")
+				}
 				return r.catalogAddOpenAPI(args[0], name, force)
 			}
-			return r.catalogAdd(args[0], name, ref, force)
+			return r.catalogAdd(args[0], name, ref, path, force)
 		},
 	}
 	cmd.Flags().StringVar(&name, "name", "", "catalog name (default: dir/repo basename, or the OpenAPI document's title with --openapi)")
 	cmd.Flags().StringVar(&ref, "ref", "", "git branch, tag, or commit to check out (git sources only)")
+	cmd.Flags().StringVar(&path, "path", "", "subdirectory within a git repo to install manifests from (git sources only)")
 	cmd.Flags().BoolVar(&force, "force", false, "replace an already-installed catalog of the same name")
 	cmd.Flags().BoolVar(&openapi, "openapi", false, "treat <source> as an OpenAPI 3.x document (http(s):// URL or local file) and materialize a manifest from it")
 	return cmd
@@ -137,7 +145,7 @@ func (r *runner) cmdCatalogInstalled() *cobra.Command {
 // manifest (fail-closed) → atomic install. Nothing is written unless every
 // manifest is a valid portable manifest and no service name collides across
 // installed catalogs.
-func (r *runner) catalogAdd(source, name, ref string, force bool) error {
+func (r *runner) catalogAdd(source, name, ref, path string, force bool) error {
 	srcType, err := classifySource(source)
 	if err != nil {
 		return err
@@ -151,6 +159,9 @@ func (r *runner) catalogAdd(source, name, ref string, force bool) error {
 	if ref != "" && srcType != "git" {
 		return agentsafety.NewUsageError("--ref only applies to a git source")
 	}
+	if path != "" && srcType != "git" {
+		return agentsafety.NewUsageError("--path only applies to a git source (point a local dir source directly at the subdirectory instead)")
+	}
 
 	tmp, err := os.MkdirTemp("", brand.Name+"-catalog-fetch-")
 	if err != nil {
@@ -161,24 +172,30 @@ func (r *runner) catalogAdd(source, name, ref string, force bool) error {
 	now := time.Now().UTC()
 	meta := manifest.CatalogMeta{Name: name, Source: source, Type: srcType, AddedAt: now, UpdatedAt: now}
 	fetchDir := source
+	label := source
 	if srcType == "git" {
 		commit, err := r.gitFetch(source, ref, tmp)
 		if err != nil {
 			return err
 		}
-		fetchDir = tmp
 		meta.Ref = ref
 		meta.Commit = commit
+		meta.Path = path
+		fetchDir, err = resolveCatalogSubdir(tmp, path)
+		if err != nil {
+			return err
+		}
+		label = sourceLabel(source, path)
 	}
 
-	files, err := r.collectAndValidate(fetchDir, source)
+	files, err := r.collectAndValidate(fetchDir, label)
 	if err != nil {
 		return err
 	}
 	if err := manifest.InstallCatalog(r.configDir(), meta, files, force); err != nil {
 		return err
 	}
-	_, _ = fmt.Fprintf(r.stderr, "installed catalog %q (%s) from %s%s\n", name, countManifests(len(files)), source, commitSuffix(meta.Commit))
+	_, _ = fmt.Fprintf(r.stderr, "installed catalog %q (%s) from %s%s\n", name, countManifests(len(files)), label, commitSuffix(meta.Commit))
 	return nil
 }
 
@@ -245,6 +262,7 @@ func (r *runner) updateOne(configDir, name string) error {
 	defer func() { _ = os.RemoveAll(tmp) }()
 
 	fetchDir := meta.Source
+	label := meta.Source
 	switch meta.Type {
 	case "dir":
 		// re-read the source dir
@@ -253,20 +271,24 @@ func (r *runner) updateOne(configDir, name string) error {
 		if err != nil {
 			return err
 		}
-		fetchDir = tmp
 		meta.Commit = commit
+		fetchDir, err = resolveCatalogSubdir(tmp, meta.Path)
+		if err != nil {
+			return err
+		}
+		label = sourceLabel(meta.Source, meta.Path)
 	default:
 		return fmt.Errorf("catalog %q has unknown source type %q", name, meta.Type)
 	}
 
-	files, err := r.collectAndValidate(fetchDir, meta.Source)
+	files, err := r.collectAndValidate(fetchDir, label)
 	if err != nil {
 		return err
 	}
 	if err := manifest.InstallCatalog(configDir, meta, files, true); err != nil {
 		return err
 	}
-	_, _ = fmt.Fprintf(r.stderr, "updated catalog %q (%s) from %s%s\n", name, countManifests(len(files)), meta.Source, commitSuffix(meta.Commit))
+	_, _ = fmt.Fprintf(r.stderr, "updated catalog %q (%s) from %s%s\n", name, countManifests(len(files)), label, commitSuffix(meta.Commit))
 	return nil
 }
 
@@ -440,6 +462,50 @@ func inferCatalogName(source, srcType string) string {
 		base = base[i+1:]
 	}
 	return strings.TrimSuffix(base, ".git")
+}
+
+// resolveCatalogSubdir joins a validated relative subdir under the clone root and
+// confirms it is an existing directory. An empty path returns root unchanged (the
+// repo root is the catalog). It rejects an absolute path and any `..` that would
+// escape the clone, then verifies (defense in depth) that the cleaned join stays
+// under root — so a git source can never be made to read manifests from outside
+// the fetched repo. A missing or non-directory target is a clear usage error.
+func resolveCatalogSubdir(root, path string) (string, error) {
+	if path == "" {
+		return root, nil
+	}
+	if filepath.IsAbs(path) {
+		return "", agentsafety.NewUsageError(fmt.Sprintf("--path %q must be a relative path within the repository, not absolute", path))
+	}
+	clean := filepath.Clean(path)
+	if clean == ".." || strings.HasPrefix(clean, ".."+string(filepath.Separator)) {
+		return "", agentsafety.NewUsageError(fmt.Sprintf("--path %q escapes the repository root", path))
+	}
+	dest := filepath.Join(root, clean)
+	if dest != root && !strings.HasPrefix(dest, root+string(filepath.Separator)) {
+		return "", agentsafety.NewUsageError(fmt.Sprintf("--path %q escapes the repository root", path))
+	}
+	info, err := os.Stat(dest)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return "", agentsafety.NewUsageError(fmt.Sprintf("subdirectory %q not found in the repository", path))
+		}
+		return "", err
+	}
+	if !info.IsDir() {
+		return "", agentsafety.NewUsageError(fmt.Sprintf("--path %q is a file, not a directory", path))
+	}
+	return dest, nil
+}
+
+// sourceLabel renders a "<source> (subdir <path>)" label for confirmation and
+// error messages when a git source installs from a subdirectory, or just the
+// source when it does not.
+func sourceLabel(source, path string) string {
+	if path == "" {
+		return source
+	}
+	return fmt.Sprintf("%s (subdir %s)", source, path)
 }
 
 // validateGitURL allows only the safe transport schemes and scp-style remotes,

@@ -96,10 +96,13 @@ Three sources, highest wins: local `services/<name>.yaml` > installed catalog
 - `catalog vendor <name> --catalog-dir catalog` — promote an edited override back
   into a repo checkout's `catalog/` to ship embedded. Validates first;
   `--catalog-dir` required (the binary can't know the repo path).
-- `catalog add <source> [--name --ref --force]` — install a dir or git repo of
-  portable manifests. Validates every `*.yaml` (schema + portability) fail-closed,
-  installs atomically. Git pinned to its commit SHA in `.anyctl-catalog.json`;
-  fetches shell to system `git` with `ext`/`fd` blocked, URL after `--`.
+- `catalog add <source> [--name --ref --path --force]` — install a dir or git repo
+  of portable manifests. Validates every `*.yaml` (schema + portability)
+  fail-closed, installs atomically. Git pinned to its commit SHA in
+  `.anyctl-catalog.json`; fetches shell to system `git` with `ext`/`fd` blocked,
+  URL after `--`. `--path <subdir>` (git-only) installs from a subdirectory of the
+  repo (recorded in the metadata so `update` re-fetches the same subdir; rejects
+  absolute/`..` traversal).
   `--openapi <url|file>` materializes one manifest from an OpenAPI 3.x doc
   (operations → `commands:`, `securitySchemes` best-effort → `auth:`, un-mappable
   → `strategy: none`; spec parsed once, not vendored).
