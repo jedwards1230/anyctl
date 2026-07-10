@@ -144,11 +144,42 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      # Keyless cosign signing below mints a short-lived Fulcio cert from the
+      # job's GitHub OIDC identity — needs id-token: write.
+      id-token: write
     steps:
       - uses: actions/download-artifact@v8
         with:
           path: dist
           merge-multiple: true
+
+      - name: Generate aggregate SHA256SUMS
+        working-directory: dist
+        run: |
+          set -euo pipefail
+          # One checksum manifest over the release binaries only — exclude the
+          # existing per-asset *.sha256 files (self-update reads those; their
+          # format/naming is unchanged). SHA256SUMS is the signed artifact.
+          find . -maxdepth 1 -type f -name 'anyctl-*' ! -name '*.sha256' -printf '%P\n' \
+            | sort | xargs sha256sum > SHA256SUMS
+          cat SHA256SUMS
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v3
+
+      - name: Sign SHA256SUMS (keyless, GitHub OIDC)
+        working-directory: dist
+        env:
+          COSIGN_YES: "true"
+        run: |
+          set -euo pipefail
+          # Keyless: identity from the job's GitHub OIDC token, cert from Fulcio,
+          # transparency log entry in Rekor. Emits the detached signature and the
+          # signing certificate alongside SHA256SUMS; all three ship in the release.
+          cosign sign-blob \
+            --output-signature SHA256SUMS.sig \
+            --output-certificate SHA256SUMS.pem \
+            SHA256SUMS
 
       - name: Compose release body (install snippet + AI notes)
         env:
@@ -165,6 +196,20 @@ jobs:
             echo '```'
             echo ""
             echo "Or download a static binary for your platform below."
+            echo ""
+            echo "## Verify"
+            echo ""
+            echo "\`SHA256SUMS\` lists every binary's digest; \`SHA256SUMS.sig\` + \`SHA256SUMS.pem\` are a keyless [cosign](https://docs.sigstore.dev/) signature over it. To verify:"
+            echo ""
+            echo '```bash'
+            echo "sha256sum -c SHA256SUMS --ignore-missing   # checksums"
+            echo "cosign verify-blob \\"
+            echo "  --certificate SHA256SUMS.pem \\"
+            echo "  --signature SHA256SUMS.sig \\"
+            echo "  --certificate-identity-regexp '^https://github.com/jedwards1230/anyctl/' \\"
+            echo "  --certificate-oidc-issuer https://token.actions.githubusercontent.com \\"
+            echo "  SHA256SUMS"
+            echo '```'
             echo ""
             echo "---"
             echo ""

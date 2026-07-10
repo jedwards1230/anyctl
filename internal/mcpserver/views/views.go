@@ -38,7 +38,7 @@ var embeddedResultHTML []byte
 // "read at server-build time" in the dev-loop contract.
 func ResultHTML() []byte {
 	if dir := os.Getenv(brand.EnvPrefix + "VIEWS_DIR"); dir != "" {
-		if b, err := os.ReadFile(filepath.Join(dir, "result.html")); err == nil {
+		if b, err := os.ReadFile(filepath.Join(dir, "result.html")); err == nil { //nolint:gosec // G703: dir is the operator-set ANYCTL_VIEWS_DIR dev-loop override, fixed filename
 			return b
 		}
 	}

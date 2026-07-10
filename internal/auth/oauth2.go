@@ -97,7 +97,7 @@ func writeCache(path, token string, expiresIn int) error {
 		AccessToken: token,
 		ExpiresAt:   time.Now().Add(time.Duration(expiresIn) * time.Second),
 	}
-	data, err := json.Marshal(entry)
+	data, err := json.Marshal(entry) //nolint:gosec // G117: token cache persisted by design to an owner-only (0600) file
 	if err != nil {
 		return fmt.Errorf("marshal token cache: %w", err)
 	}
@@ -181,7 +181,7 @@ func fetchOAuth2Token(ctx context.Context, a manifest.Auth, env template.Env, di
 	if dirInfo.Mode()&os.ModeSymlink != 0 {
 		return "", fmt.Errorf("oauth2: cache dir is a symlink (security risk)")
 	}
-	if stat, ok := dirInfo.Sys().(*syscall.Stat_t); ok && stat.Uid != uint32(os.Getuid()) {
+	if stat, ok := dirInfo.Sys().(*syscall.Stat_t); ok && stat.Uid != uint32(os.Getuid()) { //nolint:gosec // G115: os.Getuid() is a valid uid on any host this runs on
 		return "", fmt.Errorf("oauth2: cache dir not owned by current user")
 	}
 	cachePath := cacheFileName(dir, clientID, tokenURL, scope)

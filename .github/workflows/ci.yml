@@ -40,6 +40,16 @@ jobs:
         with:
           version: v2.11.3
 
+      - name: govulncheck
+        env:
+          # govulncheck@latest is built with a newer Go than this module pins
+          # (go.mod toolchain). Allow fetching the toolchain to build the tool;
+          # the scan itself still analyzes the module at its own Go version.
+          GOTOOLCHAIN: auto
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          govulncheck ./...
+
       - name: go mod tidy check
         run: |
           go mod tidy

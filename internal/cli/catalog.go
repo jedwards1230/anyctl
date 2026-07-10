@@ -221,7 +221,7 @@ func (r *runner) catalogVendor(name, catalogDir string, force bool) error {
 			return agentsafety.NewUsageError(fmt.Sprintf("%s already exists; pass --force to overwrite", dest))
 		}
 	}
-	if err := os.WriteFile(dest, data, 0o600); err != nil {
+	if err := os.WriteFile(dest, data, 0o600); err != nil { //nolint:gosec // G703: dest is <catalog-dir>/<validated-name>.yaml, not attacker-controlled
 		return fmt.Errorf("writing %s: %w", dest, err)
 	}
 	_, _ = fmt.Fprintln(r.stdout, absOrSelf(dest))
@@ -250,7 +250,7 @@ func launchEditor(path string) error {
 	}
 	parts := strings.Fields(editor)
 	args := append(parts[1:], path)
-	c := exec.Command(parts[0], args...) // #nosec G204 -- editor is the user's own $VISUAL/$EDITOR
+	c := exec.Command(parts[0], args...) // #nosec G204,G702 -- editor is the user's own $VISUAL/$EDITOR
 	c.Stdin, c.Stdout, c.Stderr = os.Stdin, os.Stdout, os.Stderr
 	return c.Run()
 }

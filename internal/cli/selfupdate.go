@@ -303,7 +303,7 @@ func replaceBinary(exe string, data []byte) error {
 		cleanup()
 		return fmt.Errorf("closing new binary %s: %w", tmpName, err)
 	}
-	if err := os.Chmod(tmpName, 0o755); err != nil {
+	if err := os.Chmod(tmpName, 0o755); err != nil { //nolint:gosec // G302: the replacement is an executable binary; it must be 0755
 		cleanup()
 		return fmt.Errorf("chmod new binary %s: %w", tmpName, err)
 	}
