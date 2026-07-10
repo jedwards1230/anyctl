@@ -1,6 +1,6 @@
 module github.com/jedwards1230/anyctl
 
-go 1.25.11
+go 1.25.7
 
 require (
 	github.com/coder/websocket v1.8.15

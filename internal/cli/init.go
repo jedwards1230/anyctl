@@ -13,7 +13,7 @@ import (
 )
 
 // defaultConfigYAML is the minimal config.yaml `anyctl init` provisions. It is a
-// generic, portable header (no homelab specifics) mirroring examples/config.yaml.
+// generic, portable header (no service-specific defaults) mirroring examples/full/config.yaml.
 var defaultConfigYAML = fmt.Sprintf(`# %s global config. Every field is optional; these are the defaults.
 # Unknown top-level keys are an error (strict decoding) — a typo is rejected at
 # load time rather than silently ignored.
@@ -131,6 +131,12 @@ func (r *runner) provisionConfigDir() error {
 	if err := r.ensureFile(filepath.Join(dir, "profile.yaml"), defaultProfileYAML); err != nil {
 		return err
 	}
+	// Point the user at the next concrete step: bind one service, then verify
+	// just that service (the scoped strict lint), rather than run a bare
+	// `lint --strict` that would flag every still-unbound service.
+	_, _ = fmt.Fprintf(r.stderr,
+		"\nNext: bind a service in %s, then run `%s lint --strict <service>` to verify it.\n",
+		filepath.Join(dir, "profile.yaml"), brand.Name)
 	return nil
 }
 

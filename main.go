@@ -1,4 +1,4 @@
-// Command anyctl is a manifest-driven CLI for homelab service APIs. A service is
+// Command anyctl is a manifest-driven CLI for HTTP/RPC service APIs. A service is
 // a YAML manifest; the binary knows nothing service-specific. See the README.
 package main
 

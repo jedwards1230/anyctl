@@ -103,7 +103,7 @@ func ex(lines ...string) string {
 func (r *runner) newRoot() *cobra.Command {
 	root := &cobra.Command{
 		Use:           brand.Name,
-		Short:         "Manifest-driven CLI for homelab service APIs",
+		Short:         "Manifest-driven CLI for HTTP/RPC service APIs",
 		Long:          fmt.Sprintf("%s executes one HTTP/RPC call against a service described by a YAML manifest.\nAdding a service is a manifest edit, never a recompile.", brand.Name),
 		SilenceErrors: true,
 		SilenceUsage:  true,

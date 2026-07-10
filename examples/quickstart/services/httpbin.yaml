@@ -1,0 +1,33 @@
+# A minimal, hand-written manifest for httpbin.org — a public HTTP request/response
+# testing service. It needs no auth, so this is the smallest possible working
+# example: one portable manifest plus a profile that binds its base_url.
+#
+# This is a plain generic HTTP API — nothing service- or homelab-specific — which
+# is the whole point: anyctl drives any HTTP/RPC API described this way.
+name: httpbin
+description: httpbin.org — public HTTP request & response testing service
+env_prefix: HTTPBIN
+
+auth:
+  strategy: none
+
+commands:
+  get:
+    help: echo back the GET request (args, headers, origin, url)
+    method: GET
+    path: /get
+  headers:
+    help: echo back just the request headers
+    method: GET
+    path: /headers
+    output: { filter: ".headers" }
+  ip:
+    help: return the caller's origin IP
+    method: GET
+    path: /ip
+    output: { filter: ".origin" }
+  uuid:
+    help: return a random UUID
+    method: GET
+    path: /uuid
+    output: { filter: ".uuid" }

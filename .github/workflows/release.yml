@@ -91,7 +91,7 @@ jobs:
     uses: jedwards1230/release-workflows/.github/workflows/ai-release.yml@v1
     with:
       service_name: anyctl
-      service_description: "a manifest-driven CLI for homelab service APIs"
+      service_description: "a manifest-driven CLI for HTTP/RPC service APIs"
       bump_type: ${{ needs.detect.outputs.bump_type }}
       create_release: false
       dry_run: ${{ needs.detect.outputs.dry_run == 'true' }}

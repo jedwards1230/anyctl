@@ -5,6 +5,7 @@ This product studies design patterns from the following MIT-licensed project.
 No source is vendored; the patterns below were re-implemented independently.
 
   rest-sh/restish — https://github.com/rest-sh/restish (MIT)
-    - OpenAPI operation extraction (internal/spec/operation.go)
-    - external-tool credential resolution (internal/auth/external_tool.go)
-    - operations-as-MCP-tools mapping (cmd/restish-mcp/)
+    - OpenAPI operation extraction (internal/manifest/spec.go,
+      internal/manifest/openapi_scaffold.go)
+    - external-tool credential resolution (internal/secret/provider.go)
+    - operations-as-MCP-tools mapping (internal/mcpserver/mcpserver.go)

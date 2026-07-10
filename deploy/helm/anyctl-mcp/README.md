@@ -116,7 +116,7 @@ networkPolicy:
           - { port: 53, protocol: TCP }
       # LAN service hosts
       - to:
-          - ipBlock: { cidr: 192.168.8.0/24 }
+          - ipBlock: { cidr: 10.0.0.0/24 }
       # 443 out (1Password.com for op:// resolution)
       - to:
           - ipBlock: { cidr: 0.0.0.0/0, except: [10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16] }
@@ -153,7 +153,7 @@ mcp:
   auth:
     enabled: true
     onePasswordItem:
-      itemPath: vaults/homelab/items/k8s-mcp-gateway-anyctl-mcp-auth
+      itemPath: vaults/<vault>/items/<item>
 ```
 
 Enabling `mcp.auth.enabled` without a token source is a hard render error
