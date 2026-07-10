@@ -75,22 +75,29 @@ func (a opAuth) token() (string, error) {
 }
 
 // checkTokenFilePerms refuses to use a service-account token file that grants
-// ANY permission bit to group or other — not just read/write, but also
-// execute (mode & 0077 != 0, i.e. every bit outside the owner triplet). This
-// token is a 1Password service-account credential with broad blast radius if
-// leaked — treated like ssh treats a loose private-key permission, not policy
-// logic: same category as refusing a corrupt config file. Returns *AuthError
-// (the same family as the other file-source failures in token()) naming the
-// exact bits at fault and the fix.
+// ANY permission bit to group or other. This token is a 1Password service-account
+// credential with broad blast radius if leaked — see checkOwnerOnlyPerms.
 func checkTokenFilePerms(path string) error {
+	return checkOwnerOnlyPerms(path, "service_account_token")
+}
+
+// checkOwnerOnlyPerms refuses a secret-bearing file that grants ANY permission
+// bit to group or other — not just read/write, but also execute (mode & 0077 !=
+// 0, i.e. every bit outside the owner triplet). A plaintext secret on disk is
+// protected by full-disk encryption at rest; a loose mode would defeat that
+// boundary for any other local account. Treated like ssh treats a loose
+// private-key permission, not policy logic: same category as refusing a corrupt
+// config file. label prefixes the *AuthError, naming the exact bits at fault and
+// the fix (shared by the SA-token file source and the file:// provider).
+func checkOwnerOnlyPerms(path, label string) error {
 	info, err := os.Stat(path)
 	if err != nil {
-		return &AuthError{Err: fmt.Errorf("service_account_token: stat %s: %w", path, err)}
+		return &AuthError{Err: fmt.Errorf("%s: stat %s: %w", label, path, err)}
 	}
 	if mode := info.Mode().Perm(); mode&0o077 != 0 {
 		return &AuthError{Err: fmt.Errorf(
-			"service_account_token: file %s grants group/other permissions (mode %#o; want owner-only, e.g. 0600 or 0400); fix with: chmod 0600 %s",
-			path, mode, path,
+			"%s: file %s grants group/other permissions (mode %#o; want owner-only, e.g. 0600 or 0400); fix with: chmod 0600 %s",
+			label, path, mode, path,
 		)}
 	}
 	return nil

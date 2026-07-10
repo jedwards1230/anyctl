@@ -3,7 +3,6 @@ package secret
 import (
 	"context"
 	"fmt"
-	"os"
 	"os/exec"
 	"strings"
 
@@ -70,34 +69,13 @@ func (p *OnePassword) Resolve(ctx context.Context, ref Ref) (string, error) {
 	}
 }
 
-// resolveRead runs the configured command with {ref} substituted. With a fields
-// fallback it tries each candidate (replacing the ref's final segment) until one
-// returns non-empty. An all-empty result returns ("", nil); the caller maps that
-// to the "resolved empty" error.
+// resolveRead runs the configured command with {ref} substituted, honoring the
+// ordered field fallback (see resolveTemplatedRead). An all-empty result returns
+// ("", nil); the caller maps that to the "resolved empty" error.
 func (p *OnePassword) resolveRead(ctx context.Context, ref Ref) (string, error) {
-	refs := []string{ref.URI}
-	if len(ref.Fields) > 0 {
-		refs = refs[:0]
-		for _, f := range ref.Fields {
-			refs = append(refs, replaceLastSegment(ref.URI, f))
-		}
-	}
-	var lastErr error
-	for _, r := range refs {
-		argv := substituteRef(p.command, r)
-		out, err := p.exec(ctx, argv)
-		if err != nil {
-			lastErr = err
-			continue
-		}
-		if out != "" {
-			return out, nil
-		}
-	}
-	if lastErr != nil {
-		return "", lastErr
-	}
-	return "", nil
+	return resolveTemplatedRead(ref, p.command, func(argv []string) (string, error) {
+		return p.exec(ctx, argv)
+	})
 }
 
 // resolveItem builds an op-specific `item get` argv. The ref is parsed as
@@ -121,6 +99,10 @@ func (p *OnePassword) resolveItem(ctx context.Context, ref Ref, idiom string) (s
 	return p.exec(ctx, argv)
 }
 
+// opBinaryDesc labels the op binary in a missing-binary diagnostic. It is a hint
+// only (a customized command may wrap op), never a gate.
+const opBinaryDesc = "op (1Password CLI)"
+
 // exec runs argv via the injected runner (tests) or the real op CLI. On the real
 // path it lazily resolves the service-account token and injects it into the
 // child process env; a nil/empty token inherits the ambient op session. ctx is
@@ -133,28 +115,7 @@ func (p *OnePassword) exec(ctx context.Context, argv []string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return execWithEnv(ctx, argv, tok)
-}
-
-// execWithEnv mirrors the default exec runner, additionally injecting the
-// service-account token into the child environment when non-empty. The token
-// goes into the process env only — never argv, never any writer. ctx cancellation
-// kills the op subprocess.
-func execWithEnv(ctx context.Context, argv []string, tok string) (string, error) {
-	if len(argv) == 0 {
-		return "", fmt.Errorf("empty resolver command")
-	}
-	cmd := exec.CommandContext(ctx, argv[0], argv[1:]...)
-	cmd.Stderr = os.Stderr // let op print its own diagnostics (session expired, etc.)
-	if tok != "" {
-		// cmd.Env replaces the whole environment, so start from os.Environ().
-		cmd.Env = withToken(os.Environ(), tok)
-	}
-	out, err := cmd.Output()
-	if err != nil {
-		return "", fmt.Errorf("%s: %w", argv[0], err)
-	}
-	return strings.TrimRight(string(out), "\n"), nil
+	return runResolverCommand(ctx, argv, tok, opBinaryDesc)
 }
 
 // withToken returns a copy of base with the OP_SERVICE_ACCOUNT_TOKEN entry

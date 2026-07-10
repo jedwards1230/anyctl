@@ -150,26 +150,47 @@ Wire that into CI with the bundled composite action
 
 ## Secrets
 
-`config.yaml` declares secret providers, dispatched by a ref's URI scheme
-(`op://` → the 1Password provider):
+Secrets are always **references** resolved at call time — a manifest stores
+`op://vault/item/field`, never a value, and resolved secrets never appear in
+argv or logs.
+
+**Zero-dependency default — env override.** The simplest path needs no external
+tool at all: with `env_override` on, a `<PREFIX>_<SECRET>` env var is used
+verbatim and skips resolution entirely (`<PREFIX>` is the service's `env_prefix`,
+`<SECRET>` the slot name — e.g. `RADARR_API_KEY`). Ideal for CI, containers, and
+Kubernetes/Docker secret env.
+
+**Providers** cover everything else. `config.yaml` declares them, dispatched by a
+ref's URI scheme:
 
 ```yaml
 secrets:
-  env_override: true            # allow <PREFIX>_<SECRET> env to skip resolution
+  env_override: true            # <PREFIX>_<SECRET> env skips resolution
   providers:
+    # 1Password (op://…) — the default; item idioms + optional service-account token.
     onepassword:
       scheme: op
       command: ["op", "read", "{ref}"]
       auth:
         service_account_token:            # optional; omit to use the desktop op session
           file: ~/.config/anyctl/sa-token # exactly one of file | value | env
+
+    # Generic exec — any {ref}-templated command's stdout (pass, vault, sops, …).
+    pass:
+      type: exec
+      command: ["pass", "show", "{ref}"]  # a pass://vault/item ref → its stdout
+
+    # File — read a value from an owner-only file (0600/0400).
+    file:
+      type: file                          # a file:///run/secrets/token ref
 ```
 
-Secrets are always **references** resolved at call time — a manifest stores
-`op://vault/item/field`, never a value, and secrets never appear in argv or
-logs. A `service_account_token.file` must be owner-only (`0600`/`0400`) or it's
-refused. Adding a backend (`aws://`, `vault://`, …) is a few edits in
-[`internal/secret/provider.go`](internal/secret/provider.go) — no engine changes.
+An op `service_account_token.file` and every `file://` path must be owner-only
+(`0600`/`0400`) or they're refused. If a provider's binary isn't on `PATH`, the
+error names the provider and points you at the `<PREFIX>_<SECRET>` env override.
+Most new backends need no Go — a config-only `exec` or `file` provider covers
+them; a bespoke one is a few edits in
+[`internal/secret/provider.go`](internal/secret/provider.go), no engine changes.
 
 ## How it works
 

@@ -22,14 +22,22 @@ defaults:
   timeout: 60s      # per-request HTTP timeout
   output: json      # json | raw | scalar
 
-# Scheme-dispatched secret providers. A ref routes to a provider by its URI
-# scheme (op:// → the onepassword provider).
+# Secrets. The zero-dependency default needs no provider at all: set a
+# <PREFIX>_<SECRET> env var (env_override) and it is used verbatim, skipping
+# resolution. Providers cover the rest, dispatched by a ref's URI scheme.
 secrets:
   env_override: true                     # allow <PREFIX>_<SECRET> env to skip resolution
   providers:
     onepassword:                         # map key aliases to scheme: op
       scheme: op
       command: ["op", "read", "{ref}"]   # {ref} ← the op:// URI
+    # A generic exec provider runs any {ref}-templated command (pass, vault, sops):
+    # pass:
+    #   type: exec
+    #   command: ["pass", "show", "{ref}"]   # a pass://… ref → its stdout
+    # A file provider reads a secret from an owner-only (0600/0400) file:
+    # file:
+    #   type: file                            # a file:///run/secrets/token ref
 
 # The legacy single-resolver `+"`secret:`"+` block is a still-supported deprecated alias.
 `, brand.Name)
