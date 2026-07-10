@@ -26,6 +26,7 @@ type CatalogMeta struct {
 	Type      string    `json:"type"`             // "git" | "dir"
 	Ref       string    `json:"ref,omitempty"`    // git: requested ref (empty = default branch)
 	Commit    string    `json:"commit,omitempty"` // git: resolved commit SHA
+	Path      string    `json:"path,omitempty"`   // git: subdirectory within the repo to install from (empty = repo root)
 	AddedAt   time.Time `json:"added_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 }

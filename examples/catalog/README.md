@@ -75,7 +75,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
-      - uses: jedwards1230/anyctl/.github/actions/validate-catalog@v1
+      - uses: jedwards1230/anyctl/.github/actions/validate-catalog@v0.21.0  # pin to a current release tag
         with:
           path: .          # default "."; the dir holding your *.yaml manifests
           version: latest  # default "latest"; pin to a anyctl release if you need stability
