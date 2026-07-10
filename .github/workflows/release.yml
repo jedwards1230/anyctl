@@ -120,6 +120,11 @@ jobs:
         with:
           go-version: "1.25"
           cache: true
+      # setup-go exports GOTOOLCHAIN=local via $GITHUB_ENV; re-export auto (last
+      # write wins) so the release binaries build with the go.mod `toolchain`
+      # version (the patched crypto/tls stdlib).
+      - name: Use go.mod toolchain (override setup-go GOTOOLCHAIN=local)
+        run: echo "GOTOOLCHAIN=auto" >> "$GITHUB_ENV"
       - name: Build
         env:
           GOOS: ${{ matrix.goos }}

@@ -23,6 +23,14 @@ jobs:
           go-version: "1.25"
           cache: true
 
+      # setup-go exports GOTOOLCHAIN=local via $GITHUB_ENV, which ignores the
+      # go.mod `toolchain` directive and blocks toolchain download. Re-export
+      # auto (last $GITHUB_ENV write wins) so every step below builds, tests,
+      # and scans with the pinned go1.25.12 (patched crypto/tls), and so
+      # `go install govulncheck@latest` can fetch a newer toolchain to build.
+      - name: Use go.mod toolchain (override setup-go GOTOOLCHAIN=local)
+        run: echo "GOTOOLCHAIN=auto" >> "$GITHUB_ENV"
+
       - name: gofmt
         run: |
           unformatted=$(gofmt -l .)
@@ -41,11 +49,6 @@ jobs:
           version: v2.11.3
 
       - name: govulncheck
-        env:
-          # govulncheck@latest is built with a newer Go than this module pins
-          # (go.mod toolchain). Allow fetching the toolchain to build the tool;
-          # the scan itself still analyzes the module at its own Go version.
-          GOTOOLCHAIN: auto
         run: |
           go install golang.org/x/vuln/cmd/govulncheck@latest
           govulncheck ./...
