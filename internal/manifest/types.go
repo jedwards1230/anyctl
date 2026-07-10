@@ -46,9 +46,13 @@ type SecretsConfig struct {
 
 // ProviderConfig configures one secrets provider.
 type ProviderConfig struct {
+	// Type selects the provider kind: onepassword | exec | file. Empty is
+	// inferred from Scheme (op/onepassword → onepassword, file → file, anything
+	// else → exec), so existing op-only configs need no `type:`.
+	Type    string       `yaml:"type"`
 	Scheme  string       `yaml:"scheme"`  // URI scheme handled (op); defaults from the map key alias
-	Command []string     `yaml:"command"` // argv; {ref} substituted (op default: op read {ref})
-	Auth    ProviderAuth `yaml:"auth"`    // optional credentials for the backing tool
+	Command []string     `yaml:"command"` // argv; {ref} substituted (op/exec default: op read {ref})
+	Auth    ProviderAuth `yaml:"auth"`    // optional credentials for the backing tool (onepassword only)
 }
 
 // ProviderAuth holds optional credentials a provider injects into its backing

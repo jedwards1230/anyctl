@@ -1,14 +1,17 @@
 package secret
 
 // This file defines the secrets-provider seam. Resolution dispatches on a ref's
-// URI scheme (op://… → the op provider), so the resolver and engine stay
-// scheme-agnostic.
-//
-// To add a provider (e.g. aws://, vault://):
+// URI scheme (op://… → the op provider, file://… → the file provider), so the
+// resolver and engine stay scheme-agnostic. Three provider kinds ship: the
+// op-specific `onepassword` provider (service-account-token injection + item
+// idioms), a generic `exec` provider (any {ref}-templated command, e.g. `pass`,
+// `vault read`, `sops`), and a `file` provider (read a value from a file). A new
+// scheme most often needs no new Go at all — a config-only `exec`/`file`
+// provider covers it. When a backend needs bespoke behavior:
 //
 //  1. Implement Provider (a new Scheme() + Resolve()) in its own file.
 //  2. Add a `secrets.providers.<name>` block to config.yaml.
-//  3. Register its constructor in NewRegistry's scheme switch.
+//  3. Register its constructor in NewRegistry's kind switch.
 //
 // No engine or cli changes are required — dispatch is by URI scheme.
 
@@ -50,13 +53,38 @@ func NewRegistry(cfg manifest.SecretsConfig, runner Runner) *Registry {
 		if scheme == "" {
 			scheme = name
 		}
-		switch scheme {
-		case "op", "onepassword":
+		switch providerKind(pc.Type, scheme) {
+		case "onepassword":
 			p := newOnePassword(pc, runner)
+			reg.providers[p.Scheme()] = p
+		case "file":
+			p := newFile(scheme)
+			reg.providers[p.Scheme()] = p
+		default: // "exec"
+			p := newExec(scheme, pc, runner)
 			reg.providers[p.Scheme()] = p
 		}
 	}
 	return reg
+}
+
+// providerKind resolves a provider's kind from its explicit `type:` (when set)
+// or, failing that, its scheme: op/onepassword → onepassword, file → file,
+// anything else → the generic exec provider. Keeping the inference here means an
+// op-only config.yaml needs no `type:` and a `pass`/`vault`-style provider works
+// with just a scheme + command.
+func providerKind(typ, scheme string) string {
+	if typ != "" {
+		return typ
+	}
+	switch scheme {
+	case "op", "onepassword":
+		return "onepassword"
+	case "file":
+		return "file"
+	default:
+		return "exec"
+	}
 }
 
 // For returns the provider registered for scheme, if any.
