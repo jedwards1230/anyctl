@@ -3,7 +3,67 @@ package manifest
 import (
 	"errors"
 	"testing"
+
+	"gopkg.in/yaml.v3"
 )
+
+// TestAnnotationsCapturedAndIgnored proves the reserved annotations: escape
+// hatch (a) round-trips through yaml.Unmarshal into the struct fields — it is
+// CAPTURED, not silently dropped — at both the service and command level, and
+// (b) passes structural Validate untouched (free-form, never read by the
+// validator, never affecting execution).
+func TestAnnotationsCapturedAndIgnored(t *testing.T) {
+	src := "" +
+		"name: x\n" +
+		"annotations:\n" +
+		"  owner: platform-team\n" +
+		"  meta:\n" +
+		"    tier: gold\n" +
+		"    critical: true\n" +
+		"  tags: [a, b, c]\n" +
+		"commands:\n" +
+		"  list:\n" +
+		"    method: GET\n" +
+		"    path: /list\n" +
+		"    annotations:\n" +
+		"      owner: alice\n" +
+		"      pager: true\n"
+
+	var svc Service
+	if err := yaml.Unmarshal([]byte(src), &svc); err != nil {
+		t.Fatalf("yaml.Unmarshal: %v", err)
+	}
+
+	// Service-level annotations captured with types preserved.
+	if got := svc.Annotations["owner"]; got != "platform-team" {
+		t.Errorf("service annotations[owner] = %v, want platform-team", got)
+	}
+	meta, ok := svc.Annotations["meta"].(map[string]any)
+	if !ok {
+		t.Fatalf("service annotations[meta] = %T, want map[string]any", svc.Annotations["meta"])
+	}
+	if meta["tier"] != "gold" || meta["critical"] != true {
+		t.Errorf("service annotations[meta] = %v, want {tier:gold critical:true}", meta)
+	}
+	tags, ok := svc.Annotations["tags"].([]any)
+	if !ok || len(tags) != 3 {
+		t.Fatalf("service annotations[tags] = %v, want a 3-element list", svc.Annotations["tags"])
+	}
+
+	// Command-level annotations captured too.
+	cmd := svc.Commands["list"]
+	if got := cmd.Annotations["owner"]; got != "alice" {
+		t.Errorf("command annotations[owner] = %v, want alice", got)
+	}
+	if got := cmd.Annotations["pager"]; got != true {
+		t.Errorf("command annotations[pager] = %v, want true", got)
+	}
+
+	// Validate ignores annotations entirely — the manifest is still clean.
+	if err := Validate(&svc); err != nil {
+		t.Errorf("Validate() with annotations = %v, want nil", err)
+	}
+}
 
 // TestValidateWrapsConfigError proves a structural validation failure is wrapped
 // in *ConfigError so callers classify it to the usage exit code (2).

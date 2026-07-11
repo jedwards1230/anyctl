@@ -164,6 +164,12 @@ func TestKnownInvalidManifestsFailSchema(t *testing.T) {
 			name: "ui unknown key",
 			yaml: "name: x\ncommands:\n  list:\n    method: GET\n    path: /list\n    ui:\n      bogus: true\n",
 		},
+		// annotations must be an object — a scalar is a type mismatch the schema
+		// catches (the block is free-form INSIDE, but it is still typed object).
+		{
+			name: "annotations scalar (not an object)",
+			yaml: "name: x\nannotations: nope\n",
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -322,6 +328,21 @@ func TestSchemaAndValidateAgree(t *testing.T) {
 			name:      "ui.view bad enum (both reject)",
 			yaml:      "name: x\ncommands:\n  list:\n    method: GET\n    path: /list\n    ui:\n      view: chart\n",
 			wantValid: false,
+		},
+		// annotations: the reserved free-form escape hatch (both accept). Mixed
+		// value types (string, nested map, list) must pass since the block is
+		// additionalProperties: true, and Go's captured map field is never read.
+		{
+			name: "top-level annotations mixed value types (both accept)",
+			yaml: "name: x\nannotations:\n  owner: platform-team\n  meta:\n    tier: gold\n    critical: true\n" +
+				"  tags: [a, b, c]\ncommands:\n  list:\n    method: GET\n    path: /list\n",
+			wantValid: true,
+		},
+		{
+			name: "command-level annotations (both accept)",
+			yaml: "name: x\ncommands:\n  list:\n    method: GET\n    path: /list\n" +
+				"    annotations:\n      owner: alice\n      pager: true\n",
+			wantValid: true,
 		},
 	}
 	for _, tc := range cases {
