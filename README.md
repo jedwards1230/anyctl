@@ -213,7 +213,8 @@ Triage `Permission denied (publickey)`:
 - Confirm the (deploy) key is authorized for *that* repo on the forge.
 
 HTTPS with a token (PAT) is **not yet supported** — tracked in
-[TRACKING-ISSUE-URL](TRACKING-ISSUE-URL). Use SSH for private catalogs today.
+[#63](https://github.com/jedwards1230/anyctl/issues/63). Use SSH for private
+catalogs today.
 
 ## Secrets
 
