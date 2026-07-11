@@ -20,7 +20,7 @@ import (
 // <config-dir>/catalogs/<name>/. It only makes more manifests AVAILABLE — every
 // manifest is validated on add to be portable (no base_url, no secret ref), so an
 // installed catalog is inert until profile.yaml binds it. Precedence at load is
-// local services/ > installed catalogs > the embedded catalog. There is no
+// local services/ > installed catalogs (there is no built-in floor). There is no
 // execution-time gating here: anyctl stays an unopinionated executor.
 
 // gitURLSchemes are the transport schemes permitted for a git source URL. ext/fd
@@ -116,9 +116,9 @@ func (r *runner) cmdCatalogRemove() *cobra.Command {
 		Use:   "remove <name>",
 		Short: "uninstall a named catalog",
 		Long: "Uninstall a named catalog (delete <config-dir>/catalogs/<name>/). Its\n" +
-			"services disappear from the next load, re-exposing the embedded manifest of\n" +
-			"the same name if there is one. Removing a catalog that is not installed is an\n" +
-			"error.",
+			"services disappear from the next load (unless another installed catalog or a\n" +
+			"local services/ file still defines the name). Removing a catalog that is not\n" +
+			"installed is an error.",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			r.curCommand = "catalog"

@@ -81,8 +81,9 @@ func (r *runner) cmdInit() *cobra.Command {
 			"base_url and secret refs go in profile.yaml (shown in a trailing comment).\n" +
 			"It prints to stdout by default; use -o to write it to a file. The output\n" +
 			fmt.Sprintf("validates cleanly (`%s lint <file>`).\n\n", brand.Name) +
-			fmt.Sprintf("To edit an *existing* embedded service, use `%s catalog edit <name>`\n", brand.Name) +
-			"(it seeds the complete manifest, not a blank starter).",
+			"To fork a service from an installed catalog, copy its manifest out of\n" +
+			"<config-dir>/catalogs/<catalog>/<name>.yaml into services/<name>.yaml, where a\n" +
+			"local file overrides the catalog's by name.",
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			r.curCommand = "init"

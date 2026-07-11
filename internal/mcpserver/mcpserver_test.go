@@ -935,7 +935,9 @@ func installPortableCatalog(t *testing.T, configDir, cat string, services ...str
 // mechanism existed (selector == svc.Name when there is no qualification).
 func TestCollidingCatalogToolNamesSanitized(t *testing.T) {
 	dir := t.TempDir()
-	installPortableCatalog(t, dir, "cat1", "foo")
+	// cat1 also defines a non-colliding sole-definer service ("solo") so we can
+	// assert its tool name is byte-identical to the bare service name.
+	installPortableCatalog(t, dir, "cat1", "foo", "solo")
 	installPortableCatalog(t, dir, "cat2", "foo")
 
 	loaded, err := manifest.Load(dir)
@@ -958,9 +960,10 @@ func TestCollidingCatalogToolNamesSanitized(t *testing.T) {
 	if names["foo_status"] {
 		t.Error("the ambiguous bare 'foo' must not produce its own MCP tool")
 	}
-	// A non-colliding embedded service's tool name is unchanged.
-	if !names["radarr_list"] {
-		t.Errorf("expected unchanged tool name radarr_list for a non-colliding service; got %v", names)
+	// A non-colliding sole-definer service's tool name is unchanged (the bare
+	// selector == svc.Name, so no "<catalog>-" prefix).
+	if !names["solo_status"] {
+		t.Errorf("expected unchanged tool name solo_status for a non-colliding service; got %v", names)
 	}
 }
 

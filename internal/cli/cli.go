@@ -165,7 +165,14 @@ func (r *runner) newSvcCmd(loaded *manifest.Loaded, loadErr error) *cobra.Comman
 				return loadErr
 			}
 			if len(args) > 0 {
-				return agentsafety.NewUsageError(fmt.Sprintf("unknown service %q", args[0]))
+				// No embedded floor: distinguish "nothing configured at all"
+				// (actionable install/add hint) from "that name isn't one of the
+				// configured services". Both are the *ConfigError/exit-2 class
+				// (NewUsageError → ExitUsage), matching this file's convention.
+				if loaded == nil || len(loaded.Services) == 0 {
+					return agentsafety.NewUsageError(noServicesHint(activeConfigDir(loaded)))
+				}
+				return agentsafety.NewUsageError(fmt.Sprintf("unknown service %q (run '%s list' to see configured services)", args[0], brand.Name))
 			}
 			return r.listServices(loaded, loadErr)
 		},

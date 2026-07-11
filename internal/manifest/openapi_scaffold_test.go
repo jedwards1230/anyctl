@@ -88,8 +88,8 @@ func TestGenerateManifestFromSpecAPIKeyHeader(t *testing.T) {
 		t.Errorf("expected the info.title in the description:\n%s", out)
 	}
 
-	// Full round-trip: write it where `catalog edit`-style local services live and
-	// load it through the real loader.
+	// Full round-trip: write it where local services live and load it through the
+	// real loader.
 	dir := t.TempDir()
 	path := filepath.Join(dir, "demo.yaml")
 	if err := os.WriteFile(path, out, 0o600); err != nil {

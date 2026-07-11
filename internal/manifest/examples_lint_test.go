@@ -3,9 +3,8 @@ package manifest
 import (
 	"os"
 	"path/filepath"
+	"sort"
 	"testing"
-
-	"github.com/jedwards1230/anyctl/catalog"
 )
 
 // examplesDir resolves the repo's full example config dir relative to this test
@@ -23,10 +22,10 @@ func examplesDir(t *testing.T) string {
 }
 
 // TestExamplesLoadAndValidate turns the shipped examples/full config into a living
-// contract. examples/full carries NO services/ dir — it is profile-only — so every
-// service comes from the embedded catalog and examples/full/profile.yaml binds it.
-// This proves a consumer can drop their vendored manifests entirely: the catalog
-// plus a profile is a complete, working config.
+// contract. examples/full is the post-floor reference: an INSTALLED catalog under
+// catalogs/reference/ (the two generic manifests) plus a profile.yaml that binds
+// both services. This proves the honest model — anyctl ships no built-in services,
+// so an installed catalog + a profile is what makes a complete, working config.
 //
 // It performs no network calls and resolves no secrets — Load is purely
 // structural (YAML parse + Validate + ValidateConfig + offline spec inference).
@@ -48,31 +47,38 @@ func TestExamplesLoadAndValidate(t *testing.T) {
 		t.Fatalf("ValidateConfig(examples/full/config.yaml): %v", err)
 	}
 
-	// examples/ ships no local services, so every service is the embedded catalog.
-	want := catalog.Names()
-	if len(loaded.Services) != len(want) {
-		t.Fatalf("loaded %d services, want %d embedded (%v)", len(loaded.Services), len(want), want)
+	// examples/full installs the generic reference catalog and binds it in
+	// profile.yaml — exactly the two services below, each from catalog:reference.
+	want := []string{"inventory", "uptime"}
+	got := loaded.CanonicalNames()
+	sort.Strings(got)
+	if len(got) != len(want) {
+		t.Fatalf("CanonicalNames() = %v, want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("CanonicalNames() = %v, want %v", got, want)
+		}
 	}
 
 	for _, name := range want {
 		svc, ok := loaded.Services[name]
 		if !ok {
-			t.Errorf("embedded service %q did not register", name)
+			t.Errorf("service %q did not register", name)
 			continue
 		}
-		if got := loaded.OriginOf(name); got != OriginEmbedded {
-			t.Errorf("%s origin = %q, want embedded (examples ships no local overrides)", name, got)
+		if origin := loaded.OriginOf(name); origin != catalogOrigin("reference") {
+			t.Errorf("%s origin = %q, want %q", name, origin, catalogOrigin("reference"))
 		}
 		t.Run(name, func(t *testing.T) {
 			// Structural Validate already ran on the RAW manifest during Load; it
 			// cannot be re-run on `svc` here because the loaded service has been
 			// profile-merged and now carries base_url/refs, which the structural
 			// "no in-manifest binding" rule forbids. Load applies
-			// examples/full/profile.yaml, so the embedded catalog must also be COMPLETE
-			// through it: every catalog manifest is portable (no base_url or secret
-			// ref) and bound to its endpoint and credentials via
-			// examples/full/profile.yaml. This proves the catalog+profile are a working
-			// end-to-end config.
+			// examples/full/profile.yaml, so the installed catalog must be COMPLETE
+			// through it: each portable manifest (no base_url or secret ref) is
+			// bound to its endpoint and credentials via the profile. This proves the
+			// installed-catalog + profile are a working end-to-end config.
 			if err := ValidateComplete(svc); err != nil {
 				t.Fatalf("ValidateComplete(%s): %v", name, err)
 			}

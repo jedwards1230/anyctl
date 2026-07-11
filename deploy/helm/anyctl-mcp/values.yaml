@@ -56,15 +56,18 @@ mcp:
   allowUnauthenticated: false
 
 # Files rendered into ANYCTL_CONFIG_DIR (/config) via a ConfigMap.
-# profileYaml is the per-environment binding (base_url + op:// secret refs);
-# service manifests themselves are embedded in the anyctl binary.
+# profileYaml is the per-environment binding (base_url + op:// secret refs).
+# The anyctl binary ships NO built-in services, so config.servicesYaml (or an
+# installed catalog) is REQUIRED for the pod to expose any tools — an empty
+# services config means the MCP server exposes ZERO tools.
 config:
   configYaml: ""
   profileYaml: ""
-  # servicesYaml: optional map of service-name → manifest YAML string.
-  # Each entry is rendered into a separate ConfigMap and mounted at
-  # <config-dir>/services/<name>.yaml, overriding or supplementing the
-  # embedded catalog — WITHOUT rebuilding the image.
+  # servicesYaml: map of service-name → manifest YAML string. Each entry is
+  # rendered into a separate ConfigMap and mounted at
+  # <config-dir>/services/<name>.yaml — WITHOUT rebuilding the image. This (or an
+  # installed catalog under <config-dir>/catalogs/) is what gives the server its
+  # tools; empty ⇒ no tools.
   # IMPORTANT: provide UNINDENTED YAML strings — the template indents
   # the content for the ConfigMap; pre-indented input over-indents.
   # Example:

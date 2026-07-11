@@ -34,7 +34,8 @@ func installDirCatalog(t *testing.T, configDir, catalog string, manifests map[st
 }
 
 // TestInstallCatalogAndLoadProvenance: an installed-catalog service shows up in
-// Load with origin catalog:<name>, shadowing the embedded floor.
+// Load with origin catalog:<name> and its IsCatalog() helper reports true. With
+// no embedded floor, a name the catalog does not define resolves to nothing.
 func TestInstallCatalogAndLoadProvenance(t *testing.T) {
 	dir := t.TempDir()
 	installDirCatalog(t, dir, "mycat", map[string]string{
@@ -54,28 +55,9 @@ func TestInstallCatalogAndLoadProvenance(t *testing.T) {
 	if got := loaded.OriginOf("widget"); !got.IsCatalog() {
 		t.Errorf("origin helpers: IsCatalog=%v, want true", got.IsCatalog())
 	}
-	// The embedded floor still loads for everything the catalog didn't touch.
-	if got := loaded.OriginOf("radarr"); got != OriginEmbedded {
-		t.Errorf("radarr origin = %q, want embedded (floor intact)", got)
-	}
-}
-
-// TestInstalledCatalogShadowsEmbedded: a catalog manifest of the same name as an
-// embedded service shadows the embedded one (origin becomes catalog:<name>).
-func TestInstalledCatalogShadowsEmbedded(t *testing.T) {
-	dir := t.TempDir()
-	installDirCatalog(t, dir, "fork", map[string]string{
-		"radarr.yaml": portableManifest("radarr"),
-	})
-	loaded, err := Load(dir)
-	if err != nil {
-		t.Fatalf("Load: %v", err)
-	}
-	if got := loaded.OriginOf("radarr"); got != catalogOrigin("fork") {
-		t.Errorf("radarr origin = %q, want %q (catalog shadows embedded)", got, catalogOrigin("fork"))
-	}
-	if loaded.Services["radarr"].Description != "test radarr" {
-		t.Errorf("radarr description = %q, want the catalog's manifest body", loaded.Services["radarr"].Description)
+	// No embedded floor: a name the catalog didn't define resolves to nothing.
+	if _, ok := loaded.Services["radarr"]; ok {
+		t.Error("radarr must not resolve (no embedded floor)")
 	}
 }
 

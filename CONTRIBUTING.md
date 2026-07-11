@@ -34,10 +34,10 @@ go build ./...
 ANYCTL_CONFIG_DIR="$PWD/examples/quickstart" ./anyctl lint
 ANYCTL_CONFIG_DIR="$PWD/examples/quickstart" ./anyctl --dry-run svc httpbin get
 
-# Try the full profile-only config binding all 15 embedded services
-ANYCTL_CONFIG_DIR="$PWD/examples/full" ./anyctl list
-ANYCTL_CONFIG_DIR="$PWD/examples/full" ./anyctl lint
-ANYCTL_CONFIG_DIR="$PWD/examples/full" ./anyctl --dry-run svc radarr list
+# Try the full config: an installed reference catalog + a profile binding it
+ANYCTL_CONFIG_DIR="$PWD/examples/full" ./anyctl list          # 2 services, origin catalog:reference
+ANYCTL_CONFIG_DIR="$PWD/examples/full" ./anyctl lint --strict
+ANYCTL_CONFIG_DIR="$PWD/examples/full" ./anyctl --dry-run svc uptime status
 
 # Validate the reference catalog (read-only, no config dir needed)
 ./anyctl catalog validate examples/catalog
@@ -45,33 +45,30 @@ ANYCTL_CONFIG_DIR="$PWD/examples/full" ./anyctl --dry-run svc radarr list
 
 CI runs `gofmt`, `go vet`, `golangci-lint`, `go mod tidy` check, `go test -race` (with a 75% coverage floor), and `go build`. All checks must pass before a PR can merge.
 
-## Changing an embedded manifest
+## Adding or authoring a service manifest
 
-The embedded catalog lives in `catalog/`. Editing a manifest is **rebuild-free** — the authoring loop assumes one terminal session where `ANYCTL_CONFIG_DIR` stays exported throughout:
+anyctl ships no built-in manifests — a service is a local `services/<name>.yaml`
+or a manifest inside an installed catalog. Editing YAML is **rebuild-free**:
 
-1. **Seed a local override**:
+1. **Scaffold a starter manifest** into a config dir's `services/`:
    ```bash
    export ANYCTL_CONFIG_DIR=$(mktemp -d)
-   anyctl catalog edit <name>          # copies the full manifest into $ANYCTL_CONFIG_DIR/services/<name>.yaml
+   anyctl init <name> --auth bearer -o "$ANYCTL_CONFIG_DIR/services/<name>.yaml"
    ```
-2. **Edit and test**:
+2. **Edit and test** (bind its `base_url`/secrets in `$ANYCTL_CONFIG_DIR/profile.yaml`):
    ```bash
    $EDITOR "$ANYCTL_CONFIG_DIR/services/<name>.yaml"
-   anyctl svc <name> <command> --dry-run   # preview the resolved request without sending
+   anyctl lint --strict <name>              # structural + completeness check
+   anyctl svc <name> <command> --dry-run    # preview the resolved request without sending
    ```
-3. **Promote back into the catalog**:
+3. **Publish a catalog** (optional): a directory or git repo of *portable*
+   manifests is an installable catalog. Validate it against anyctl's contract
+   before anyone installs it:
    ```bash
-   anyctl catalog vendor <name> --catalog-dir catalog   # run from the repo root
+   anyctl catalog validate ./my-manifests   # read-only schema + portability check
    ```
-4. **Validate**:
-   ```bash
-   anyctl lint catalog/<name>.yaml
-   ```
-5. **Commit and open a PR**:
-   ```bash
-   git add catalog/<name>.yaml
-   git commit -m "fix(catalog): update <name> manifest"
-   ```
+   The reference catalog under [`examples/catalog/`](examples/catalog/) is the
+   template a third-party author copies.
 
 ## Documentation
 

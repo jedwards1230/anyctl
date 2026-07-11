@@ -1,76 +1,21 @@
-# anyctl per-user profile. Binds the embedded catalog manifests to THIS machine's
-# endpoints and credentials. The catalog ships in portable form (no base_url, no
-# secret ref); the bindings below complete every service it provides — note there
-# is NO services/ dir here, so this profile alone makes examples/ a working config.
+# anyctl per-user profile. Binds the INSTALLED reference catalog (under
+# catalogs/reference/) to THIS machine's endpoints. A catalog ships in portable
+# form (no base_url, no secret ref); the bindings below complete every service it
+# provides. anyctl has no built-in services, so the installed catalog + this
+# profile together make examples/full a working config.
 # Precedence at resolution time: env override > profile > manifest.
 #
-# These are placeholders — replace the example.com hosts, 192.0.2.x addresses,
-# and op://vault/... refs with your own before use. `anyctl catalog list` shows
-# every embedded service; `anyctl catalog show <name>` dumps one to fork locally.
+# These are placeholders — replace the example.com hosts with your own before use.
+# `anyctl list` shows every configured service and its origin (catalog:reference).
+# The reference manifests live under catalogs/reference/ — the same two shipped in
+# examples/catalog/ (installable with `anyctl catalog add examples/catalog`).
 version: 1
 services:
-  radarr:
-    base_url: https://movies.example.com
-    secrets:
-      api_key: { ref: "op://vault/Radarr/api_key" }
-  sonarr:
-    base_url: https://tv.example.com
-    secrets:
-      api_key: { ref: "op://vault/Sonarr/api_key" }
-  bazarr:
-    base_url: https://bazarr.example.com
-    secrets:
-      api_key: { ref: "op://vault/Bazarr/api_key" }
-  prowlarr:
-    base_url: https://prowlarr.example.com
-    secrets:
-      api_key: { ref: "op://vault/Prowlarr/api_key" }
-  tdarr:
-    base_url: https://tdarr.example.com
-  n8n:
-    base_url: https://n8n.example.com/api/v1
-    secrets:
-      api_key: { ref: "op://vault/n8n API/credential" }
-  authentik:
-    base_url: https://auth.example.com/api/v3
-    secrets:
-      token: { ref: "op://vault/Authentik API/token" }
-  harbor:
-    base_url: https://registry.example.com/api/v2.0
-    secrets:
-      username: { ref: "op://vault/Harbor/username" }
-      password: { ref: "op://vault/Harbor/password" }
-  abs:
-    base_url: https://audiobooks.example.com
-    secrets:
-      api_token: { ref: "op://vault/Audiobookshelf/api_token" }
-  forgejo:
-    base_url: https://git.example.com/api/v1
-    secrets:
-      token: { ref: "op://vault/Forgejo/token" }
-  cloudflare:
-    base_url: https://api.cloudflare.com/client/v4
-    secrets:
-      token: { ref: "op://vault/Cloudflare API Token/credential" }
-  contextforge:
-    base_url: https://mcp-gateway.example.com
-    secrets:
-      token: { ref: "op://vault/ContextForge/credential" }
-  ts:
-    base_url: https://api.tailscale.com
-    secrets:
-      client_id: { ref: "op://vault/Tailscale API/client_id" }
-      client_secret: { ref: "op://vault/Tailscale API/client_secret" }
-  truenas:
-    base_url: wss://192.0.2.36/api/current
-    tls_insecure: true
-    secrets:
-      api_key: { ref: "op://vault/TrueNAS/api_key" }
-  sunshine:
-    base_url: https://192.0.2.10:47990/api
-    tls_insecure: true
-    endpoints:
-      serverinfo: { base_url: http://192.0.2.10:47989 }
-    secrets:
-      username: { ref: "op://vault/Sunshine/username" }
-      password: { ref: "op://vault/Sunshine/password" }
+  uptime:
+    base_url: https://status.example.com
+  inventory:
+    base_url: https://inventory.example.com
+    # api_key binds via the INVENTORY_API_KEY env override (declared in the
+    # manifest), so no ref is required here. To use 1Password instead, add:
+    #   secrets:
+    #     api_key: { ref: "op://vault/Inventory/api_key" }

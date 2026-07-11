@@ -35,7 +35,7 @@ helm install anyctl-mcp oci://ghcr.io/jedwards1230/charts/anyctl-mcp \
 | `mcp.allowUnauthenticated` | `false` | `--allow-unauthenticated`: explicit opt-out of the bearer-token requirement (use only when NetworkPolicy/an upstream gateway is the sole intended boundary) |
 | `config.profileYaml` | `""` | per-env binding (base_url + op:// refs) → `/config/profile.yaml` |
 | `config.configYaml` | `""` | optional `/config/config.yaml` |
-| `config.servicesYaml` | `{}` | map of service-name → **unindented** manifest YAML; each entry mounts as `/config/services/<name>.yaml`, overriding the embedded catalog without a rebuild. Values must be unindented — the template indents them for the ConfigMap. Example: `servicesYaml: {radarr: "name: radarr\n..."}` |
+| `config.servicesYaml` | `{}` | map of service-name → **unindented** manifest YAML; each entry mounts as `/config/services/<name>.yaml`. REQUIRED for the pod to expose any tools (anyctl ships no built-in services; empty ⇒ zero tools) unless an installed catalog supplies them. Values must be unindented — the template indents them for the ConfigMap. Example: `servicesYaml: {radarr: "name: radarr\n..."}` |
 | `auth.existingSecret.name` | `""` | secret holding the op service-account token |
 | `auth.onePasswordItem.itemPath` | `""` | render a OnePasswordItem CRD instead (1Password operator) |
 | `ingress.enabled` | `false` | expose via Ingress |
@@ -44,8 +44,9 @@ helm install anyctl-mcp oci://ghcr.io/jedwards1230/charts/anyctl-mcp \
 | `networkPolicy.egress.enabled` | `false` | also restrict egress (adds `Egress` to `policyTypes`) |
 | `networkPolicy.egress.rules` | `[]` | raw egress rule objects (empty while enabled = default-deny egress) |
 
-Service manifests are embedded in the anyctl binary — only `profile.yaml`
-(and optional `config.yaml`) need supplying.
+anyctl ships no built-in services, so a pod exposes tools only for the manifests
+you supply via `config.servicesYaml` (or an installed catalog); `profile.yaml`
+(and optional `config.yaml`) then bind them.
 
 ## Access boundaries
 

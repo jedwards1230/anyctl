@@ -23,9 +23,9 @@ func TestRunVersion(t *testing.T) {
 	}
 }
 
-// TestRunListEmptyConfig confirms an empty config dir is not an error and still
-// lists the embedded catalog: with no local services/ dir, every built-in
-// service is available and marked `embedded`.
+// TestRunListEmptyConfig confirms an empty config dir is not an error: anyctl
+// ships no built-in services, so `list` exits 0 and prints the actionable hint
+// (install a catalog or add a local manifest).
 func TestRunListEmptyConfig(t *testing.T) {
 	t.Setenv("ANYCTL_CONFIG_DIR", t.TempDir())
 	var out, errb bytes.Buffer
@@ -33,8 +33,8 @@ func TestRunListEmptyConfig(t *testing.T) {
 		t.Fatalf("exit = %d, want 0 (stderr: %s)", code, errb.String())
 	}
 	got := out.String()
-	if !strings.Contains(got, "radarr") || !strings.Contains(got, "embedded") {
-		t.Errorf("list stdout = %q, want the embedded catalog (radarr + embedded marker)", got)
+	if !strings.Contains(got, "No services configured") || !strings.Contains(got, "catalog add") {
+		t.Errorf("list stdout = %q, want the actionable no-services hint", got)
 	}
 }
 
