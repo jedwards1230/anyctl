@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -40,16 +41,20 @@ func (r *runner) cmdCatalogAdd() *cobra.Command {
 	var force, openapi bool
 	cmd := &cobra.Command{
 		Use:   "add <source> [--name <name>] [--ref <ref>] [--path <subdir>] [--force] [--openapi]",
-		Short: "install a named catalog of portable manifests from a dir, git URL, or OpenAPI document",
+		Short: "Install a named catalog from a dir, git URL, or OpenAPI document",
 		Long: "Install a named catalog of portable manifests under\n" +
 			"<config-dir>/catalogs/<name>/. <source> is either an existing local directory,\n" +
 			"a git URL (https/http/ssh/git/file:// or scp-style user@host:path), or — with\n" +
 			"--openapi — an OpenAPI 3.x document (an http(s):// URL or a local file).\n\n" +
-			"Every top-level *.yaml/*.yml in a dir/git source is validated to be a PORTABLE\n" +
-			"manifest — no base_url, no secret ref — before anything is written; one bad\n" +
-			"manifest rejects the whole add. A git source is pinned to the resolved commit\n" +
-			"SHA, so an installed catalog is a reproducible, inert bundle until profile.yaml\n" +
-			"binds it.\n\n" +
+			"A dir/git source MUST carry an " + manifest.CatalogIndexFile + " index file at its\n" +
+			"root (the --path subdir for a subdir install). The index names and describes\n" +
+			"the catalog and, optionally, curates its member manifests. Every member is\n" +
+			"validated to be a PORTABLE manifest — no base_url, no secret ref — before\n" +
+			"anything is written; one bad manifest rejects the whole add. A git source is\n" +
+			"pinned to the resolved commit SHA, so an installed catalog is a reproducible,\n" +
+			"inert bundle until profile.yaml binds it.\n\n" +
+			"With no `manifests:` list in the index, every top-level *.yaml/*.yml (except\n" +
+			"the index) is a member; with one, exactly those files install, in that order.\n\n" +
 			"--path installs from a subdirectory of a git repo instead of its root — for a\n" +
 			"repo that keeps its catalog under, say, anyctl-catalog/. The subdir is recorded\n" +
 			"so `catalog update` re-fetches from the same place. It must be a relative path\n" +
@@ -59,13 +64,12 @@ func (r *runner) cmdCatalogAdd() *cobra.Command {
 			"auth: block on a best-effort basis (anything that can't be faithfully mapped\n" +
 			"falls back to `auth: { strategy: none }` with a comment explaining what to wire\n" +
 			"by hand). The spec is parsed once at add-time; it is NOT vendored and no spec:\n" +
-			"reference is kept — the installed manifest stands alone. --ref and --path do not\n" +
-			"apply to an --openapi source (they are git-only).\n\n" +
-			"The catalog name defaults to the dir/repo basename (a trailing .git is\n" +
-			"stripped) — or, with --openapi, the document's info.title, slugified. Pass\n" +
-			"--name to override, or if the inferred name is not a valid single path segment.\n" +
-			"--ref selects a git branch/tag/commit. --force replaces an already-installed\n" +
-			"catalog of the same name.",
+			"reference is kept — the installed manifest stands alone. An --openapi source\n" +
+			"needs no index (anyctl synthesizes the manifest); --ref and --path do not apply\n" +
+			"to it (they are git-only).\n\n" +
+			"The catalog name is --name, else the index `name` (else, with --openapi, the\n" +
+			"document's info.title, slugified). --ref selects a git branch/tag/commit.\n" +
+			"--force replaces an already-installed catalog of the same name.",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			r.curCommand = "catalog"
@@ -81,7 +85,7 @@ func (r *runner) cmdCatalogAdd() *cobra.Command {
 			return r.catalogAdd(args[0], name, ref, path, force)
 		},
 	}
-	cmd.Flags().StringVar(&name, "name", "", "catalog name (default: dir/repo basename, or the OpenAPI document's title with --openapi)")
+	cmd.Flags().StringVar(&name, "name", "", "catalog name (default: the index `name`, or the OpenAPI document's title with --openapi)")
 	cmd.Flags().StringVar(&ref, "ref", "", "git branch, tag, or commit to check out (git sources only)")
 	cmd.Flags().StringVar(&path, "path", "", "subdirectory within a git repo to install manifests from (git sources only)")
 	cmd.Flags().BoolVar(&force, "force", false, "replace an already-installed catalog of the same name")
@@ -91,21 +95,20 @@ func (r *runner) cmdCatalogAdd() *cobra.Command {
 
 func (r *runner) cmdCatalogUpdate() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "update [name]",
-		Short: "re-fetch an installed catalog from its recorded source (all if none named)",
-		Long: "Re-fetch one installed catalog (or every installed catalog when no name is\n" +
-			"given) from its recorded source, re-validating each manifest as portable\n" +
-			"(same fail-closed gate as `catalog add`). A git source is re-cloned at its\n" +
-			"recorded ref and re-pinned to the new commit SHA. Per-catalog outcomes are\n" +
-			"reported to stderr; a failure on one catalog does not abort the others.",
-		Args: cobra.MaximumNArgs(1),
+		Use:   "update [name...]",
+		Short: "Re-fetch installed catalogs from their recorded source (all if none named)",
+		Long: "Re-fetch one or more installed catalogs (or every installed catalog when no\n" +
+			"name is given) from their recorded source, re-reading each source's\n" +
+			manifest.CatalogIndexFile + " index and re-validating every member manifest as\n" +
+			"portable (the same fail-closed gate as `catalog add`). A git source is\n" +
+			"re-cloned at its recorded ref and re-pinned to the new commit SHA; the index's\n" +
+			"description/version/homepage and member selection are refreshed too.\n" +
+			"Per-catalog outcomes are reported to stderr; a failure on one catalog does not\n" +
+			"abort the others.",
+		Args: cobra.ArbitraryArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			r.curCommand = "catalog"
-			name := ""
-			if len(args) == 1 {
-				name = args[0]
-			}
-			return r.catalogUpdate(name)
+			return r.catalogUpdate(args)
 		},
 	}
 	return cmd
@@ -114,7 +117,7 @@ func (r *runner) cmdCatalogUpdate() *cobra.Command {
 func (r *runner) cmdCatalogRemove() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "remove <name>",
-		Short: "uninstall a named catalog",
+		Short: "Uninstall a named catalog",
 		Long: "Uninstall a named catalog (delete <config-dir>/catalogs/<name>/). Its\n" +
 			"services disappear from the next load (unless another installed catalog or a\n" +
 			"local services/ file still defines the name). Removing a catalog that is not\n" +
@@ -128,33 +131,41 @@ func (r *runner) cmdCatalogRemove() *cobra.Command {
 	return cmd
 }
 
-func (r *runner) cmdCatalogInstalled() *cobra.Command {
+func (r *runner) cmdCatalogList() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "installed",
-		Short: "list installed named catalogs (name, type, commit/ref, source)",
-		Args:  cobra.NoArgs,
+		Use:   "list",
+		Short: "List installed catalogs (name, version, services, pinned commit, source)",
+		Long: "List every installed catalog, one per line: its name, index version (`-`\n" +
+			"when the index carries none), the number of service manifests it provides,\n" +
+			"the pinned git commit (short SHA, else the requested ref, else `-` for a dir\n" +
+			"source), and its source. Data goes to stdout. Use `catalog info <name>` for\n" +
+			"one catalog's full detail.",
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			r.curCommand = "catalog"
-			return r.catalogInstalled()
+			return r.catalogList()
 		},
 	}
 	return cmd
 }
 
-// catalogAdd installs a catalog from a dir or git source. Fetch → validate every
-// manifest (fail-closed) → atomic install. Nothing is written unless every
-// manifest is a valid portable manifest and no service name collides across
-// installed catalogs.
+// catalogAdd installs a catalog from a dir or git source. Fetch → read the
+// required anyctl-catalog.yaml index → validate every member manifest
+// (fail-closed) → atomic install. Nothing is written unless the index is present
+// and valid, every selected manifest is a valid portable manifest, and no
+// service name collides within the source. The name is --name, else the index's
+// `name` (basename inference is gone — the index is the identity record).
 func (r *runner) catalogAdd(source, name, ref, path string, force bool) error {
 	srcType, err := classifySource(source)
 	if err != nil {
 		return err
 	}
-	if name == "" {
-		name = inferCatalogName(source, srcType)
-	}
-	if err := manifest.ValidateName(name); err != nil {
-		return agentsafety.NewUsageError(fmt.Sprintf("inferred catalog name %q is invalid; pass --name with a single path segment (^[a-z0-9][a-z0-9_-]*$)", name))
+	// A supplied --name must be a valid single path segment; an index-supplied
+	// name is already validated by ParseCatalogIndex.
+	if name != "" {
+		if err := manifest.ValidateName(name); err != nil {
+			return agentsafety.NewUsageError(err.Error())
+		}
 	}
 	if ref != "" && srcType != "git" {
 		return agentsafety.NewUsageError("--ref only applies to a git source")
@@ -170,7 +181,7 @@ func (r *runner) catalogAdd(source, name, ref, path string, force bool) error {
 	defer func() { _ = os.RemoveAll(tmp) }()
 
 	now := time.Now().UTC()
-	meta := manifest.CatalogMeta{Name: name, Source: source, Type: srcType, AddedAt: now, UpdatedAt: now}
+	meta := manifest.CatalogMeta{Source: source, Type: srcType, AddedAt: now, UpdatedAt: now}
 	fetchDir := source
 	label := source
 	if srcType == "git" {
@@ -188,7 +199,20 @@ func (r *runner) catalogAdd(source, name, ref, path string, force bool) error {
 		label = sourceLabel(source, path)
 	}
 
-	files, err := r.collectAndValidate(fetchDir, label)
+	idx, err := manifest.ReadCatalogIndex(fetchDir)
+	if err != nil {
+		return r.catalogIndexError(label, err)
+	}
+	// Name precedence: --name flag wins over the index name.
+	if name == "" {
+		name = idx.Name
+	}
+	meta.Name = name
+	meta.Description = idx.Description
+	meta.Version = idx.Version
+	meta.Homepage = idx.Homepage
+
+	files, err := r.collectAndValidate(fetchDir, label, idx.Manifests)
 	if err != nil {
 		return err
 	}
@@ -199,16 +223,35 @@ func (r *runner) catalogAdd(source, name, ref, path string, force bool) error {
 	return nil
 }
 
-// catalogUpdate re-fetches one or all installed catalogs. A per-catalog failure
-// is reported and the first such error is returned, but it never aborts the rest.
-func (r *runner) catalogUpdate(name string) error {
+// catalogIndexError renders a missing-index failure as an actionable usage error
+// naming the file and printing a 3-line starter snippet; any other index error
+// (parse/schema/field, already a *ConfigError) passes through unchanged.
+func (r *runner) catalogIndexError(source string, err error) error {
+	if errors.Is(err, manifest.ErrCatalogIndexMissing) {
+		return agentsafety.NewUsageError(fmt.Sprintf(
+			"%s has no %s at its root — a catalog source must carry an index file. Add one with:\n\n"+
+				"  name: my-catalog                # ^[a-z0-9][a-z0-9_-]*$; the default install name\n"+
+				"  description: what this catalog provides\n"+
+				"  # optional: version, homepage, and a curated `manifests:` list",
+			source, manifest.CatalogIndexFile))
+	}
+	return err
+}
+
+// catalogUpdate re-fetches the named catalogs (or every installed catalog when
+// names is empty). Each named catalog's name is validated up front. A per-catalog
+// failure is reported and the first such error is returned, but it never aborts
+// the rest.
+func (r *runner) catalogUpdate(names []string) error {
 	configDir := r.configDir()
 	var targets []string
-	if name != "" {
-		if err := manifest.ValidateName(name); err != nil {
-			return agentsafety.NewUsageError(err.Error())
+	if len(names) > 0 {
+		for _, name := range names {
+			if err := manifest.ValidateName(name); err != nil {
+				return agentsafety.NewUsageError(err.Error())
+			}
 		}
-		targets = []string{name}
+		targets = names
 	} else {
 		cats, err := manifest.InstalledCatalogs(configDir)
 		if err != nil {
@@ -281,7 +324,20 @@ func (r *runner) updateOne(configDir, name string) error {
 		return fmt.Errorf("catalog %q has unknown source type %q", name, meta.Type)
 	}
 
-	files, err := r.collectAndValidate(fetchDir, label)
+	// Re-read the source's index on every update: refresh the folded-in metadata
+	// (description/version/homepage) and the member selection so a curated
+	// `manifests:` list or a renamed description in the source is picked up. The
+	// install NAME stays fixed (the install dir is the source of truth); only the
+	// index's other fields flow through.
+	idx, err := manifest.ReadCatalogIndex(fetchDir)
+	if err != nil {
+		return r.catalogIndexError(label, err)
+	}
+	meta.Description = idx.Description
+	meta.Version = idx.Version
+	meta.Homepage = idx.Homepage
+
+	files, err := r.collectAndValidate(fetchDir, label, idx.Manifests)
 	if err != nil {
 		return err
 	}
@@ -329,40 +385,50 @@ func (r *runner) catalogRemove(name string) error {
 	return nil
 }
 
-func (r *runner) catalogInstalled() error {
-	cats, err := manifest.InstalledCatalogs(r.configDir())
+// catalogList prints one row per installed catalog: NAME VERSION SERVICES PINNED
+// SOURCE. VERSION is the index version (`-` if none); SERVICES is the count of
+// service manifests in the installed dir; PINNED is the short commit SHA, else
+// the requested ref, else `-`; SOURCE is where it came from. Data → stdout.
+func (r *runner) catalogList() error {
+	configDir := r.configDir()
+	cats, err := manifest.InstalledCatalogs(configDir)
 	if err != nil {
 		return err
 	}
 	for _, c := range cats {
-		ver := "-"
-		if c.Commit != "" {
-			ver = shortSHA(c.Commit)
-		} else if c.Ref != "" {
-			ver = c.Ref
+		ver := c.Version
+		if ver == "" {
+			ver = "-"
 		}
-		typ := c.Type
-		if typ == "" {
-			typ = "-"
+		pinned := "-"
+		if c.Commit != "" {
+			pinned = shortSHA(c.Commit)
+		} else if c.Ref != "" {
+			pinned = c.Ref
 		}
 		src := c.Source
 		if src == "" {
 			src = "-"
 		}
-		_, _ = fmt.Fprintf(r.stdout, "%-16s %-5s %-12s %s\n", c.Name, typ, ver, src)
+		services := 0
+		if names, err := manifest.CatalogServiceNames(configDir, c.Name); err == nil {
+			services = len(names)
+		}
+		_, _ = fmt.Fprintf(r.stdout, "%-16s %-10s %-8d %-14s %s\n", c.Name, ver, services, pinned, src)
 	}
 	return nil
 }
 
-// collectAndValidate enumerates top-level *.yaml/*.yml in fetchDir, validates each
-// as a portable manifest (fail-closed), and rejects a duplicate service name
-// within the source. It returns the files keyed by base filename, ready for
-// InstallCatalog. A service name already defined by ANOTHER installed catalog is
-// allowed — both stay addressable via their qualified "<catalog>:<service>"
-// selector; the bare name becomes ambiguous (see manifest.Loaded.Ambiguous) and
-// is resolved at load/lookup time, not blocked here.
-func (r *runner) collectAndValidate(fetchDir, source string) (map[string][]byte, error) {
-	entries, err := validateEntries(fetchDir)
+// collectAndValidate validates a catalog source's member manifests (the index's
+// `manifests:` list, or every top-level *.yaml/*.yml when members is nil) as
+// portable manifests (fail-closed), rejecting a duplicate service name within the
+// source. It returns the files keyed by base filename, ready for InstallCatalog.
+// A service name already defined by ANOTHER installed catalog is allowed — both
+// stay addressable via their qualified "<catalog>:<service>" selector; the bare
+// name becomes ambiguous (see manifest.Loaded.Ambiguous) and is resolved at
+// load/lookup time, not blocked here.
+func (r *runner) collectAndValidate(fetchDir, source string, members []string) (map[string][]byte, error) {
+	entries, err := validateEntries(fetchDir, members)
 	if err != nil {
 		return nil, fmt.Errorf("read %s: %w", source, err)
 	}
@@ -449,19 +515,6 @@ func classifySource(source string) (string, error) {
 		return "", err
 	}
 	return "git", nil
-}
-
-// inferCatalogName derives a catalog name from the source basename, stripping a
-// trailing .git for git URLs. The result is validated by the caller.
-func inferCatalogName(source, srcType string) string {
-	if srcType == "dir" {
-		return filepath.Base(filepath.Clean(source))
-	}
-	base := source
-	if i := strings.LastIndexAny(base, "/:"); i >= 0 {
-		base = base[i+1:]
-	}
-	return strings.TrimSuffix(base, ".git")
 }
 
 // resolveCatalogSubdir joins a validated relative subdir under the clone root and

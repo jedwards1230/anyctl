@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bytes"
+	"os"
 	"path/filepath"
 	"testing"
 
@@ -14,6 +15,7 @@ import (
 func TestCatalogValidateValid(t *testing.T) {
 	dir := t.TempDir()
 	writeSourceManifest(t, dir, "widget.yaml", portableWidget)
+	writeCatalogIndex(t, dir, "ref")
 
 	var out, errb bytes.Buffer
 	if code := Run([]string{"catalog", "validate", dir}, &out, &errb); code != agentsafety.ExitOK {
@@ -21,6 +23,39 @@ func TestCatalogValidateValid(t *testing.T) {
 	}
 	if !bytes.Contains(out.Bytes(), []byte("ok   widget.yaml (widget)")) {
 		t.Errorf("stdout = %q, want an \"ok widget.yaml (widget)\" line", out.String())
+	}
+	if !bytes.Contains(out.Bytes(), []byte("index anyctl-catalog.yaml: name=ref")) {
+		t.Errorf("stdout = %q, want the index line", out.String())
+	}
+}
+
+// TestCatalogValidateMissingIndex: a directory with manifests but no
+// anyctl-catalog.yaml index fails validation naming the missing index file.
+func TestCatalogValidateMissingIndex(t *testing.T) {
+	dir := t.TempDir()
+	writeSourceManifest(t, dir, "widget.yaml", portableWidget)
+
+	var out, errb bytes.Buffer
+	if code := Run([]string{"catalog", "validate", dir}, &out, &errb); code != agentsafety.ExitUsage {
+		t.Fatalf("exit = %d, want %d (usage) (stderr: %s)", code, agentsafety.ExitUsage, errb.String())
+	}
+	if !bytes.Contains(errb.Bytes(), []byte("anyctl-catalog.yaml")) {
+		t.Errorf("stderr = %q, want it to name the missing index file", errb.String())
+	}
+}
+
+// TestCatalogValidateBadIndex: a present-but-invalid index (missing the required
+// description) fails validation.
+func TestCatalogValidateBadIndex(t *testing.T) {
+	dir := t.TempDir()
+	writeSourceManifest(t, dir, "widget.yaml", portableWidget)
+	if err := os.WriteFile(filepath.Join(dir, "anyctl-catalog.yaml"), []byte("name: ref\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	var out, errb bytes.Buffer
+	if code := Run([]string{"catalog", "validate", dir}, &out, &errb); code != agentsafety.ExitUsage {
+		t.Fatalf("exit = %d, want %d (usage) (stderr: %s)", code, agentsafety.ExitUsage, errb.String())
 	}
 }
 
@@ -34,6 +69,7 @@ func TestCatalogValidateRejectsBinding(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			dir := t.TempDir()
 			writeSourceManifest(t, dir, "bound.yaml", body)
+			writeCatalogIndex(t, dir, "ref")
 
 			var out, errb bytes.Buffer
 			if code := Run([]string{"catalog", "validate", dir}, &out, &errb); code != agentsafety.ExitUsage {
@@ -52,6 +88,7 @@ func TestCatalogValidateDuplicateName(t *testing.T) {
 	dir := t.TempDir()
 	writeSourceManifest(t, dir, "widget.yaml", portableWidget)
 	writeSourceManifest(t, dir, "widget2.yaml", portableWidget) // same `name: widget`
+	writeCatalogIndex(t, dir, "ref")
 
 	var out, errb bytes.Buffer
 	if code := Run([]string{"catalog", "validate", dir}, &out, &errb); code != agentsafety.ExitUsage {
@@ -62,9 +99,11 @@ func TestCatalogValidateDuplicateName(t *testing.T) {
 	}
 }
 
-// TestCatalogValidateEmptyDir: a directory with no manifests is a usage error.
+// TestCatalogValidateEmptyDir: a directory with an index but no manifests is a
+// usage error ('no manifests').
 func TestCatalogValidateEmptyDir(t *testing.T) {
 	dir := t.TempDir()
+	writeCatalogIndex(t, dir, "ref")
 
 	var out, errb bytes.Buffer
 	if code := Run([]string{"catalog", "validate", dir}, &out, &errb); code != agentsafety.ExitUsage {
@@ -81,6 +120,7 @@ func TestCatalogValidateMixedResults(t *testing.T) {
 	dir := t.TempDir()
 	writeSourceManifest(t, dir, "widget.yaml", portableWidget)
 	writeSourceManifest(t, dir, "bad.yaml", "name: bad\nbogus_key: 1\nauth: { strategy: none }\n")
+	writeCatalogIndex(t, dir, "ref")
 
 	var out, errb bytes.Buffer
 	if code := Run([]string{"catalog", "validate", dir}, &out, &errb); code != agentsafety.ExitUsage {
@@ -101,6 +141,7 @@ func TestCatalogValidateNoConfigDirNeeded(t *testing.T) {
 	t.Setenv("ANYCTL_CONFIG_DIR", filepath.Join(t.TempDir(), "does-not-exist"))
 	dir := t.TempDir()
 	writeSourceManifest(t, dir, "widget.yaml", portableWidget)
+	writeCatalogIndex(t, dir, "ref")
 
 	var out, errb bytes.Buffer
 	if code := Run([]string{"catalog", "validate", dir}, &out, &errb); code != agentsafety.ExitOK {

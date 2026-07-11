@@ -1,10 +1,30 @@
 # Example catalog
 
 A minimal, two-service reference catalog demonstrating the shape a third-party
-`anyctl` catalog repo should ship: one no-auth service
-([`uptime.yaml`](uptime.yaml)) and one header-key service
-([`inventory.yaml`](inventory.yaml)). Both are placeholders (`example.com`) and
-both pass `anyctl catalog validate examples/catalog`.
+`anyctl` catalog repo should ship: the required
+[`anyctl-catalog.yaml`](anyctl-catalog.yaml) index, one no-auth service
+([`uptime.yaml`](uptime.yaml)), and one header-key service
+([`inventory.yaml`](inventory.yaml)). Both manifests are placeholders
+(`example.com`) and the whole catalog passes
+`anyctl catalog validate examples/catalog`.
+
+## The catalog index
+
+Every dir/git catalog source MUST carry `anyctl-catalog.yaml` at its root — the
+identity record that makes it installable (a bare directory of `*.yaml` no longer
+is). It names and describes the catalog and, optionally, curates its members:
+
+```yaml
+name: reference               # required; the default install name (^[a-z0-9][a-z0-9_-]*$)
+description: two-service ...   # required; a one-line summary
+version: "1.0.0"              # optional, informational (shown by `catalog list`/`info`)
+homepage: https://...         # optional
+manifests:                    # optional — omit to auto-glob every top-level *.yaml (except the index)
+  - uptime.yaml               #   …or list members to curate + order them
+  - inventory.yaml
+```
+
+Get the index's JSON Schema for editor validation with `anyctl schema catalog`.
 
 This directory is deliberately **not** `examples/catalogs/` (plural) — that
 path is reserved for an *installed* catalog under a config dir. This is just a
@@ -58,9 +78,9 @@ published catalog.
 anyctl catalog validate .   # run from this directory, or pass any catalog dir
 ```
 
-Read-only: no network call, no config dir, no install. Exits 0 only if every
-top-level `*.yaml`/`*.yml` is a valid, portable manifest and no two manifests
-share a service name.
+Read-only: no network call, no config dir, no install. Exits 0 only if the
+`anyctl-catalog.yaml` index is present and valid and every selected member
+manifest is a valid, portable manifest with no two sharing a service name.
 
 ### CI: the validate-catalog action
 
@@ -86,7 +106,8 @@ jobs:
 ```sh
 anyctl catalog add https://github.com/you/your-catalog.git --name yours
 anyctl catalog add ./local-checkout --name yours          # …or a local dir
-anyctl catalog installed                                  # confirm it's there
+anyctl catalog list                                       # confirm it's there
+anyctl catalog info yours                                  # its identity + services
 
 anyctl svc inventory items                                # address by bare name
 anyctl svc yours:inventory items                           # …or the qualified <catalog>:<service> form

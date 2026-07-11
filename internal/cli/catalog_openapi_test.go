@@ -73,14 +73,23 @@ func TestCatalogAddOpenAPILocalFile(t *testing.T) {
 		t.Errorf("list output should show petstore:\n%s", out.String())
 	}
 
-	// `catalog installed` reports type "openapi" with the source as the spec path.
+	// `catalog list` reports the catalog with the spec path as its source, and
+	// `catalog info` reports its openapi type.
 	out.Reset()
 	errb.Reset()
-	if code := Run([]string{"catalog", "installed"}, &out, &errb); code != agentsafety.ExitOK {
-		t.Fatalf("installed exit = %d (stderr: %s)", code, errb.String())
+	if code := Run([]string{"catalog", "list"}, &out, &errb); code != agentsafety.ExitOK {
+		t.Fatalf("list exit = %d (stderr: %s)", code, errb.String())
 	}
-	if !bytes.Contains(out.Bytes(), []byte("openapi")) || !bytes.Contains(out.Bytes(), []byte(specPath)) {
-		t.Errorf("`catalog installed` should list petstore (openapi, %s):\n%s", specPath, out.String())
+	if !bytes.Contains(out.Bytes(), []byte(specPath)) {
+		t.Errorf("`catalog list` should list petstore with source %s:\n%s", specPath, out.String())
+	}
+	out.Reset()
+	errb.Reset()
+	if code := Run([]string{"catalog", "info", "petstore"}, &out, &errb); code != agentsafety.ExitOK {
+		t.Fatalf("info exit = %d (stderr: %s)", code, errb.String())
+	}
+	if !bytes.Contains(out.Bytes(), []byte("openapi")) {
+		t.Errorf("`catalog info` should report the openapi type:\n%s", out.String())
 	}
 
 	// Bind a base_url and dry-run a command to prove the generated manifest

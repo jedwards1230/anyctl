@@ -1,0 +1,13 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/jedwards1230/anyctl/main/schema/catalog.schema.json
+#
+# anyctl-catalog.yaml — the required index at a catalog source's root. It names
+# and describes the catalog for a marketplace listing and, via `manifests:`,
+# curates exactly which files are members (order preserved). Drop `manifests:`
+# to auto-glob every top-level *.yaml/*.yml (except this index) instead.
+name: reference
+description: two-service anyctl reference catalog (no-auth + header-key)
+version: "1.0.0"
+homepage: https://github.com/jedwards1230/anyctl
+manifests:
+  - uptime.yaml
+  - inventory.yaml

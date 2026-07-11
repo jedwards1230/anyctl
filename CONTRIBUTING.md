@@ -61,14 +61,14 @@ or a manifest inside an installed catalog. Editing YAML is **rebuild-free**:
    anyctl lint --strict <name>              # structural + completeness check
    anyctl svc <name> <command> --dry-run    # preview the resolved request without sending
    ```
-3. **Publish a catalog** (optional): a directory or git repo of *portable*
-   manifests is an installable catalog. Validate it against anyctl's contract
-   before anyone installs it:
+3. **Publish a catalog** (optional): a git repo (any forge) or directory with an
+   `anyctl-catalog.yaml` index plus *portable* manifests is an installable
+   catalog. Validate it against anyctl's contract before anyone installs it:
    ```bash
-   anyctl catalog validate ./my-manifests   # read-only schema + portability check
+   anyctl catalog validate ./my-catalog   # read-only: index + schema + portability check
    ```
-   The reference catalog under [`examples/catalog/`](examples/catalog/) is the
-   template a third-party author copies.
+   The reference catalog under [`examples/catalog/`](examples/catalog/) — index
+   plus two manifests — is the template a third-party author copies.
 
 ## Documentation
 

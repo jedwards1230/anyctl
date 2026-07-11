@@ -35,9 +35,10 @@ func TestCatalogAddGitSubdir(t *testing.T) {
 		t.Skip("git not available")
 	}
 	repo := t.TempDir()
-	// A subdir holds the catalog; the repo root holds an unrelated (non-manifest)
-	// file that must be ignored when --path points at the subdir.
+	// A subdir holds the catalog (index + manifest); the repo root holds an
+	// unrelated file that must be ignored when --path points at the subdir.
 	writeSourceManifest(t, filepath.Join(repo, "anyctl-catalog"), "widget.yaml", portableWidget)
+	writeCatalogIndex(t, filepath.Join(repo, "anyctl-catalog"), "infra")
 	if err := os.WriteFile(filepath.Join(repo, "README.md"), []byte("# infra\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -180,6 +181,7 @@ func TestCatalogUpdateGitSubdir(t *testing.T) {
 	repo := t.TempDir()
 	subDir := filepath.Join(repo, "anyctl-catalog")
 	writeSourceManifest(t, subDir, "widget.yaml", portableWidget)
+	writeCatalogIndex(t, subDir, "infra")
 	git := gitRepoRunner(t, gitBin, repo)
 	git("init", "--quiet", "-b", "main")
 	git("add", ".")

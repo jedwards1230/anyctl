@@ -132,18 +132,38 @@ never collide with a built-in like `list` or `doctor`.
 ## Catalogs
 
 anyctl ships with **no built-in services**. You **install named catalogs** —
-bundles of portable manifests from a directory or git repo — into
-`catalogs/<name>/`:
+bundles of portable manifests published as a git repo (any forge: GitHub,
+Forgejo, Codeberg, GitLab, …) or a local directory — into `catalogs/<name>/`.
+**Git is the default distribution path.**
+
+Every catalog source carries a required **`anyctl-catalog.yaml`** index at its
+root — the identity record that makes it installable:
+
+```yaml
+# anyctl-catalog.yaml
+name: my-catalog                 # required; the default install name (^[a-z0-9][a-z0-9_-]*$)
+description: what this provides  # required; a one-line summary
+version: "1.0.0"                 # optional, informational
+homepage: https://git.example/you/my-catalog   # optional
+manifests:                       # optional — omit to auto-glob every top-level *.yaml
+  - uptime.yaml                  # …or list members to curate + order them
+  - inventory.yaml
+```
 
 ```sh
-anyctl catalog add ./my-manifests                    # install a local dir (name = basename)
-anyctl catalog add https://git.example/team/cat.git --ref v1.2   # …or a git repo, pinned to a ref
-anyctl catalog add https://git.example/org/infra.git --path anyctl-catalog   # …or a subdirectory of a git repo
-anyctl catalog add ./openapi.json --openapi          # …or materialize one from an OpenAPI 3.x doc
-anyctl catalog installed                             # list installed catalogs
-anyctl catalog update [name]                         # re-fetch from the recorded source
+anyctl catalog add https://git.example/you/my-catalog.git         # install from any git host
+anyctl catalog add https://git.example/team/cat.git --ref v1.2    # …pinned to a ref
+anyctl catalog add https://git.example/org/infra.git --path anyctl-catalog  # …from a repo subdir
+anyctl catalog add ./my-manifests                                 # …or a local dir
+anyctl catalog add ./openapi.json --openapi                       # …or from an OpenAPI 3.x doc (no index needed)
+anyctl catalog list                                               # name, version, services, pinned commit, source
+anyctl catalog info <name>                                        # one catalog's full detail + its services
+anyctl catalog update [name...]                                   # re-fetch (variadic; all if none named)
 anyctl catalog remove <name>
 ```
+
+The install name is `--name`, else the index's `name`. Get the index schema for
+editor validation with `anyctl schema catalog`.
 
 **Resolution precedence (highest wins):** local `services/<name>.yaml` >
 installed catalog. There is no built-in floor — with neither present, a config
@@ -152,25 +172,49 @@ then becomes ambiguous and you address each as `<catalog>:<service>`.
 
 A catalog carries no endpoints or credentials, so it's **inert until your
 profile binds it** — that's why catalogs need no signing. `catalog add`
-validates every manifest against the schema + portability rule before writing
-anything; a git source is pinned to its commit SHA for reproducibility. When a
-repo keeps its manifests in a subdirectory (rather than at the repo root), pass
-`--path <subdir>` to install from there — the subdir is recorded so `catalog
-update` re-fetches from the same place. `--path` is git-only (point a local dir
-source directly at the subdirectory instead) and must stay within the repo (no
-absolute path, no `..`).
+validates the index and every member manifest against the schema + portability
+rule before writing anything; a git source is pinned to its commit SHA for
+reproducibility. When a repo keeps its catalog in a subdirectory, pass `--path
+<subdir>` to install from there (the index must live in that subdir) — the
+subdir is recorded so `catalog update` re-fetches from the same place. `--path`
+is git-only and must stay within the repo (no absolute path, no `..`).
 
-**Publishing your own:** any git repo or directory of portable manifests is a
-valid source. Check it against anyctl's contract before anyone installs it:
+**Publishing your own:** push a repo with an `anyctl-catalog.yaml` index plus
+your manifests. Check it against anyctl's contract before anyone installs it:
 
 ```sh
-anyctl catalog validate ./my-manifests   # read-only schema + portability check, exit 2 on failure
+anyctl catalog validate ./my-catalog   # read-only: index + schema + portability check, exit 2 on failure
 ```
 
 Wire that into CI with the bundled composite action
 (`jedwards1230/anyctl/.github/actions/validate-catalog@v0.21.0` — pin to the
 current release tag; see the [releases](https://github.com/jedwards1230/anyctl/releases)).
 [`examples/catalog/`](examples/catalog/) is a minimal reference catalog.
+
+### Private catalogs over SSH
+
+A private catalog installs over SSH — `git@host:you/cat.git` (scp-style) or
+`ssh://git@host/you/cat.git`. anyctl runs system `git`, so SSH auth defers
+entirely to your environment: `~/.ssh/config` (host, user, `IdentityFile`) and a
+running `ssh-agent`. Set up a key with your forge's normal flow — GitHub deploy
+keys or a user SSH key, and the Forgejo/Codeberg/GitLab equivalents (a repo
+deploy key or an account SSH key).
+
+anyctl sets `GIT_TERMINAL_PROMPT=0`, so git **never hangs on a prompt** and fails
+closed instead. A consequence: a **passphrase-protected key needs a loaded
+`ssh-agent`** (`ssh-add ~/.ssh/id_ed25519`) — with no agent, git can't read the
+passphrase non-interactively and the add fails cleanly rather than blocking.
+
+Triage `Permission denied (publickey)`:
+
+- `ssh -T git@host` — confirm the key authenticates to the forge at all.
+- `ssh-add -l` — confirm the right key is loaded in the agent.
+- Check `~/.ssh/config` maps the host to the intended `IdentityFile`/user.
+- Confirm the (deploy) key is authorized for *that* repo on the forge.
+
+HTTPS with a token (PAT) is **not yet supported** — tracked in
+[#63](https://github.com/jedwards1230/anyctl/issues/63). Use SSH for private
+catalogs today.
 
 ## Secrets
 

@@ -48,6 +48,9 @@ func TestExampleCatalogValidates(t *testing.T) {
 		if filepath.Ext(name) != ".yaml" && filepath.Ext(name) != ".yml" {
 			continue
 		}
+		if name == CatalogIndexFile {
+			continue // the anyctl-catalog.yaml index is not a manifest
+		}
 		manifestCount++
 		path := filepath.Join(dir, name)
 		b, err := os.ReadFile(path)

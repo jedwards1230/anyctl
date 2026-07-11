@@ -76,6 +76,9 @@ func TestCatalogManifestsConformToSchema(t *testing.T) {
 		if e.IsDir() || (filepath.Ext(name) != ".yaml" && filepath.Ext(name) != ".yml") {
 			continue // skip README and any non-YAML
 		}
+		if name == manifest.CatalogIndexFile {
+			continue // the anyctl-catalog.yaml index is not a service manifest
+		}
 		count++
 		t.Run(name, func(t *testing.T) {
 			data, err := os.ReadFile(filepath.Join(dir, name))

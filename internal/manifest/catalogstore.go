@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/jedwards1230/anyctl/internal/brand"
+	"gopkg.in/yaml.v3"
 )
 
 // CatalogMetaFile is the per-catalog metadata file anyctl writes into each
@@ -19,16 +20,22 @@ import (
 // installed` can report provenance. It is NOT a manifest and the loader ignores it.
 const CatalogMetaFile = "." + brand.Name + "-catalog.json"
 
-// CatalogMeta is the provenance record for one installed catalog.
+// CatalogMeta is the provenance record for one installed catalog. The
+// Description/Version/Homepage fields are folded in from the source's
+// anyctl-catalog.yaml index at add/update time so `catalog list`/`info` can
+// report a catalog's identity without re-reading the (uncopied) index.
 type CatalogMeta struct {
-	Name      string    `json:"name"`
-	Source    string    `json:"source"`
-	Type      string    `json:"type"`             // "git" | "dir"
-	Ref       string    `json:"ref,omitempty"`    // git: requested ref (empty = default branch)
-	Commit    string    `json:"commit,omitempty"` // git: resolved commit SHA
-	Path      string    `json:"path,omitempty"`   // git: subdirectory within the repo to install from (empty = repo root)
-	AddedAt   time.Time `json:"added_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	Name        string    `json:"name"`
+	Description string    `json:"description,omitempty"` // index: one-line summary
+	Version     string    `json:"version,omitempty"`     // index: informational version string
+	Homepage    string    `json:"homepage,omitempty"`    // index: project/repo URL
+	Source      string    `json:"source"`
+	Type        string    `json:"type"`             // "git" | "dir" | "openapi"
+	Ref         string    `json:"ref,omitempty"`    // git: requested ref (empty = default branch)
+	Commit      string    `json:"commit,omitempty"` // git: resolved commit SHA
+	Path        string    `json:"path,omitempty"`   // git: subdirectory within the repo to install from (empty = repo root)
+	AddedAt     time.Time `json:"added_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
 }
 
 // namePattern restricts a service OR catalog name to a single, safe path
@@ -205,6 +212,47 @@ func InstallCatalog(configDir string, meta CatalogMeta, files map[string][]byte,
 		return fmt.Errorf("installing catalog %q: %w", meta.Name, err)
 	}
 	return nil
+}
+
+// CatalogServiceNames returns the sorted service names an installed catalog
+// provides — one per member manifest, using the manifest's `name:` (falling back
+// to the filename stem when unset), exactly as loadInstalledCatalogs resolves
+// them. The catalog metadata file and any stray index file are skipped. It is
+// the data behind `catalog list`'s SERVICES count and `catalog info`'s service
+// listing; a not-installed catalog is a *ConfigError (exit 2). Parsing is
+// best-effort by design (list/info must not fail on one malformed manifest): a
+// file that will not decode falls back to its filename stem.
+func CatalogServiceNames(configDir, name string) ([]string, error) {
+	if err := ValidateName(name); err != nil {
+		return nil, &ConfigError{Err: err}
+	}
+	dir := filepath.Join(CatalogsDir(configDir), name)
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, &ConfigError{Err: fmt.Errorf("catalog %q is not installed", name)}
+		}
+		return nil, fmt.Errorf("read %s: %w", dir, err)
+	}
+	names := make([]string, 0, len(entries))
+	for _, e := range entries {
+		fname := e.Name()
+		// Skip subdirs, the metadata file, a defensively-present index file, and
+		// any non-YAML — mirroring loadInstalledCatalogs's member filter.
+		if e.IsDir() || fname == CatalogMetaFile || fname == CatalogIndexFile || !isYAML(fname) {
+			continue
+		}
+		svcName := strings.TrimSuffix(strings.TrimSuffix(fname, ".yaml"), ".yml")
+		if b, readErr := os.ReadFile(filepath.Join(dir, fname)); readErr == nil {
+			var svc Service
+			if yaml.Unmarshal(b, &svc) == nil && svc.Name != "" {
+				svcName = svc.Name
+			}
+		}
+		names = append(names, svcName)
+	}
+	sort.Strings(names)
+	return names, nil
 }
 
 // RemoveCatalog deletes an installed catalog's dir. A name that is not installed

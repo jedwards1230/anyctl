@@ -23,19 +23,22 @@ import (
 func (r *runner) cmdCatalogValidate() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "validate <dir>",
-		Short: "validate every manifest in a directory as a portable catalog manifest (read-only)",
-		Long: "Validate every top-level *.yaml/*.yml in <dir> as a PORTABLE manifest — the\n" +
-			"same fail-closed gate `catalog add` runs (JSON Schema, then structural\n" +
-			"Validate, which rejects an in-manifest base_url or secret ref). A duplicate\n" +
-			"service name across two manifests in the directory is also rejected.\n\n" +
+		Short: "Validate a catalog source: its index and every member manifest (read-only)",
+		Long: "Validate a catalog source directory — the same fail-closed gate `catalog add`\n" +
+			"runs. First <dir> must carry an " + manifest.CatalogIndexFile + " index at its\n" +
+			"root (present, schema-valid, well-formed name/description/members); then every\n" +
+			"member manifest (the index's `manifests:` list, or every top-level *.yaml/*.yml\n" +
+			"when it has none) is validated as a PORTABLE manifest — JSON Schema, then\n" +
+			"structural Validate, which rejects an in-manifest base_url or secret ref. A\n" +
+			"duplicate service name across two member manifests is also rejected.\n\n" +
 			"This command is read-only: no network call, no install, no profile binding,\n" +
 			"and no interaction with any installed catalog — it only inspects\n" +
 			"the files in <dir>. That makes it the check a third-party catalog repository\n" +
 			"runs in its own CI (see .github/actions/validate-catalog) to confirm its\n" +
-			fmt.Sprintf("manifests satisfy %s's contract before anyone runs `%s catalog add`\n", brand.Name, brand.Name) +
+			fmt.Sprintf("catalog satisfies %s's contract before anyone runs `%s catalog add`\n", brand.Name, brand.Name) +
 			"against the repo.\n\n" +
-			"Prints one line per manifest (\"ok\" or \"FAIL\" with the reason) and exits 0\n" +
-			"only if every manifest is valid and at least one was found.",
+			"Prints the index name, then one line per manifest (\"ok\" or \"FAIL\" with the\n" +
+			"reason), and exits 0 only if the index and every manifest are valid.",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			r.curCommand = "catalog"
@@ -52,13 +55,22 @@ type catalogValidateResult struct {
 	err  error
 }
 
-// catalogValidate validates every top-level *.yaml/*.yml in dir, printing a
-// per-file result to stdout. It shares the read → ValidatePortableManifest →
-// stem-fallback → duplicate-detection walk with collectAndValidate (via
-// validateEntries) but, unlike that fail-fast `catalog add` path, it reports
-// every file so a CI run surfaces every problem in one pass.
+// catalogValidate validates a catalog source dir: first its required
+// anyctl-catalog.yaml index (present, schema-valid, well-formed members), then
+// every selected member manifest, printing a per-file result to stdout. It
+// shares the read → ValidatePortableManifest → stem-fallback →
+// duplicate-detection walk with collectAndValidate (via validateEntries) but,
+// unlike that fail-fast `catalog add` path, it reports every file so a CI run
+// surfaces every problem in one pass. A missing index is the same fail-closed
+// gate `catalog add` runs, with the same starter-snippet hint.
 func (r *runner) catalogValidate(dir string) error {
-	entries, err := validateEntries(dir)
+	idx, err := manifest.ReadCatalogIndex(dir)
+	if err != nil {
+		return r.catalogIndexError(dir, err)
+	}
+	_, _ = fmt.Fprintf(r.stdout, "index %s: name=%s\n", manifest.CatalogIndexFile, idx.Name)
+
+	entries, err := validateEntries(dir, idx.Manifests)
 	if err != nil {
 		return fmt.Errorf("read %s: %w", dir, err)
 	}
@@ -109,23 +121,26 @@ type manifestEntry struct {
 	dupOf   string // earlier file that defined `name`, when this entry duplicates it
 }
 
-// validateEntries walks the top-level *.yaml/*.yml files in dir (sorted) and
-// validates each as a portable manifest, returning one manifestEntry per file.
-// It never fails fast and never wraps errors into a caller-specific type, so
-// both the fail-fast `catalog add` path (collectAndValidate) and the
+// validateEntries walks a catalog source's member manifests (sorted for the
+// glob case, index-declared order for the explicit case) and validates each as a
+// portable manifest, returning one manifestEntry per file. members selects the
+// mechanism: nil means auto-glob every top-level *.yaml/*.yml (except the index
+// file itself); a non-nil list is the exact ordered set from the index's
+// `manifests:`. It never fails fast and never wraps errors into a caller-specific
+// type, so both the fail-fast `catalog add` path (collectAndValidate) and the
 // accumulate-all `catalog validate` path reduce the identical walk differently.
 // Only the dir-read error is returned directly (the callers wrap it with their
 // own source/dir label).
-func validateEntries(dir string) ([]manifestEntry, error) {
-	entries, err := yamlEntriesIn(dir)
+func validateEntries(dir string, members []string) ([]manifestEntry, error) {
+	files, err := memberFiles(dir, members)
 	if err != nil {
 		return nil, err
 	}
-	out := make([]manifestEntry, 0, len(entries))
+	out := make([]manifestEntry, 0, len(files))
 	svcToFile := map[string]string{} // service name → first file that defined it
-	for _, e := range entries {
-		me := manifestEntry{file: e.Name()}
-		path := filepath.Join(dir, e.Name())
+	for _, fname := range files {
+		me := manifestEntry{file: fname}
+		path := filepath.Join(dir, fname)
 		b, readErr := os.ReadFile(path)
 		if readErr != nil {
 			me.readErr = fmt.Errorf("read %s: %w", path, readErr)
@@ -139,7 +154,7 @@ func validateEntries(dir string) ([]manifestEntry, error) {
 			continue
 		}
 		if svcName == "" {
-			svcName = strings.TrimSuffix(strings.TrimSuffix(e.Name(), ".yaml"), ".yml")
+			svcName = strings.TrimSuffix(strings.TrimSuffix(fname, ".yaml"), ".yml")
 		}
 		me.name = svcName
 		if prev, dup := svcToFile[svcName]; dup {
@@ -147,29 +162,47 @@ func validateEntries(dir string) ([]manifestEntry, error) {
 			out = append(out, me)
 			continue
 		}
-		svcToFile[svcName] = e.Name()
+		svcToFile[svcName] = fname
 		me.data = b
 		out = append(out, me)
 	}
 	return out, nil
 }
 
-// yamlEntriesIn returns the top-level *.yaml/*.yml directory entries directly
-// under dir, sorted by name (os.ReadDir already returns entries sorted by
-// filename, so this is just the shared filter both collectAndValidate and
-// catalogValidate need).
-func yamlEntriesIn(dir string) ([]os.DirEntry, error) {
+// memberFiles resolves the ordered member filenames to validate. With members
+// nil it globs the top-level *.yaml/*.yml in dir (excluding the index file) in
+// sorted order — today's discovery behavior. With members non-nil it returns
+// exactly those filenames in the declared order; each is guarded as a bare path
+// segment (defense in depth — ParseCatalogIndex already validated the shape) so
+// a curated entry can never point outside the source. A listed file that is
+// missing is left in the list so validateEntries surfaces it as a read error
+// (fail-closed for `catalog add`, reported for `catalog validate`).
+func memberFiles(dir string, members []string) ([]string, error) {
+	if members != nil {
+		out := make([]string, 0, len(members))
+		for _, m := range members {
+			if base := filepath.Base(m); base != m || base == "." || base == ".." {
+				return nil, agentsafety.NewUsageError(fmt.Sprintf("invalid manifests entry %q: must be a bare file name", m))
+			}
+			out = append(out, m)
+		}
+		return out, nil
+	}
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return nil, err
 	}
-	yamlEntries := make([]os.DirEntry, 0, len(entries))
+	out := make([]string, 0, len(entries))
 	for _, e := range entries {
 		if e.IsDir() || !isYAMLFile(e.Name()) {
 			continue
 		}
-		yamlEntries = append(yamlEntries, e)
+		// The index file is not a manifest; never glob it as a member.
+		if e.Name() == manifest.CatalogIndexFile {
+			continue
+		}
+		out = append(out, e.Name())
 	}
-	sort.Slice(yamlEntries, func(i, j int) bool { return yamlEntries[i].Name() < yamlEntries[j].Name() })
-	return yamlEntries, nil
+	sort.Slice(out, func(i, j int) bool { return out[i] < out[j] })
+	return out, nil
 }

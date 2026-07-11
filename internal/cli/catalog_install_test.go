@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/jedwards1230/anyctl/internal/agentsafety"
@@ -21,6 +22,27 @@ func writeSourceManifest(t *testing.T, srcDir, fname, body string) {
 	}
 }
 
+// writeCatalogIndex writes the required anyctl-catalog.yaml index into a catalog
+// source dir. name is the index's catalog name (the default install name);
+// members, when non-empty, pins an explicit ordered `manifests:` list, otherwise
+// the catalog auto-globs its top-level manifests.
+func writeCatalogIndex(t *testing.T, srcDir, name string, members ...string) {
+	t.Helper()
+	if err := os.MkdirAll(srcDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	body := "name: " + name + "\ndescription: test catalog " + name + "\n"
+	if len(members) > 0 {
+		body += "manifests:\n"
+		for _, m := range members {
+			body += "  - " + m + "\n"
+		}
+	}
+	if err := os.WriteFile(filepath.Join(srcDir, "anyctl-catalog.yaml"), []byte(body), 0o600); err != nil {
+		t.Fatal(err)
+	}
+}
+
 const portableWidget = `name: widget
 description: a widget
 auth: { strategy: none }
@@ -28,22 +50,28 @@ commands:
   list: { method: GET, path: /list }
 `
 
-// TestCatalogAddDirSource: adding a local dir source installs the catalog and its
-// services load with origin catalog:<name>; `catalog installed` lists it.
+// TestCatalogAddDirSource: adding a local dir source installs the catalog under
+// its index `name` and its services load with origin catalog:<name>; `catalog
+// list` reports it.
 func TestCatalogAddDirSource(t *testing.T) {
 	cfg := t.TempDir()
 	t.Setenv("ANYCTL_CONFIG_DIR", cfg)
-	src := filepath.Join(t.TempDir(), "mycat")
+	src := filepath.Join(t.TempDir(), "srcdir")
 	writeSourceManifest(t, src, "widget.yaml", portableWidget)
+	writeCatalogIndex(t, src, "mycat")
 
 	var out, errb bytes.Buffer
 	if code := Run([]string{"catalog", "add", src}, &out, &errb); code != agentsafety.ExitOK {
 		t.Fatalf("add exit = %d, want 0 (stderr: %s)", code, errb.String())
 	}
-	// Installed under the inferred name (the dir basename).
+	// Installed under the index name (not the dir basename — inference is gone).
 	manifestPath := filepath.Join(cfg, "catalogs", "mycat", "widget.yaml")
 	if _, err := os.Stat(manifestPath); err != nil {
 		t.Fatalf("catalog manifest not installed: %v", err)
+	}
+	// The index file is NOT copied into the installed catalog dir.
+	if _, err := os.Stat(filepath.Join(cfg, "catalogs", "mycat", "anyctl-catalog.yaml")); !os.IsNotExist(err) {
+		t.Error("the index file must not be copied into the installed catalog dir")
 	}
 
 	// list shows the service with its catalog provenance.
@@ -56,14 +84,14 @@ func TestCatalogAddDirSource(t *testing.T) {
 		t.Errorf("list output should mark widget as catalog:mycat:\n%s", out.String())
 	}
 
-	// `catalog installed` reports it (data to stdout).
+	// `catalog list` reports it (data to stdout).
 	out.Reset()
 	errb.Reset()
-	if code := Run([]string{"catalog", "installed"}, &out, &errb); code != agentsafety.ExitOK {
-		t.Fatalf("installed exit = %d (stderr: %s)", code, errb.String())
+	if code := Run([]string{"catalog", "list"}, &out, &errb); code != agentsafety.ExitOK {
+		t.Fatalf("catalog list exit = %d (stderr: %s)", code, errb.String())
 	}
-	if !bytes.Contains(out.Bytes(), []byte("mycat")) || !bytes.Contains(out.Bytes(), []byte("dir")) {
-		t.Errorf("`catalog installed` should list mycat (dir):\n%s", out.String())
+	if !bytes.Contains(out.Bytes(), []byte("mycat")) {
+		t.Errorf("`catalog list` should list mycat:\n%s", out.String())
 	}
 }
 
@@ -75,6 +103,7 @@ func TestCatalogAddRejectsNonSchemaManifest(t *testing.T) {
 	src := filepath.Join(t.TempDir(), "badcat")
 	writeSourceManifest(t, src, "widget.yaml", portableWidget)
 	writeSourceManifest(t, src, "bad.yaml", "name: bad\nbogus_key: 1\nauth: { strategy: none }\n")
+	writeCatalogIndex(t, src, "badcat")
 
 	var out, errb bytes.Buffer
 	if code := Run([]string{"catalog", "add", src}, &out, &errb); code == agentsafety.ExitOK {
@@ -97,6 +126,7 @@ func TestCatalogAddRejectsBindingManifest(t *testing.T) {
 			t.Setenv("ANYCTL_CONFIG_DIR", cfg)
 			src := filepath.Join(t.TempDir(), "boundcat")
 			writeSourceManifest(t, src, "bound.yaml", body)
+			writeCatalogIndex(t, src, "boundcat")
 
 			var out, errb bytes.Buffer
 			if code := Run([]string{"catalog", "add", src}, &out, &errb); code != agentsafety.ExitUsage {
@@ -109,18 +139,41 @@ func TestCatalogAddRejectsBindingManifest(t *testing.T) {
 	}
 }
 
-// TestCatalogAddNoManifests: a source dir with no *.yaml is a usage error.
+// TestCatalogAddNoManifests: a source that carries an index but no member
+// manifests is a usage error ('no manifests').
 func TestCatalogAddNoManifests(t *testing.T) {
 	cfg := t.TempDir()
 	t.Setenv("ANYCTL_CONFIG_DIR", cfg)
-	src := t.TempDir() // empty
+	src := t.TempDir() // only an index, no manifests
+	writeCatalogIndex(t, src, "empty")
 
 	var out, errb bytes.Buffer
-	if code := Run([]string{"catalog", "add", src, "--name", "empty"}, &out, &errb); code != agentsafety.ExitUsage {
+	if code := Run([]string{"catalog", "add", src}, &out, &errb); code != agentsafety.ExitUsage {
 		t.Fatalf("exit = %d, want %d (usage) (stderr: %s)", code, agentsafety.ExitUsage, errb.String())
 	}
 	if !bytes.Contains(errb.Bytes(), []byte("no manifests")) {
 		t.Errorf("stderr = %q, want a 'no manifests' diagnostic", errb.String())
+	}
+}
+
+// TestCatalogAddMissingIndex: a source dir with manifests but no
+// anyctl-catalog.yaml index is a usage error that names the index file (basename
+// inference is gone; the index is the discovery contract). Nothing is installed.
+func TestCatalogAddMissingIndex(t *testing.T) {
+	cfg := t.TempDir()
+	t.Setenv("ANYCTL_CONFIG_DIR", cfg)
+	src := filepath.Join(t.TempDir(), "noidx")
+	writeSourceManifest(t, src, "widget.yaml", portableWidget)
+
+	var out, errb bytes.Buffer
+	if code := Run([]string{"catalog", "add", src, "--name", "noidx"}, &out, &errb); code != agentsafety.ExitUsage {
+		t.Fatalf("exit = %d, want %d (usage) (stderr: %s)", code, agentsafety.ExitUsage, errb.String())
+	}
+	if !bytes.Contains(errb.Bytes(), []byte("anyctl-catalog.yaml")) {
+		t.Errorf("stderr = %q, want it to name the missing index file", errb.String())
+	}
+	if _, err := os.Stat(filepath.Join(cfg, "catalogs", "noidx")); !os.IsNotExist(err) {
+		t.Error("nothing should be installed when the index is missing")
 	}
 }
 
@@ -134,8 +187,10 @@ func TestCatalogAddCrossCatalogCollision(t *testing.T) {
 	t.Setenv("ANYCTL_CONFIG_DIR", cfg)
 	srcA := filepath.Join(t.TempDir(), "acat")
 	writeSourceManifest(t, srcA, "widget.yaml", portableWidget)
+	writeCatalogIndex(t, srcA, "acat")
 	srcB := filepath.Join(t.TempDir(), "bcat")
 	writeSourceManifest(t, srcB, "widget.yaml", portableWidget)
+	writeCatalogIndex(t, srcB, "bcat")
 
 	var out, errb bytes.Buffer
 	if code := Run([]string{"catalog", "add", srcA}, &out, &errb); code != agentsafety.ExitOK {
@@ -192,8 +247,10 @@ func TestLintDoctorQualifiedAndAmbiguousSelector(t *testing.T) {
 	t.Setenv("ANYCTL_CONFIG_DIR", cfg)
 	srcA := filepath.Join(t.TempDir(), "acat")
 	writeSourceManifest(t, srcA, "widget.yaml", portableWidget)
+	writeCatalogIndex(t, srcA, "acat")
 	srcB := filepath.Join(t.TempDir(), "bcat")
 	writeSourceManifest(t, srcB, "widget.yaml", portableWidget)
+	writeCatalogIndex(t, srcB, "bcat")
 	var out, errb bytes.Buffer
 	for _, src := range []string{srcA, srcB} {
 		out.Reset()
@@ -229,6 +286,7 @@ func TestCatalogRemove(t *testing.T) {
 	t.Setenv("ANYCTL_CONFIG_DIR", cfg)
 	src := filepath.Join(t.TempDir(), "mycat")
 	writeSourceManifest(t, src, "widget.yaml", portableWidget)
+	writeCatalogIndex(t, src, "mycat")
 
 	var out, errb bytes.Buffer
 	if code := Run([]string{"catalog", "add", src}, &out, &errb); code != agentsafety.ExitOK {
@@ -258,6 +316,7 @@ func TestCatalogUpdateDirSource(t *testing.T) {
 	t.Setenv("ANYCTL_CONFIG_DIR", cfg)
 	src := filepath.Join(t.TempDir(), "mycat")
 	writeSourceManifest(t, src, "widget.yaml", portableWidget)
+	writeCatalogIndex(t, src, "mycat")
 
 	var out, errb bytes.Buffer
 	if code := Run([]string{"catalog", "add", src}, &out, &errb); code != agentsafety.ExitOK {
@@ -372,6 +431,7 @@ func TestCatalogUpdateBulkWithOpenAPISource(t *testing.T) {
 
 	dirSrc := filepath.Join(t.TempDir(), "dircat")
 	writeSourceManifest(t, dirSrc, "widget.yaml", portableWidget)
+	writeCatalogIndex(t, dirSrc, "dircat")
 
 	specPath := filepath.Join(t.TempDir(), "petstore.yaml")
 	if err := os.WriteFile(specPath, []byte(openapiPetstoreFixture), 0o600); err != nil {
@@ -472,9 +532,10 @@ func TestCatalogAddGitSource(t *testing.T) {
 	if err != nil {
 		t.Skip("git not available")
 	}
-	// Build a tiny local git repo holding one portable manifest.
+	// Build a tiny local git repo holding one portable manifest and its index.
 	repo := t.TempDir()
 	writeSourceManifest(t, repo, "widget.yaml", portableWidget)
+	writeCatalogIndex(t, repo, "gitcat")
 	gitInit := func(args ...string) {
 		t.Helper()
 		c := exec.Command(gitBin, args...)
@@ -486,7 +547,7 @@ func TestCatalogAddGitSource(t *testing.T) {
 		}
 	}
 	gitInit("init", "--quiet", "-b", "main")
-	gitInit("add", "widget.yaml")
+	gitInit("add", ".")
 	gitInit("commit", "--quiet", "-m", "init")
 
 	cfg := t.TempDir()
@@ -500,27 +561,80 @@ func TestCatalogAddGitSource(t *testing.T) {
 	}
 	out.Reset()
 	errb.Reset()
-	if code := Run([]string{"catalog", "installed"}, &out, &errb); code != agentsafety.ExitOK {
-		t.Fatalf("installed exit = %d (stderr: %s)", code, errb.String())
+	if code := Run([]string{"catalog", "list"}, &out, &errb); code != agentsafety.ExitOK {
+		t.Fatalf("catalog list exit = %d (stderr: %s)", code, errb.String())
 	}
-	if !bytes.Contains(out.Bytes(), []byte("gitcat")) || !bytes.Contains(out.Bytes(), []byte("git")) {
-		t.Errorf("`catalog installed` should list the git catalog with a commit:\n%s", out.String())
+	if !bytes.Contains(out.Bytes(), []byte("gitcat")) {
+		t.Errorf("`catalog list` should list the git catalog:\n%s", out.String())
+	}
+	// `catalog info` shows the git provenance (type + pinned commit).
+	out.Reset()
+	errb.Reset()
+	if code := Run([]string{"catalog", "info", "gitcat"}, &out, &errb); code != agentsafety.ExitOK {
+		t.Fatalf("catalog info exit = %d (stderr: %s)", code, errb.String())
+	}
+	if !bytes.Contains(out.Bytes(), []byte("git")) || !bytes.Contains(out.Bytes(), []byte("commit:")) {
+		t.Errorf("`catalog info` should report the git type and pinned commit:\n%s", out.String())
 	}
 }
 
-// TestCatalogAddInferredNameInvalid: when the inferred name is not a valid path
-// segment, the user is told to pass --name and nothing is installed.
-func TestCatalogAddInferredNameInvalid(t *testing.T) {
+// TestCatalogAddInvalidNameFlag: an explicit --name that is not a valid path
+// segment is a usage error and nothing is installed (basename inference is gone;
+// the index or --name is the identity source).
+func TestCatalogAddInvalidNameFlag(t *testing.T) {
 	cfg := t.TempDir()
 	t.Setenv("ANYCTL_CONFIG_DIR", cfg)
-	src := filepath.Join(t.TempDir(), "Bad.Name")
+	src := filepath.Join(t.TempDir(), "srcdir")
 	writeSourceManifest(t, src, "widget.yaml", portableWidget)
+	writeCatalogIndex(t, src, "ok")
 
 	var out, errb bytes.Buffer
-	if code := Run([]string{"catalog", "add", src}, &out, &errb); code != agentsafety.ExitUsage {
+	if code := Run([]string{"catalog", "add", src, "--name", "Bad.Name"}, &out, &errb); code != agentsafety.ExitUsage {
 		t.Fatalf("exit = %d, want %d (usage) (stderr: %s)", code, agentsafety.ExitUsage, errb.String())
 	}
-	if !bytes.Contains(errb.Bytes(), []byte("--name")) {
-		t.Errorf("stderr = %q, want guidance to pass --name", errb.String())
+	if _, err := os.Stat(filepath.Join(cfg, "catalogs", "ok")); !os.IsNotExist(err) {
+		t.Error("nothing should be installed when --name is invalid")
+	}
+}
+
+// TestCatalogAddExplicitMembers: an index with a curated `manifests:` list
+// installs exactly those files (and only those), in order, ignoring unlisted
+// manifests in the source.
+func TestCatalogAddExplicitMembers(t *testing.T) {
+	cfg := t.TempDir()
+	t.Setenv("ANYCTL_CONFIG_DIR", cfg)
+	src := filepath.Join(t.TempDir(), "srcdir")
+	writeSourceManifest(t, src, "widget.yaml", portableWidget)
+	writeSourceManifest(t, src, "gadget.yaml", strings.Replace(portableWidget, "name: widget", "name: gadget", 1))
+	// Only widget is a member; gadget is present but unlisted.
+	writeCatalogIndex(t, src, "curated", "widget.yaml")
+
+	var out, errb bytes.Buffer
+	if code := Run([]string{"catalog", "add", src}, &out, &errb); code != agentsafety.ExitOK {
+		t.Fatalf("add exit = %d, want 0 (stderr: %s)", code, errb.String())
+	}
+	if _, err := os.Stat(filepath.Join(cfg, "catalogs", "curated", "widget.yaml")); err != nil {
+		t.Errorf("the listed member widget.yaml should be installed: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(cfg, "catalogs", "curated", "gadget.yaml")); !os.IsNotExist(err) {
+		t.Error("an unlisted manifest must not be installed")
+	}
+}
+
+// TestCatalogAddMissingMemberFailsClosed: an index listing a manifest that does
+// not exist fails the whole add (fail-closed); nothing is installed.
+func TestCatalogAddMissingMemberFailsClosed(t *testing.T) {
+	cfg := t.TempDir()
+	t.Setenv("ANYCTL_CONFIG_DIR", cfg)
+	src := filepath.Join(t.TempDir(), "srcdir")
+	writeSourceManifest(t, src, "widget.yaml", portableWidget)
+	writeCatalogIndex(t, src, "curated", "widget.yaml", "ghost.yaml")
+
+	var out, errb bytes.Buffer
+	if code := Run([]string{"catalog", "add", src}, &out, &errb); code == agentsafety.ExitOK {
+		t.Fatalf("add should fail when a listed member is missing (stderr: %s)", errb.String())
+	}
+	if _, err := os.Stat(filepath.Join(cfg, "catalogs", "curated")); !os.IsNotExist(err) {
+		t.Error("nothing should be installed when a listed member is missing")
 	}
 }
