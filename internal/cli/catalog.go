@@ -15,9 +15,12 @@ import (
 func (r *runner) cmdCatalog() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "catalog",
-		Short: "install and manage named service-manifest catalogs",
+		Short: "Install and manage named service-manifest catalogs",
 		Long: "Install and manage named catalogs — bundles of portable service manifests\n" +
 			"from a directory or git repo, installed into <config-dir>/catalogs/<name>/.\n\n" +
+			"Git is the first-class distribution path: publish a catalog by pushing a repo\n" +
+			"with an anyctl-catalog.yaml index plus its manifests (GitHub, Forgejo,\n" +
+			"Codeberg, GitLab, any git host), and install it with `catalog add <url>`.\n\n" +
 			"anyctl ships with no built-in services: an installed catalog (or a local\n" +
 			"services/<name>.yaml) is what gives the binary something to run. A local\n" +
 			"file overrides an installed-catalog service of the same name; two installed\n" +
@@ -28,7 +31,8 @@ func (r *runner) cmdCatalog() *cobra.Command {
 	cmd.AddCommand(r.cmdCatalogAdd())
 	cmd.AddCommand(r.cmdCatalogUpdate())
 	cmd.AddCommand(r.cmdCatalogRemove())
-	cmd.AddCommand(r.cmdCatalogInstalled())
+	cmd.AddCommand(r.cmdCatalogList())
+	cmd.AddCommand(r.cmdCatalogInfo())
 	cmd.AddCommand(r.cmdCatalogValidate())
 	return cmd
 }

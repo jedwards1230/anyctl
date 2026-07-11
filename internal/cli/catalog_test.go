@@ -22,6 +22,7 @@ func TestListShowsOverrideMarker(t *testing.T) {
 	src := filepath.Join(t.TempDir(), "mycat")
 	writeSourceManifest(t, src, "radarr.yaml", svcManifest)
 	writeSourceManifest(t, src, "sonarr.yaml", strings.Replace(svcManifest, "name: radarr", "name: sonarr", 1))
+	writeCatalogIndex(t, src, "mycat")
 	var out, errb bytes.Buffer
 	if code := Run([]string{"catalog", "add", src}, &out, &errb); code != agentsafety.ExitOK {
 		t.Fatalf("catalog add exit = %d, want 0 (stderr: %s)", code, errb.String())
