@@ -17,3 +17,11 @@ import _ "embed"
 //
 //go:embed manifest.schema.json
 var Manifest []byte
+
+// Catalog is the raw JSON Schema (draft-07) for a catalog index file
+// (anyctl-catalog.yaml) — the required identity/member record at the root of a
+// dir or git catalog source. Like Manifest it is hand-authored so its rules
+// (required name/description, member-filename pattern) stay editor-consumable.
+//
+//go:embed catalog.schema.json
+var Catalog []byte

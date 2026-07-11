@@ -1,0 +1,40 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://raw.githubusercontent.com/jedwards1230/anyctl/main/schema/catalog.schema.json",
+  "title": "anyctl catalog index",
+  "description": "Schema for anyctl-catalog.yaml — the required index file at the root of a directory or git catalog source. It is the intentional-publish marker and identity record for a catalog: it names the catalog, describes it for a marketplace listing, and optionally curates which manifests are members. It is NOT a service manifest (see manifest.schema.json). Every object is closed (additionalProperties: false); a typo'd key is an error, not a silent drop. This schema is an editor aid; the authoritative check is `anyctl catalog validate` (manifest.ParseCatalogIndex), which also enforces the member-filename and name rules JSON Schema cannot fully express.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["name", "description"],
+  "properties": {
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^[a-z0-9][a-z0-9_-]*$",
+      "description": "Default install name (a single path segment; --name overrides it). Must match ^[a-z0-9][a-z0-9_-]*$."
+    },
+    "description": {
+      "type": "string",
+      "minLength": 1,
+      "description": "One-line human-readable summary, shown by `anyctl catalog list`/`info`."
+    },
+    "version": {
+      "type": "string",
+      "description": "Optional, informational version string (e.g. \"1.0.0\"); shown by `anyctl catalog list`/`info`. anyctl does not interpret it."
+    },
+    "homepage": {
+      "type": "string",
+      "description": "Optional project/repository URL, shown by `anyctl catalog info`."
+    },
+    "manifests": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "^[^/\\\\]+\\.(yaml|yml)$",
+        "description": "A bare manifest filename (no path separators), ending in .yaml or .yml."
+      },
+      "description": "Optional member list. Absent: every top-level *.yaml/*.yml (except this index) is a member. Present: exactly these files, in this order, are installed — curation, ordering, subsets."
+    }
+  }
+}

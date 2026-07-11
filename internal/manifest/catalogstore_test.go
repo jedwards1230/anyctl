@@ -419,3 +419,62 @@ func TestReadCatalogMeta(t *testing.T) {
 		t.Error("ReadCatalogMeta for a missing catalog should report found=false")
 	}
 }
+
+// TestCatalogMetaRoundTripIndexFields: the index-derived Description/Version/
+// Homepage fields survive an InstallCatalog → ReadCatalogMeta round-trip.
+func TestCatalogMetaRoundTripIndexFields(t *testing.T) {
+	dir := t.TempDir()
+	meta := CatalogMeta{
+		Name: "idxcat", Description: "an indexed catalog", Version: "2.3.4",
+		Homepage: "https://example.test/idxcat", Source: "/some/dir", Type: "dir",
+	}
+	if err := InstallCatalog(dir, meta, map[string][]byte{"a.yaml": []byte(portableManifest("a"))}, false); err != nil {
+		t.Fatal(err)
+	}
+	got, found, err := ReadCatalogMeta(dir, "idxcat")
+	if err != nil || !found {
+		t.Fatalf("ReadCatalogMeta: found=%v err=%v", found, err)
+	}
+	if got.Description != meta.Description || got.Version != meta.Version || got.Homepage != meta.Homepage {
+		t.Errorf("round-tripped index fields = %+v, want description/version/homepage from %+v", got, meta)
+	}
+}
+
+// TestCatalogServiceNames returns the sorted service names a catalog provides,
+// from each member manifest's name (falling back to the filename stem), skipping
+// the metadata file.
+func TestCatalogServiceNames(t *testing.T) {
+	dir := t.TempDir()
+	installDirCatalog(t, dir, "mycat", map[string]string{
+		"widget.yaml": portableManifest("widget"),
+		"gadget.yaml": portableManifest("gadget"),
+		// A file whose manifest has no `name:` — the service name is the stem.
+		"stemmed.yaml": "auth: { strategy: none }\ncommands:\n  list: { method: GET, path: /l }\n",
+	})
+	names, err := CatalogServiceNames(dir, "mycat")
+	if err != nil {
+		t.Fatalf("CatalogServiceNames: %v", err)
+	}
+	want := []string{"gadget", "stemmed", "widget"}
+	if len(names) != len(want) {
+		t.Fatalf("names = %v, want %v", names, want)
+	}
+	for i := range want {
+		if names[i] != want[i] {
+			t.Fatalf("names = %v, want %v (sorted)", names, want)
+		}
+	}
+}
+
+// TestCatalogServiceNamesNotInstalled: a not-installed catalog is a *ConfigError.
+func TestCatalogServiceNamesNotInstalled(t *testing.T) {
+	dir := t.TempDir()
+	_, err := CatalogServiceNames(dir, "nope")
+	if err == nil {
+		t.Fatal("expected an error for a not-installed catalog")
+	}
+	var cfgErr *ConfigError
+	if !errors.As(err, &cfgErr) {
+		t.Errorf("want *ConfigError (exit 2), got %T: %v", err, err)
+	}
+}

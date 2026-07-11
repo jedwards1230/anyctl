@@ -282,6 +282,13 @@ func loadInstalledCatalogs(l *Loaded, profile *Profile) error {
 			if f.IsDir() || !isYAML(f.Name()) {
 				continue // ignore the catalog marker (.anyctl-catalog.json) and any non-YAML
 			}
+			// Defensive: install never copies the anyctl-catalog.yaml index into a
+			// catalog dir (its fields fold into CatalogMetaFile), so it should never
+			// appear here — but exclude it explicitly so a hand-placed index can
+			// never be misread as a service manifest.
+			if f.Name() == CatalogIndexFile {
+				continue
+			}
 			names = append(names, f.Name())
 		}
 		sort.Strings(names)
