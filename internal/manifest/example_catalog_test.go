@@ -9,9 +9,9 @@ import (
 // exampleCatalogDir resolves the repo's examples/catalog/ reference catalog
 // relative to this test file's package directory (internal/manifest →
 // ../../examples/catalog). It is deliberately SINGULAR ("catalog", not
-// "catalogs") and lives outside examples/ proper, so it is never picked up as
-// an installed catalog by Load(examples) — see examples_lint_test.go's "15
-// embedded services" contract.
+// "catalogs") and lives outside any config dir's catalogs/ tree, so it is never
+// picked up as an installed catalog — it is the standalone reference corpus a
+// third-party author copies.
 func exampleCatalogDir(t *testing.T) string {
 	t.Helper()
 	dir, err := filepath.Abs(filepath.Join("..", "..", "examples", "catalog"))

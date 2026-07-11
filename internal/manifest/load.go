@@ -11,7 +11,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jedwards1230/anyctl/catalog"
 	"github.com/jedwards1230/anyctl/internal/brand"
 	"gopkg.in/yaml.v3"
 )
@@ -19,19 +18,19 @@ import (
 // DefaultResolverCommand is the secret resolver used when config.yaml omits one.
 var DefaultResolverCommand = []string{"op", "read", "{ref}"}
 
-// Origin records where a loaded service came from: the embedded catalog, a local
-// services/<name>.yaml, or a local file that overrides an embedded service.
+// Origin records where a loaded service came from: an installed catalog, a local
+// services/<name>.yaml, or a local file that overrides an installed-catalog
+// service.
 type Origin string
 
 const (
-	OriginEmbedded Origin = "embedded" // built-in catalog manifest (top-level catalog package)
-	OriginLocal    Origin = "local"    // local services/<name>.yaml with no embedded counterpart
-	OriginOverride Origin = "override" // local services/<name>.yaml shadowing an embedded/installed service
+	OriginLocal    Origin = "local"    // local services/<name>.yaml with no installed-catalog counterpart
+	OriginOverride Origin = "override" // local services/<name>.yaml shadowing an installed-catalog service
 )
 
 // originCatalogPrefix marks a provenance value for an installed (named) catalog:
 // the dynamic origin "catalog:<name>" records which installed catalog supplied a
-// service. It sits between the embedded floor and a local override in precedence.
+// service. An installed catalog sits below a local override in precedence.
 const originCatalogPrefix = "catalog:"
 
 // catalogOrigin builds the dynamic Origin for an installed catalog of the given name.
@@ -42,15 +41,14 @@ func (o Origin) IsCatalog() bool { return strings.HasPrefix(string(o), originCat
 
 // Loaded is the merged result of a config dir: the global config plus every
 // service manifest, keyed by ADDRESSABLE SELECTOR. A selector is either a bare
-// service name (an embedded/local service, or an installed-catalog service with
-// exactly one definer) or a qualified "<catalog>:<service>" name (every
-// installed-catalog service, always — even a sole definer also gets the
-// qualified form). Services come from the embedded catalog, installed catalogs,
-// and the local services/ dir, with local overriding installed overriding
-// embedded by name.
+// service name (a local service, or an installed-catalog service with exactly
+// one definer) or a qualified "<catalog>:<service>" name (every installed-catalog
+// service, always — even a sole definer also gets the qualified form). Services
+// come from two sources — installed catalogs and the local services/ dir — with
+// a local file overriding an installed-catalog service by name.
 type Loaded struct {
 	Config Config
-	// Services is keyed by selector: bare names for embedded/local services and
+	// Services is keyed by selector: bare names for local services and
 	// any installed-catalog service with exactly one definer, plus a qualified
 	// "<catalog>:<service>" entry for EVERY installed-catalog service. A bare
 	// name that more than one installed catalog defines (and no local override
@@ -175,38 +173,18 @@ func Load(dir string) (*Loaded, error) {
 	}
 	l.Profile = profile
 
-	// Embedded catalog (built-in portable manifests). These are the fallback
-	// every config gets for free; a local services/<name>.yaml overrides one by
-	// name below. A malformed embedded manifest is a build-time bug, so a decode
-	// failure here is fatal (and caught by the catalog tests in CI).
-	for _, name := range catalog.Names() {
-		data, ok := catalog.Manifest(name)
-		if !ok {
-			continue // unreachable: Names and Manifest share one index
-		}
-		svc, err := decodeService(data, "catalog:"+name+".yaml", dir, os.Stderr)
-		if err != nil {
-			return nil, fmt.Errorf("embedded catalog: %w", err)
-		}
-		if svc.Name == "" {
-			svc.Name = name
-		}
-		finalizeService(svc, l.Config, profile)
-		l.Services[svc.Name] = svc
-		l.Origins[svc.Name] = OriginEmbedded
-	}
-
-	// Installed (named) catalogs, loaded AFTER the embedded floor and BEFORE the
-	// local services/ dir, so precedence is local > installed catalogs > embedded.
-	// An installed catalog shadows the embedded one of the same name; two installed
-	// catalogs claiming one name is a hard error (fail-closed). A missing catalogs/
-	// dir is not an error.
+	// Installed (named) catalogs, loaded BEFORE the local services/ dir, so
+	// precedence is local > installed catalogs. Two installed catalogs claiming one
+	// name is not fatal — each stays addressable as "<catalog>:<service>" and the
+	// bare name becomes ambiguous. A missing catalogs/ dir is not an error. anyctl
+	// ships no built-in services: absent any installed catalog or local services/
+	// dir, a config resolves to ZERO services.
 	if err := loadInstalledCatalogs(l, profile); err != nil {
 		return nil, err
 	}
 
-	// Local service manifests (optional dir). A local file overrides the embedded
-	// (or installed-catalog) service of the same name — that is the feature, not a
+	// Local service manifests (optional dir). A local file overrides the
+	// installed-catalog service of the same name — that is the feature, not a
 	// duplicate error. Two LOCAL files claiming the same name is still a real
 	// duplicate.
 	svcDir := filepath.Join(dir, "services")
@@ -236,9 +214,9 @@ func Load(dir string) (*Loaded, error) {
 		switch {
 		case prior == OriginLocal || prior == OriginOverride:
 			return nil, fmt.Errorf("duplicate service name %q in %s", svc.Name, path)
-		case prior == OriginEmbedded || prior.IsCatalog() || wasAmbiguous:
-			// Local shadows the embedded one, a (sole-definer) installed catalog,
-			// or an otherwise-ambiguous bare name claimed by multiple installed
+		case prior.IsCatalog() || wasAmbiguous:
+			// Local shadows a (sole-definer) installed catalog, or an
+			// otherwise-ambiguous bare name claimed by multiple installed
 			// catalogs — a local file always wins and resolves the ambiguity.
 			l.Origins[svc.Name] = OriginOverride
 		default:
@@ -255,17 +233,16 @@ func Load(dir string) (*Loaded, error) {
 }
 
 // loadInstalledCatalogs merges every manifest under <dir>/catalogs/<cat>/ into l,
-// after the embedded floor and before the local services/ dir. Catalog subdirs
-// are visited in sorted name order and each catalog's manifests in sorted file
-// order, so the load is deterministic.
+// before the local services/ dir. Catalog subdirs are visited in sorted name
+// order and each catalog's manifests in sorted file order, so the load is
+// deterministic.
 //
 // Every installed-catalog service is ALWAYS addressable via its qualified
 // "<catalog>:<service>" selector — registered unconditionally, regardless of any
 // bare-name collision. The bare name additionally resolves when exactly one
-// installed catalog defines it (shadowing the embedded floor, origin →
-// catalog:<cat>); when MORE than one does, the bare name is left unresolved
-// (recorded in l.Ambiguous, any embedded floor entry of that name removed) —
-// looking it up is a hard error, never a silent pick. A duplicate service name
+// installed catalog defines it (origin → catalog:<cat>); when MORE than one does,
+// the bare name is left unresolved (recorded in l.Ambiguous) — looking it up is a
+// hard error, never a silent pick. A duplicate service name
 // within ONE catalog is still a hard error. A missing catalogs/ dir is not an
 // error; a malformed installed manifest fails Load (consistent with services/).
 func loadInstalledCatalogs(l *Loaded, profile *Profile) error {
@@ -341,13 +318,13 @@ func loadInstalledCatalogs(l *Loaded, profile *Profile) error {
 	for name, definers := range bareDefiners {
 		if len(definers) == 1 {
 			cat := definers[0]
-			l.Services[name] = l.Services[cat+":"+name] // shadows the embedded floor (or an unset bare name)
+			l.Services[name] = l.Services[cat+":"+name] // resolves the (previously unset) bare name
 			l.Origins[name] = catalogOrigin(cat)
 			continue
 		}
 		// More than one installed catalog defines this name: the bare selector
-		// resolves to nothing (never silently pick one) — drop any embedded floor
-		// entry and record the ambiguity for Lookup/CLI to report.
+		// resolves to nothing (never silently pick one) — record the ambiguity for
+		// Lookup/CLI to report.
 		delete(l.Services, name)
 		delete(l.Origins, name)
 		l.Ambiguous[name] = definers // already sorted: definers append in sorted cat order
@@ -357,7 +334,8 @@ func loadInstalledCatalogs(l *Loaded, profile *Profile) error {
 
 // finalizeService applies global defaults then the user's profile binding (if
 // any). Order matters: the profile wins over the manifest but inherits any global
-// default the binding leaves unset. Shared by the embedded and local load paths.
+// default the binding leaves unset. Shared by the installed-catalog and local
+// load paths.
 func finalizeService(svc *Service, cfg Config, profile *Profile) {
 	mergeDefaults(svc, cfg)
 	if profile != nil {
@@ -440,8 +418,8 @@ func loadService(path, configDir string, warn io.Writer) (*Service, error) {
 
 // decodeService parses, structurally validates, and spec-infers a manifest from
 // raw bytes. label names the source in errors/warnings (a file path for a local
-// manifest, "catalog:<name>" for an embedded one). configDir resolves relative
-// spec: paths; pass "" when there is no config root (a bare embedded manifest).
+// manifest, "catalogs/<cat>/<file>" for an installed-catalog one). configDir
+// resolves relative spec: paths; pass "" when there is no config root.
 func decodeService(b []byte, label, configDir string, warn io.Writer) (*Service, error) {
 	var svc Service
 	if err := yaml.Unmarshal(b, &svc); err != nil {

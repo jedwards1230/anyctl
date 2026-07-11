@@ -462,7 +462,7 @@ func writeWrappedComment(b *strings.Builder, text string) {
 // …) guarantees correct YAML quoting/escaping — a hand-written "key: value"
 // line would need to reimplement that escaping itself to stay safe. The
 // encoder is pinned to 2-space indent to match the hand-written style the rest
-// of the codebase (scaffold.go, the embedded catalog) uses, rather than
+// of the codebase (scaffold.go, the example catalogs) uses, rather than
 // yaml.Marshal's 4-space default.
 func writeYAMLField(b *strings.Builder, key string, value any) error {
 	var buf strings.Builder

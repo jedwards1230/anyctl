@@ -5,8 +5,6 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
-
-	"github.com/jedwards1230/anyctl/catalog"
 )
 
 func writeConfig(t *testing.T, dir, body string) {
@@ -92,14 +90,10 @@ func TestLoadMissingDir(t *testing.T) {
 	if err != nil {
 		t.Fatalf("missing dir should not error: %v", err)
 	}
-	// A missing config dir still yields the embedded catalog (no local overrides).
-	if len(l.Services) != len(catalog.Names()) {
-		t.Errorf("missing dir loaded %d services, want %d embedded", len(l.Services), len(catalog.Names()))
-	}
-	if svc, ok := l.Services["radarr"]; !ok {
-		t.Error("embedded radarr should be available with no config dir")
-	} else if got := l.OriginOf(svc.Name); got != OriginEmbedded {
-		t.Errorf("radarr origin = %q, want embedded", got)
+	// anyctl ships no built-in floor: a missing/empty config dir yields ZERO
+	// services (no installed catalogs, no local services/).
+	if len(l.Services) != 0 {
+		t.Errorf("missing dir loaded %d services, want 0 (no embedded floor)", len(l.Services))
 	}
 }
 

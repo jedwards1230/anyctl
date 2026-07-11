@@ -74,15 +74,16 @@ func TestSvcBareListsServices(t *testing.T) {
 }
 
 // TestSvcBareEmptyConfigGraceful confirms bare `anyctl svc` with no local config
-// does not crash — it lists the embedded catalog (parity with `list`) and exits 0.
+// does not crash — it prints the actionable no-services hint (parity with `list`)
+// and exits 0.
 func TestSvcBareEmptyConfigGraceful(t *testing.T) {
 	t.Setenv("ANYCTL_CONFIG_DIR", t.TempDir())
 	var out, errb bytes.Buffer
 	if code := Run([]string{"svc"}, &out, &errb); code != agentsafety.ExitOK {
 		t.Fatalf("exit = %d, want 0 (stderr: %s)", code, errb.String())
 	}
-	if got := out.String(); !strings.Contains(got, "radarr") || !strings.Contains(got, "embedded") {
-		t.Fatalf("bare svc stdout = %q, want the embedded catalog (parity with `list`)", got)
+	if got := out.String(); !strings.Contains(got, "No services configured") || !strings.Contains(got, "catalog add") {
+		t.Fatalf("bare svc stdout = %q, want the actionable no-services hint (parity with `list`)", got)
 	}
 }
 

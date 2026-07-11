@@ -29,7 +29,7 @@ func (r *runner) cmdCatalogValidate() *cobra.Command {
 			"Validate, which rejects an in-manifest base_url or secret ref). A duplicate\n" +
 			"service name across two manifests in the directory is also rejected.\n\n" +
 			"This command is read-only: no network call, no install, no profile binding,\n" +
-			"and no interaction with any installed or embedded catalog — it only inspects\n" +
+			"and no interaction with any installed catalog — it only inspects\n" +
 			"the files in <dir>. That makes it the check a third-party catalog repository\n" +
 			"runs in its own CI (see .github/actions/validate-catalog) to confirm its\n" +
 			fmt.Sprintf("manifests satisfy %s's contract before anyone runs `%s catalog add`\n", brand.Name, brand.Name) +

@@ -48,9 +48,9 @@ and reject anything that carries one. An in-manifest secret `env:` (like
 never a value baked into the manifest.
 
 See [`anyctl schema`](../../README.md#manifest-json-schema-editor-support) for
-the full JSON Schema, and `anyctl catalog show <name>` against the embedded
-catalog for fuller real-world examples (header-key, bearer, basic auth; named
-commands; pagination; multi-endpoint).
+the full JSON Schema. For fuller real-world examples (header-key, bearer, basic
+auth; named commands; pagination; multi-endpoint), see the manifests in any
+published catalog.
 
 ## Validating before you publish
 
@@ -93,11 +93,11 @@ anyctl svc yours:inventory items                           # …or the qualified
 ```
 
 The qualified `<catalog>:<service>` selector always works. The bare name only
-works while it's unambiguous — if a consumer has another installed catalog (or
-the embedded catalog) that also defines a service named `inventory`, the bare
-name errors and lists both qualified forms instead of silently picking one.
-Resolution precedence (highest wins): a consumer's local `services/<name>.yaml`
-\> any installed catalog \> the embedded catalog.
+works while it's unambiguous — if a consumer has another installed catalog that
+also defines a service named `inventory`, the bare name errors and lists both
+qualified forms instead of silently picking one. Resolution precedence (highest
+wins): a consumer's local `services/<name>.yaml` \> any installed catalog. There
+is no built-in floor.
 
 An installed catalog is **inert** until the consumer's `profile.yaml` binds a
 `base_url` and the declared secrets — installing it only makes the manifests

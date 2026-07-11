@@ -2,9 +2,10 @@ package schema_test
 
 import (
 	"bytes"
+	"os"
+	"path/filepath"
 	"testing"
 
-	"github.com/jedwards1230/anyctl/catalog"
 	"github.com/jedwards1230/anyctl/internal/manifest"
 	"github.com/jedwards1230/anyctl/schema"
 	"github.com/santhosh-tekuri/jsonschema/v6"
@@ -56,35 +57,47 @@ func goValidate(src []byte) error {
 }
 
 // TestCatalogManifestsConformToSchema is the no-false-positives guarantee: every
-// embedded catalog manifest must validate clean against the schema AND pass the
-// Go structural Validate. (internal/manifest/testdata/petstore.yaml is excluded
-// on purpose — it is an OpenAPI 3.0 document used as a spec: inference fixture,
-// not a anyctl manifest, so it would correctly fail this schema.)
+// manifest in the in-repo reference catalog (examples/catalog/) must validate
+// clean against the schema AND pass the Go structural Validate. anyctl ships no
+// embedded catalog anymore, so the reference catalog is the real corpus this
+// guards. (internal/manifest/testdata/petstore.yaml is excluded on purpose — it
+// is an OpenAPI 3.0 document used as a spec: inference fixture, not a anyctl
+// manifest, so it would correctly fail this schema.)
 func TestCatalogManifestsConformToSchema(t *testing.T) {
 	sch := compileSchema(t)
-	names := catalog.Names()
-	if len(names) == 0 {
-		t.Fatal("no catalog manifests found")
+	dir := filepath.Join("..", "examples", "catalog")
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatalf("read %s: %v", dir, err)
 	}
-	for _, name := range names {
+	var count int
+	for _, e := range entries {
+		name := e.Name()
+		if e.IsDir() || (filepath.Ext(name) != ".yaml" && filepath.Ext(name) != ".yml") {
+			continue // skip README and any non-YAML
+		}
+		count++
 		t.Run(name, func(t *testing.T) {
-			data, ok := catalog.Manifest(name)
-			if !ok {
-				t.Fatalf("catalog.Manifest(%q) missing", name)
+			data, err := os.ReadFile(filepath.Join(dir, name))
+			if err != nil {
+				t.Fatalf("read %s: %v", name, err)
 			}
 			if err := schemaValidate(sch, data); err != nil {
-				t.Errorf("schema rejected catalog manifest %q: %v", name, err)
+				t.Errorf("schema rejected reference manifest %q: %v", name, err)
 			}
 			var svc manifest.Service
 			if err := yaml.Unmarshal(data, &svc); err != nil {
 				t.Fatalf("yaml decode %q: %v", name, err)
 			}
 			if err := manifest.Validate(&svc); err != nil {
-				t.Errorf("manifest.Validate rejected catalog manifest %q: %v", name, err)
+				t.Errorf("manifest.Validate rejected reference manifest %q: %v", name, err)
 			}
 		})
 	}
-	t.Logf("conformance corpus: %d catalog manifests", len(names))
+	if count == 0 {
+		t.Fatalf("no reference manifests found in %s", dir)
+	}
+	t.Logf("conformance corpus: %d reference manifests", count)
 }
 
 // TestKnownInvalidManifestsFailSchema asserts the schema catches the structural

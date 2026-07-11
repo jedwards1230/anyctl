@@ -32,9 +32,8 @@ pre-call hook), not baked into the tool. Don't add safety/policy logic here.
 
 ```
 main.go                 entry → internal/cli
-catalog/                portable service manifests embedded in the binary (//go:embed *.yaml)
 internal/
-  manifest/   YAML model + XDG load/merge + schema validation + embedded/installed-catalog merge + catalog store
+  manifest/   YAML model + XDG load/merge + schema validation + installed-catalog merge + catalog store
   command/    format-neutral Command model + producers (commands: block, generic verbs)
   template/   {secret.X}/{env.X}/{arg.N}/{var} expansion (JSON braces pass through)
   secret/     scheme-dispatched Provider interface (op:// → 1Password) + env override
@@ -83,19 +82,16 @@ to stderr. It still gates nothing.
 
 ## Catalogs
 
-Three sources, highest wins: local `services/<name>.yaml` > installed catalog
-(`catalogs/*/`) > the embedded floor (top-level `catalog/`, 15 manifests
-`//go:embed`'d). A manifest is plain YAML, so editing is **rebuild-free**.
+anyctl ships **no built-in services** — there is no embedded floor. Two sources,
+highest wins: local `services/<name>.yaml` > installed catalog (`catalogs/*/`).
+Absent any local `services/` or installed `catalogs/`, a config resolves to ZERO
+services and `list`/bare `svc` print an actionable hint (exit 0) while `svc
+<name>`/`doctor`/`mcp` error (exit 2). A manifest is plain YAML, so editing is
+**rebuild-free**. To author a NEW manifest, scaffold with `anyctl init` into
+`services/` and validate with `anyctl lint`.
 
-- `catalog list`/`show <name>` — inspect/dump embedded manifests.
-- `catalog edit <name>` — seed the **full** embedded manifest into
-  `services/<name>.yaml` (shadows embedded at next load). A FULL copy, not a
-  patch, because a local override wholesale replaces the embedded entry
-  (validated standalone, no field-level merge — see `decodeService`/`Validate` in
-  `load.go`). `--force` to clobber; `--edit` opens `$VISUAL`/`$EDITOR`.
-- `catalog vendor <name> --catalog-dir catalog` — promote an edited override back
-  into a repo checkout's `catalog/` to ship embedded. Validates first;
-  `--catalog-dir` required (the binary can't know the repo path).
+`catalog` manages INSTALLED (named) catalogs only:
+
 - `catalog add <source> [--name --ref --path --force]` — install a dir or git repo
   of portable manifests. Validates every `*.yaml` (schema + portability)
   fail-closed, installs atomically. Git pinned to its commit SHA in
@@ -155,17 +151,17 @@ auto-detects by shape. A write-confirmation View is a later PR.
   4 HTTP≥400, 5 network, 6 decode).
 - Secrets are refs (`op://...`) resolved at call time — never values in manifests,
   never in argv, redacted in verbose/dry-run output.
-- Services resolve from **three sources, highest wins**: a local
+- Services resolve from **two sources, highest wins**: a local
   `<config-dir>/services/<name>.yaml` > an installed named catalog
-  (`<config-dir>/catalogs/*/`) > the embedded catalog (the top-level `catalog`
-  package, the 15 built-in portable manifests). `list` marks each `local`,
-  `override` (a local file shadowing embedded/an installed catalog), `catalog:<name>`
-  (from an installed catalog), or `embedded`. Two *local* files with one name is
+  (`<config-dir>/catalogs/*/`). There is no built-in floor. `list` marks each
+  `local`, `override` (a local file shadowing an installed catalog), or
+  `catalog:<name>` (from an installed catalog). Two *local* files with one name is
   still a duplicate error. Two *installed catalogs* defining one name is **not**
   an error — both stay addressable as `<catalog>:<service>`; the bare name is
   ambiguous and errors (listing both qualified forms) until you qualify it.
-  Absent any local `services/` or `catalogs/`, all 15 come from the embedded
-  catalog.
+  Absent any local `services/` or `catalogs/`, a config has ZERO services and
+  `list`/bare `svc` print an actionable hint (exit 0) while `svc <name>`/`doctor`/
+  `mcp` fail with the same guidance (exit 2).
 - A manifest is **portable** (what a service *is*); user-specific endpoints and
   credentials (`base_url`, secret `ref`s, per-machine endpoint/var/tls overrides)
   live in a `profile.yaml` at the config root, which is the **sole** binding

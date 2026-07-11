@@ -38,11 +38,12 @@ anyctl svc radarr status              # smoke-test the live endpoint
 anyctl svc radarr list --dry-run      # preview the resolved request, send nothing
 ```
 
-**You don't need to write any manifests to start.** 15 services ship embedded in
-the binary — radarr, sonarr, prowlarr, bazarr, tdarr, n8n, authentik, harbor,
-abs, forgejo, sunshine, truenas, ts, contextforge, cloudflare. `anyctl list`
-shows them all. You just bind the ones you use to your machine with a
-`profile.yaml`.
+**anyctl ships with no built-in services.** You give it something to run in one of
+two ways: **install a catalog** — a bundle of portable manifests from a directory
+or git repo (`anyctl catalog add <source>`) — or **write a local manifest** under
+`services/`. Either way you then bind the services you use to your machine with a
+`profile.yaml`. With nothing configured, `anyctl list` prints a short hint telling
+you how to configure one.
 
 ## Manifests & profiles
 
@@ -102,16 +103,16 @@ with `ANYCTL_CONFIG_DIR` or `--config-dir`:
 ```
 
 The [`examples/`](examples/) dir has three ready-to-try configs:
-[`quickstart/`](examples/quickstart/) (one no-auth service, runs as-is),
-[`full/`](examples/full/) (a profile-only config binding all 15 embedded
-services to placeholder hosts — `ANYCTL_CONFIG_DIR=examples/full anyctl lint
+[`quickstart/`](examples/quickstart/) (one no-auth local service, runs as-is),
+[`full/`](examples/full/) (an installed reference catalog + a profile binding its
+two services to placeholder hosts — `ANYCTL_CONFIG_DIR=examples/full anyctl lint
 --strict`), and [`catalog/`](examples/catalog/) (a reference third-party
 catalog).
 
 ## Commands
 
 ```sh
-anyctl list                           # every service + its origin (embedded / local / override / catalog:<name>)
+anyctl list                           # every service + its origin (local / override / catalog:<name>)
 anyctl svc radarr list                # run a named command
 anyctl svc radarr list --filter 'length'   # gojq filter the output
 anyctl svc radarr list --dry-run      # print the resolved request, send nothing
@@ -130,20 +131,9 @@ never collide with a built-in like `list` or `doctor`.
 
 ## Catalogs
 
-The 15 embedded manifests are the **default catalog** — the floor every install
-gets for free. A manifest is plain YAML, so editing one is **rebuild-free**:
-
-```sh
-anyctl catalog show radarr            # dump an embedded manifest
-anyctl catalog edit radarr            # copy it into services/ for live editing (no recompile)
-anyctl catalog vendor radarr --catalog-dir ./catalog   # promote an edit back into a repo checkout to ship
-```
-
-`catalog edit` seeds a **full** copy (not a patch) because a local override
-wholesale replaces the embedded entry.
-
-You can also **install named catalogs** — bundles of portable manifests from a
-directory or git repo — into `catalogs/<name>/`:
+anyctl ships with **no built-in services**. You **install named catalogs** —
+bundles of portable manifests from a directory or git repo — into
+`catalogs/<name>/`:
 
 ```sh
 anyctl catalog add ./my-manifests                    # install a local dir (name = basename)
@@ -156,9 +146,9 @@ anyctl catalog remove <name>
 ```
 
 **Resolution precedence (highest wins):** local `services/<name>.yaml` >
-installed catalog > embedded. Two installed catalogs may share a service name;
-the bare name then becomes ambiguous and you address each as
-`<catalog>:<service>`.
+installed catalog. There is no built-in floor — with neither present, a config
+has no services. Two installed catalogs may share a service name; the bare name
+then becomes ambiguous and you address each as `<catalog>:<service>`.
 
 A catalog carries no endpoints or credentials, so it's **inert until your
 profile binds it** — that's why catalogs need no signing. `catalog add`

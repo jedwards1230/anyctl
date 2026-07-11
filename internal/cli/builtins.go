@@ -33,11 +33,33 @@ func (r *runner) addBuiltins(root *cobra.Command, loaded *manifest.Loaded, loadE
 func (r *runner) cmdList(loaded *manifest.Loaded, loadErr error) *cobra.Command {
 	return &cobra.Command{
 		Use:   "list",
-		Short: "list configured services (embedded / local / override)",
+		Short: "list configured services (local / override / catalog:<name>)",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return r.listServices(loaded, loadErr)
 		},
 	}
+}
+
+// noServicesHint is the single actionable message shown when a config dir
+// resolves to ZERO services. anyctl ships no built-in "floor" catalog, so an
+// empty config is an ordinary first-run state — the message names the two ways to
+// configure one (install a catalog or add a local manifest). Centralized so the
+// four empty-config call sites (list, bare svc, doctor, mcp) stay in lockstep.
+// dir is the active config dir.
+func noServicesHint(dir string) string {
+	return fmt.Sprintf(
+		"No services configured. Install a catalog with '%s catalog add <source>' or add a manifest at %s/services/<name>.yaml",
+		brand.Name, dir,
+	)
+}
+
+// activeConfigDir reports the config dir a loaded result came from, falling back
+// to the resolved default when nothing loaded (loaded == nil).
+func activeConfigDir(loaded *manifest.Loaded) string {
+	if loaded != nil {
+		return loaded.Dir
+	}
+	return manifest.ConfigDir()
 }
 
 // listServices prints the configured services (name + optional description) to
@@ -48,7 +70,7 @@ func (r *runner) listServices(loaded *manifest.Loaded, loadErr error) error {
 		return loadErr
 	}
 	if loaded == nil || len(loaded.Services) == 0 {
-		_, _ = fmt.Fprintf(r.stdout, "No services configured. Add manifests under %s/services/\n", manifest.ConfigDir())
+		_, _ = fmt.Fprintln(r.stdout, noServicesHint(activeConfigDir(loaded)))
 		return nil
 	}
 	for _, name := range loaded.CanonicalNames() {
@@ -169,7 +191,10 @@ func (r *runner) cmdDoctor(loaded *manifest.Loaded) *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			r.curCommand = "doctor"
 			if loaded == nil || len(loaded.Services) == 0 {
-				return fmt.Errorf("no services configured")
+				// No embedded floor: an empty config is a config problem, not a
+				// runtime failure — classify as a usage error (exit 2) with the
+				// shared actionable hint.
+				return agentsafety.NewUsageError(noServicesHint(activeConfigDir(loaded)))
 			}
 			// A single selector argument resolves through Lookup, so a qualified
 			// "<catalog>:<service>" name works and an ambiguous bare name reports
@@ -289,7 +314,10 @@ func (r *runner) cmdMCP() *cobra.Command {
 			"to the named service(s). Both filters compose and apply to either transport.",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if r.loaded == nil || len(r.loaded.Services) == 0 {
-				return fmt.Errorf("no services configured; add manifests under %s/services/", manifest.ConfigDir())
+				// No embedded floor: with nothing configured the server would expose
+				// zero tools — surface the shared actionable hint as a usage error
+				// (exit 2) instead of starting an empty server.
+				return agentsafety.NewUsageError(noServicesHint(activeConfigDir(r.loaded)))
 			}
 			if err := mcpserver.ValidateServices(r.loaded, services); err != nil {
 				return agentsafety.NewUsageError(err.Error())

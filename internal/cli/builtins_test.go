@@ -121,9 +121,8 @@ commands:
 }
 
 // TestLintStrictScopedPasses: `lint --strict <service>` exits 0 when that one
-// bound service is complete, even though other (embedded, unbound) services would
-// fail an unscoped `lint --strict`. This is the "verify just the one I bound"
-// path the `init` next-step hint promotes.
+// bound service is complete. This is the "verify just the one I bound" path the
+// `init` next-step hint promotes.
 func TestLintStrictScopedPasses(t *testing.T) {
 	dir := t.TempDir()
 	writeService(t, dir, "radarr", validManifestBody)

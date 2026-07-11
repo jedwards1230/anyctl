@@ -2,63 +2,36 @@ package cli
 
 import (
 	"bytes"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/jedwards1230/anyctl/internal/agentsafety"
 )
 
-// TestCatalogList: `anyctl catalog list` prints the embedded services with their
-// descriptions, independent of any local config.
-func TestCatalogList(t *testing.T) {
-	t.Setenv("ANYCTL_CONFIG_DIR", t.TempDir())
-	var out, errb bytes.Buffer
-	if code := Run([]string{"catalog", "list"}, &out, &errb); code != agentsafety.ExitOK {
-		t.Fatalf("exit = %d, want 0 (stderr: %s)", code, errb.String())
-	}
-	got := out.String()
-	for _, name := range []string{"radarr", "truenas", "cloudflare"} {
-		if !strings.Contains(got, name) {
-			t.Errorf("catalog list = %q, want to include %q", got, name)
-		}
-	}
-}
-
-// TestCatalogShow: `anyctl catalog show <name>` dumps the embedded YAML, and the
-// output is a valid manifest (carries the name:, no leaked base_url).
-func TestCatalogShow(t *testing.T) {
-	t.Setenv("ANYCTL_CONFIG_DIR", t.TempDir())
-	var out, errb bytes.Buffer
-	if code := Run([]string{"catalog", "show", "radarr"}, &out, &errb); code != agentsafety.ExitOK {
-		t.Fatalf("exit = %d, want 0 (stderr: %s)", code, errb.String())
-	}
-	got := out.String()
-	if !strings.Contains(got, "name: radarr") {
-		t.Fatalf("catalog show radarr = %q, want the embedded manifest YAML", got)
-	}
-}
-
-// TestCatalogShowUnknown: an unknown service is a usage error (exit 2).
-func TestCatalogShowUnknown(t *testing.T) {
-	t.Setenv("ANYCTL_CONFIG_DIR", t.TempDir())
-	var out, errb bytes.Buffer
-	if code := Run([]string{"catalog", "show", "nope"}, &out, &errb); code != agentsafety.ExitUsage {
-		t.Fatalf("exit = %d, want %d (usage)", code, agentsafety.ExitUsage)
-	}
-	if !strings.Contains(errb.String(), "no embedded service") {
-		t.Fatalf("stderr = %q, want a 'no embedded service' diagnostic", errb.String())
-	}
-}
-
-// TestListShowsOverrideMarker: a local manifest that shadows an embedded service
-// is marked `override` in `list`, while untouched embedded services stay
-// `embedded`.
+// TestListShowsOverrideMarker: with a catalog installed, a local
+// services/<name>.yaml that shadows one of its services is marked `override` in
+// `list`, while an untouched catalog service stays `catalog:<name>`. The
+// `override` origin needs an installed base to shadow (there is no embedded
+// floor), so the test stages a catalog first.
 func TestListShowsOverrideMarker(t *testing.T) {
 	dir := t.TempDir()
-	writeService(t, dir, "radarr", svcManifest)
 	t.Setenv("ANYCTL_CONFIG_DIR", dir)
 
+	// Install a two-service catalog (radarr + sonarr) from a source dir.
+	src := filepath.Join(t.TempDir(), "mycat")
+	writeSourceManifest(t, src, "radarr.yaml", svcManifest)
+	writeSourceManifest(t, src, "sonarr.yaml", strings.Replace(svcManifest, "name: radarr", "name: sonarr", 1))
 	var out, errb bytes.Buffer
+	if code := Run([]string{"catalog", "add", src}, &out, &errb); code != agentsafety.ExitOK {
+		t.Fatalf("catalog add exit = %d, want 0 (stderr: %s)", code, errb.String())
+	}
+
+	// A local radarr manifest shadows the installed-catalog radarr.
+	writeService(t, dir, "radarr", svcManifest)
+
+	out.Reset()
+	errb.Reset()
 	if code := Run([]string{"list"}, &out, &errb); code != agentsafety.ExitOK {
 		t.Fatalf("exit = %d, want 0 (stderr: %s)", code, errb.String())
 	}
@@ -74,8 +47,8 @@ func TestListShowsOverrideMarker(t *testing.T) {
 				t.Errorf("radarr marker = %q, want override (line %q)", fields[1], line)
 			}
 		case "sonarr":
-			if fields[1] != "embedded" {
-				t.Errorf("sonarr marker = %q, want embedded (line %q)", fields[1], line)
+			if fields[1] != "catalog:mycat" {
+				t.Errorf("sonarr marker = %q, want catalog:mycat (line %q)", fields[1], line)
 			}
 		}
 	}
