@@ -1,16 +1,18 @@
 # Composite action a third-party catalog repository wires into its own CI to
-# check its manifests against anyctl's contract: installs anyctl, then runs
+# check its catalog against anyctl's contract: installs anyctl, then runs
 # `anyctl catalog validate <path>` (read-only — no network, no install, no
-# config dir) against the catalog directory.
+# config dir) against the catalog directory. That validates the required
+# anyctl-catalog.yaml index at the directory's root and every member manifest it
+# selects. Mechanically unchanged from earlier releases; only the index is new.
 name: Validate anyctl catalog
 description: >-
-  Validate a directory of portable anyctl service manifests with
-  `anyctl catalog validate` (the same fail-closed gate `anyctl catalog add`
-  enforces).
+  Validate an anyctl catalog directory (its anyctl-catalog.yaml index and every
+  member manifest) with `anyctl catalog validate` — the same fail-closed gate
+  `anyctl catalog add` enforces.
 
 inputs:
   path:
-    description: Catalog directory to validate (top-level *.yaml/*.yml manifests).
+    description: Catalog directory to validate (holds anyctl-catalog.yaml plus its manifests).
     required: false
     default: "."
   version:

@@ -90,11 +90,22 @@ services and `list`/bare `svc` print an actionable hint (exit 0) while `svc
 **rebuild-free**. To author a NEW manifest, scaffold with `anyctl init` into
 `services/` and validate with `anyctl lint`.
 
-`catalog` manages INSTALLED (named) catalogs only:
+**Git is the first-class distribution path.** Every dir/git catalog source MUST
+carry an `anyctl-catalog.yaml` index at its root (the `--path` subdir for a subdir
+install) — the required identity record: `name` + `description` (both required),
+optional `version`/`homepage`, and an optional curated `manifests:` member list
+(absent → auto-glob top-level `*.yaml` except the index; present → exactly those,
+in order, fail-closed). The index is NOT copied into `catalogs/<name>/`; its
+fields fold into `.anyctl-catalog.json` (`CatalogMeta.Description/Version/Homepage`).
+Model + parse/validate: `internal/manifest/catalogindex.go`; schema:
+`schema/catalog.schema.json` (embedded as `schema.Catalog`, printed by `anyctl
+schema catalog`). `--openapi` sources are index-exempt (anyctl synthesizes the
+manifest). `catalog` manages INSTALLED (named) catalogs only:
 
 - `catalog add <source> [--name --ref --path --force]` — install a dir or git repo
-  of portable manifests. Validates every `*.yaml` (schema + portability)
-  fail-closed, installs atomically. Git pinned to its commit SHA in
+  of portable manifests. Reads the index, then validates every member `*.yaml`
+  (schema + portability) fail-closed, installs atomically. Name = `--name` > index
+  `name` (no basename inference). Git pinned to its commit SHA in
   `.anyctl-catalog.json`; fetches shell to system `git` with `ext`/`fd` blocked,
   URL after `--`. `--path <subdir>` (git-only) installs from a subdirectory of the
   repo (recorded in the metadata so `update` re-fetches the same subdir; rejects
@@ -103,11 +114,13 @@ services and `list`/bare `svc` print an actionable hint (exit 0) while `svc
   (operations → `commands:`, `securitySchemes` best-effort → `auth:`, un-mappable
   → `strategy: none`; spec parsed once, not vendored).
   Impl: `internal/manifest/openapi_scaffold.go`, `internal/cli/catalog_openapi.go`.
-- `catalog update [name]` / `remove <name>` / `installed`.
-- `catalog validate <dir>` — the SAME fail-closed gate `catalog add` runs
-  (`ValidatePortableManifest` + duplicate-name check), read-only and
-  config-dir-free (per-file `ok`/`FAIL`, exit 0/2). What a third-party catalog
-  repo runs in CI. Impl: `internal/cli/catalog_validate.go`.
+- `catalog update [name...]` (variadic; re-reads each source's index) / `remove
+  <name>` / `list` (NAME VERSION SERVICES PINNED SOURCE) / `info <name>` (one
+  catalog's identity, provenance, and services).
+- `catalog validate <dir>` — the SAME fail-closed gate `catalog add` runs (index
+  present + valid, then `ValidatePortableManifest` + duplicate-name check),
+  read-only and config-dir-free (per-file `ok`/`FAIL`, exit 0/2). What a
+  third-party catalog repo runs in CI. Impl: `internal/cli/catalog_validate.go`.
 
 **Two installed catalogs MAY share a service name** — both install; each stays
 addressable as `<catalog>:<service>`. The bare name becomes ambiguous:
