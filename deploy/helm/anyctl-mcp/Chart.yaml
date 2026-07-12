@@ -10,7 +10,6 @@ appVersion: "0.0.0"
 keywords:
   - anyctl
   - mcp
-  - homelab
 home: https://github.com/jedwards1230/anyctl
 sources:
   - https://github.com/jedwards1230/anyctl

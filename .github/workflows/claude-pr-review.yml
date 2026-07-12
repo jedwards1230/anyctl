@@ -29,7 +29,7 @@ jobs:
         go-quality@jedwards1230-plugins
       focus: |
         anyctl is a single Go binary: a manifest-driven CLI that drives HTTP/RPC
-        homelab service APIs. It compiles in ZERO service-specific logic — a
+        service APIs. It compiles in ZERO service-specific logic — a
         service is one services/<name>.yaml manifest. Core principle: it is an
         unopinionated executor (gates nothing) — do NOT suggest adding
         --read-only / write-confirm / safety gating; guardrails live in the

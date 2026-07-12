@@ -2,11 +2,26 @@
 
 A single, manifest-driven CLI for HTTP/RPC service APIs. **A service is one YAML
 file** — the binary knows nothing service-specific, so adding or removing a
-service is a manifest edit, never a recompile.
+service is a manifest edit, never a recompile. Run it at a shell, or expose the
+same services to an AI agent as typed MCP tools — from one config.
 
-It replaces a pile of bespoke per-service `curl`/`jq`/auth/pagination wrappers
-with one static Go binary you can run at a shell, call from an agent over the
-CLI, or expose to an agent over MCP — all from the same config.
+## Why anyctl
+
+**YAML in → CLI *and* agent tools out.** One manifest gives you both a shell
+command and a typed MCP tool for every service command — no per-service MCP
+server to write. The agent surface is safe by construction: a dry-run on every
+tool, secret redaction, a mutation audit log, `--read-only`, and `--service`
+scoping.
+
+**The manifest/profile split is a trust boundary.** Manifests — and the catalogs
+that bundle them — carry no endpoints and no credentials, so a shared catalog is
+*inert* until your own `profile.yaml` binds it to a host. You can distribute
+service definitions without distributing access; no signing needed.
+
+**One binary instead of a pile of wrappers.** It replaces the per-service
+`curl`/`jq`/auth/pagination scripts that accrete around every API with one
+static Go binary that's Unix-native — stdout is data, stderr is diagnostics,
+exit codes are real.
 
 ## Install
 
@@ -28,22 +43,26 @@ anyctl svc httpbin get                # a real request against httpbin.org
 anyctl lint --strict httpbin          # confirm httpbin's base_url is bound
 ```
 
-Then set up your own config dir:
+Then set up your own config dir. anyctl ships **no built-in services**, so the
+first step is always to *give it one* — scaffold a starter manifest (below) or
+`anyctl catalog add` a catalog:
 
 ```sh
-anyctl init                           # provision ~/.config/anyctl (config.yaml + profile.yaml)
-# bind a service in profile.yaml (see below), then:
-anyctl lint --strict radarr           # confirm that one service's base_url + secrets are bound
-anyctl svc radarr status              # smoke-test the live endpoint
-anyctl svc radarr list --dry-run      # preview the resolved request, send nothing
+anyctl init                           # provision ~/.config/anyctl
+
+# 1. scaffold a starter manifest into your config dir
+anyctl init radarr --auth header-key -o ~/.config/anyctl/services/radarr.yaml
+
+# 2. bind radarr's base_url + secret ref in ~/.config/anyctl/profile.yaml
+#    (see "Manifests & profiles" below)
+
+# 3. verify, then run
+anyctl lint --strict radarr           # confirm radarr's base_url + secret are bound
+anyctl svc radarr status --dry-run    # preview the resolved request, send nothing
+anyctl svc radarr status              # the live request, once base_url is a real host
 ```
 
-**anyctl ships with no built-in services.** You give it something to run in one of
-two ways: **install a catalog** — a bundle of portable manifests from a directory
-or git repo (`anyctl catalog add <source>`) — or **write a local manifest** under
-`services/`. Either way you then bind the services you use to your machine with a
-`profile.yaml`. With nothing configured, `anyctl list` prints a short hint telling
-you how to configure one.
+With nothing configured, `anyctl list` prints a short hint on how to get started.
 
 ## Manifests & profiles
 
@@ -105,9 +124,8 @@ with `ANYCTL_CONFIG_DIR` or `--config-dir`:
 The [`examples/`](examples/) dir has three ready-to-try configs:
 [`quickstart/`](examples/quickstart/) (one no-auth local service, runs as-is),
 [`full/`](examples/full/) (an installed reference catalog + a profile binding its
-two services to placeholder hosts — `ANYCTL_CONFIG_DIR=examples/full anyctl lint
---strict`), and [`catalog/`](examples/catalog/) (a reference third-party
-catalog).
+two services to placeholder hosts), and [`catalog/`](examples/catalog/) (a
+reference third-party catalog).
 
 ## Commands
 
@@ -129,12 +147,32 @@ anyctl schema > manifest.schema.json  # JSON Schema for editor completion/valida
 Service commands live under `svc` (aliased `s`) so a user-defined service can
 never collide with a built-in like `list` or `doctor`.
 
+## MCP server
+
+`anyctl mcp` exposes every command as a tool over stdio (default) or
+streamable-HTTP (`anyctl mcp --http :9000`, endpoint `/mcp`, `GET /healthz`
+probe). It also exposes the generic verbs (`<svc>_get/_post/…`, `<svc>_call`)
+so an agent gets the full write surface; `--read-only` drops the write verbs and
+`--service` restricts to named services.
+
+Read tools additionally link an [MCP Apps](https://github.com/modelcontextprotocol/ext-apps)
+result View — a universal table/record/tree HTML view a supporting host renders
+inline; other hosts fall back to the plain-text result. A command can shape its
+rendering with an optional `ui:` hint block (`view`, `columns`, `primary`,
+`badges`, `sort`, `drilldown`); absent one, the View auto-detects by result shape.
+
+**Security:** a `--http` bind to loopback is unauthenticated (network
+reachability is the boundary). A bind to any non-loopback address *refuses to
+start* without a bearer token (`--auth-token-file` or `ANYCTL_MCP_AUTH_TOKEN`,
+constant-time compared) unless `--allow-unauthenticated` opts out. The
+[`anyctl-mcp` chart](deploy/helm/anyctl-mcp) adds an opt-in NetworkPolicy.
+
 ## Catalogs
 
-anyctl ships with **no built-in services**. You **install named catalogs** —
-bundles of portable manifests published as a git repo (any forge: GitHub,
-Forgejo, Codeberg, GitLab, …) or a local directory — into `catalogs/<name>/`.
-**Git is the default distribution path.**
+A **catalog** is a bundle of portable manifests you install into
+`catalogs/<name>/`, published as a git repo (any forge: GitHub, Forgejo,
+Codeberg, GitLab, …) or a local directory. **Git is the default distribution
+path.**
 
 Every catalog source carries a required **`anyctl-catalog.yaml`** index at its
 root — the identity record that makes it installable:
@@ -187,8 +225,8 @@ anyctl catalog validate ./my-catalog   # read-only: index + schema + portability
 ```
 
 Wire that into CI with the bundled composite action
-(`jedwards1230/anyctl/.github/actions/validate-catalog@v0.21.0` — pin to the
-current release tag; see the [releases](https://github.com/jedwards1230/anyctl/releases)).
+(`jedwards1230/anyctl/.github/actions/validate-catalog@v0.21.0`, pinned to a
+[release tag](https://github.com/jedwards1230/anyctl/releases)).
 [`examples/catalog/`](examples/catalog/) is a minimal reference catalog.
 
 ### Private catalogs over SSH
@@ -274,28 +312,7 @@ them; a bespoke one is a few edits in
 - **Unopinionated executor.** The binary gates nothing — it does exactly what the
   manifest says — **except** a step explicitly marked `confirm:`, which aborts
   unless `--yes` clears it. Guardrails belong in the consuming layer, not the tool.
-- **Unix-native.** stdout is data, stderr is diagnostics, exit codes are real,
-  secrets never touch argv, manifests are re-read per call.
-
-## MCP server
-
-`anyctl mcp` exposes every command as a tool over stdio (default) or
-streamable-HTTP (`anyctl mcp --http :9000`, endpoint `/mcp`, `GET /healthz`
-probe). It also exposes the generic verbs (`<svc>_get/_post/…`, `<svc>_call`)
-so an agent gets the full write surface; `--read-only` drops the write verbs and
-`--service` restricts to named services.
-
-Read tools additionally link an [MCP Apps](https://github.com/modelcontextprotocol/ext-apps)
-result View — a universal table/record/tree HTML view a supporting host renders
-inline; other hosts fall back to the plain-text result. A command can shape its
-rendering with an optional `ui:` hint block (`view`, `columns`, `primary`,
-`badges`, `sort`, `drilldown`); absent one, the View auto-detects by result shape.
-
-**Security:** a `--http` bind to loopback is unauthenticated (network
-reachability is the boundary). A bind to any non-loopback address *refuses to
-start* without a bearer token (`--auth-token-file` or `ANYCTL_MCP_AUTH_TOKEN`,
-constant-time compared) unless `--allow-unauthenticated` opts out. The
-[`anyctl-mcp` chart](deploy/helm/anyctl-mcp) adds an opt-in NetworkPolicy.
+- **Unix-native.** Secrets never touch argv; manifests are re-read per call.
 
 ## Observability
 

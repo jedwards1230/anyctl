@@ -1,6 +1,6 @@
 # Default values for anyctl-mcp.
-# A portable chart: homelab-specific bits (OnePasswordItem, redirect-lan ingress)
-# are opt-in via values, so the chart is reusable outside this homelab.
+# A portable chart: site-specific bits (OnePasswordItem, LAN-only ingress) are
+# opt-in via values, so the chart is reusable anywhere.
 
 replicaCount: 1
 
@@ -79,8 +79,8 @@ config:
   servicesYaml: {}
 
 # 1Password service-account token used by `op` to resolve op:// refs.
-# Pick exactly one source. existingSecret is the portable default; the homelab
-# instance sets onePasswordItem.itemPath to have the 1Password operator mint it.
+# Pick exactly one source. existingSecret is the portable default; set
+# onePasswordItem.itemPath to have the 1Password operator mint it instead.
 auth:
   env: OP_SERVICE_ACCOUNT_TOKEN
   existingSecret:
@@ -113,8 +113,8 @@ resources:
     memory: 256Mi
 
 # fsGroup matches the container's uid/gid (10001) so the writable emptyDir
-# mounts (HOME, /tmp) are group-owned by the running user. This pod has no NFS,
-# so the homelab fsGroup:100 convention doesn't apply here.
+# mounts (HOME, /tmp) are group-owned by the running user. This pod has no
+# shared (e.g. NFS) storage, so no external fsGroup convention applies here.
 podSecurityContext:
   fsGroup: 10001
   # Set at both pod and container level: the container securityContext below is
