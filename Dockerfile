@@ -8,7 +8,7 @@
 # container is network-reachable (e.g. federated by an MCP gateway). Override
 # CMD for stdio or other subcommands.
 
-FROM golang:1.26-trixie AS build
+FROM golang:1.27-trixie AS build
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
@@ -21,7 +21,7 @@ RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
 
 # Pinned to a digest (not the mutable trixie-slim tag) so rebuilds are
 # reproducible and don't silently drift onto a different base.
-FROM debian:trixie-slim@sha256:28de0877c2189802884ccd20f15ee41c203573bd87bb6b883f5f46362d24c5c2
+FROM debian:trixie-slim@sha256:3a39a0592364683e6bab97937b72cad5a8fa6dcbbee90edb3bb48c7f8e94f258
 # Install the 1Password CLI (op) from 1Password's official GPG-signed APT repo.
 # The signed repo gives supply-chain integrity verification (CWE-494) without
 # pinning brittle per-arch checksums that break on every op bump. arch is
