@@ -11,9 +11,9 @@ toolchain go1.25.12
 require (
 	github.com/coder/websocket v1.8.15
 	github.com/itchyny/gojq v0.12.19
-	github.com/modelcontextprotocol/go-sdk v1.6.1
-	github.com/pb33f/libopenapi v0.38.5
-	github.com/santhosh-tekuri/jsonschema/v6 v6.0.2
+	github.com/modelcontextprotocol/go-sdk v1.7.0
+	github.com/pb33f/libopenapi v0.38.7
+	github.com/santhosh-tekuri/jsonschema/v6 v6.0.3
 	github.com/spf13/cobra v1.10.2
 	go.opentelemetry.io/otel v1.45.0
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace v1.45.0
@@ -51,6 +51,7 @@ require (
 	golang.org/x/sync v0.22.0 // indirect
 	golang.org/x/sys v0.47.0 // indirect
 	golang.org/x/text v0.40.0 // indirect
+	golang.org/x/time v0.15.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20260803160001-6ac0973c030d // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260803160001-6ac0973c030d // indirect
 	google.golang.org/grpc v1.83.0 // indirect
