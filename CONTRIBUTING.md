@@ -4,7 +4,7 @@
 
 ## Prerequisites
 
-- Go 1.25 or later (see `go.mod` for the exact floor version)
+- Go 1.26 or later (see `go.mod` for the exact floor version)
 
 ## Build, test & lint
 
