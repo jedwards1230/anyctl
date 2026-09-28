@@ -43,8 +43,8 @@ github.com/modelcontextprotocol/go-sdk v1.8.0 h1:KIvahhYqwtbeniWVPs3TcXEA7b8jEtw
 github.com/modelcontextprotocol/go-sdk v1.8.0/go.mod h1:dL7u98E/zjJTGzEq+j30jQ8K2k1mb6LeAH4inEcSGts=
 github.com/pb33f/jsonpath v0.8.3 h1:gdOUYn31vic8iRSSR4I2SEv7UQf2WxLeDcUnDPpGZNE=
 github.com/pb33f/jsonpath v0.8.3/go.mod h1:zBV5LJW4OQOPatmQE2QdKpGQJvhDTlE5IEj6ASaRNTo=
-github.com/pb33f/libopenapi v0.39.0 h1:PHHc0s3JGHSzW/yZL926LufjZrtGq31yWLZvc63443Y=
-github.com/pb33f/libopenapi v0.39.0/go.mod h1:nISN8KLZBliHRwZY0V53JZJtuzI8P52WGfJ6J56z9Tg=
+github.com/pb33f/libopenapi v0.40.1 h1:Ma+2kxag5ox70sSP4dcgGY/4QGZ0VS5Ov8S/z4POyIc=
+github.com/pb33f/libopenapi v0.40.1/go.mod h1:nISN8KLZBliHRwZY0V53JZJtuzI8P52WGfJ6J56z9Tg=
 github.com/pb33f/ordered-map/v2 v2.3.1 h1:5319HDO0aw4DA4gzi+zv4FXU9UlSs3xGZ40wcP1nBjY=
 github.com/pb33f/ordered-map/v2 v2.3.1/go.mod h1:qxFQgd0PkVUtOMCkTapqotNgzRhMPL7VvaHKbd1HnmQ=
 github.com/pb33f/testify v0.1.0 h1:g48/HDU/jn2COspS4nM0scptxiKTJ4DnbX/4ehK6IZ8=
