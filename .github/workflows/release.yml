@@ -5,7 +5,8 @@
 #      contributors, tests, linter config, view build sources -- see
 #      .github/.releaseignore, gitignore syntax), in which case no release is cut.
 #   3. No associated PR (direct push), or no label and the file list can't be
-#      fetched/classified: no release, with a ::warning::.
+#      fetched/classified: release as patch with a ::warning:: (a missed release
+#      is invisible; an extra one is harmless). semver:none is still honored.
 # workflow_dispatch always releases. The detect job decides; the shared
 # ai-release.yml computes the version/tag and AI release notes
 # (create_release: false), then build/image/chart publish from the tagged ref and
@@ -87,8 +88,8 @@ jobs:
           done
 
           if [ -z "$PR_JSON" ]; then
-            echo "::warning::No merged PR found for ${GITHUB_SHA} (direct push?) — skipping release."
-            { echo "type=none"; echo "release=false"; } >> "$GITHUB_OUTPUT"
+            echo "::warning::No merged PR found for ${GITHUB_SHA} (direct push?) — cannot classify files, releasing as patch."
+            { echo "type=patch"; echo "release=true"; } >> "$GITHUB_OUTPUT"
             exit 0
           fi
           N=$(jq -r '.number' <<<"$PR_JSON")
@@ -118,12 +119,14 @@ jobs:
               echo "::notice::.github/.releaseignore is missing or empty — nothing is dev-only."
               FIRST_PRODUCT=${FILE_LIST[0]}
             else
-              SCRATCH=$(mktemp -d)
-              git init -q "$SCRATCH"
-              printf '%s\0' "${FILE_LIST[@]}" > "$SCRATCH.paths"
               rc=0
-              git -C "$SCRATCH" -c core.excludesFile="$RELEASEIGNORE" \
-                check-ignore --no-index -z --stdin < "$SCRATCH.paths" > "$SCRATCH.matched" || rc=$?
+              if SCRATCH=$(mktemp -d) && git init -q "$SCRATCH" \
+                  && printf '%s\0' "${FILE_LIST[@]}" > "$SCRATCH.paths"; then
+                git -C "$SCRATCH" -c core.excludesFile="$RELEASEIGNORE" \
+                  check-ignore --no-index -z --stdin < "$SCRATCH.paths" > "$SCRATCH.matched" || rc=$?
+              else
+                rc=2
+              fi
               if [ "$rc" -gt 1 ]; then
                 CLASSIFY_ERR=true
                 FILES_OK=false
@@ -167,9 +170,9 @@ jobs:
 
           # 2/3. No label.
           if [ "$FILES_OK" != true ]; then
-            if [ "$CLASSIFY_ERR" = true ]; then WHY="git check-ignore failed (rc=${rc})"; else WHY="could not list files"; fi
-            echo "::warning::No semver:* label and ${WHY} for PR #${N} — skipping release (label-gated default)."
-            { echo "type=none"; echo "release=false"; } >> "$GITHUB_OUTPUT"
+            if [ "$CLASSIFY_ERR" = true ]; then WHY="git check-ignore failed (rc=${rc})"; else WHY="could not list files (API failure or empty list)"; fi
+            echo "::warning::No semver:* label and ${WHY} for PR #${N} — cannot classify, releasing as patch."
+            { echo "type=patch"; echo "release=true"; } >> "$GITHUB_OUTPUT"
           elif [ "$ALL_DEV" = true ]; then
             COUNT=$(grep -c . <<<"$FILES" || true)
             echo "::notice::Dev-only rule: all ${COUNT} changed paths in PR #${N} are dev-only (first: $(grep . <<<"$FILES" | head -3 | paste -sd, -)) — skipping release."
