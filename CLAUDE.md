@@ -11,6 +11,8 @@ is one `services/<name>.yaml` manifest; the binary compiles in **zero**
 service-specific logic. Adding/removing a service is a YAML edit, never a
 recompile. It replaces a set of bespoke per-service bash wrappers.
 
+Requirements, feature inventory, and non-goals: `docs/PRD.md` — read before adding a feature.
+
 **Design rationale.** A *manifest* is the portable description of what a service
 *is* — its commands, auth strategy, and secret slots — identical for every user.
 A *profile* is the per-machine binding — the `base_url`, secret refs, and any
