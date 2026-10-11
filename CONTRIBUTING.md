@@ -94,4 +94,11 @@ Keep documentation current as part of the change, not as a follow-up — update 
 
 ## Releases
 
-Releases are opt-in. Before merging, add one of `semver:patch`, `semver:minor`, or `semver:major` to the PR to cut a release on merge; with no label, merging does not release. A release publishes a single immutable `vX.Y.Z` tag with AI-generated release notes and cross-compiled static binaries for Linux and macOS (amd64 + arm64).
+Releases are decided per merged PR:
+
+- An explicit `semver:major`, `semver:minor`, or `semver:patch` label always wins and sets the bump (the highest one if several); `semver:none` skips the release when it is the only `semver:*` label.
+- With no label, the PR releases as a **patch** unless every changed file is dev-only (CI workflows, `CLAUDE.md`/`AGENTS.md`, `CONTRIBUTING*`, tests and `testdata/` fixtures, linter config, and the `views/` build sources). The list lives in [`.github/.releaseignore`](.github/.releaseignore) in gitignore syntax (note git's rule: a file can't be re-included if a parent directory is excluded, so re-include a directory with `!dir/` before `!dir/**`); edit that file to change what counts. Dependabot bumps to GitHub Actions or `views/` therefore do not release; Go module and Docker base-image bumps do.
+- If the files can't be classified (direct push with no associated PR, or with no label a file list that can't be fetched, is empty, or fails to classify), the merge releases as a patch and logs a `::warning::`. A lone `semver:none` label is still honored.
+- A `semver:*` bump label on a dev-only diff still releases but logs a warning suggesting `semver:none`.
+
+A release publishes a single immutable `vX.Y.Z` tag with AI-generated release notes and cross-compiled static binaries for Linux and macOS (amd64 + arm64).

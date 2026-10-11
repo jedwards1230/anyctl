@@ -1,0 +1,36 @@
+# .github/.releaseignore -- dev-only paths for the release gate (gitignore syntax).
+# A merged PR whose changed files ALL match here releases nothing, unless it carries a
+# semver:* label (an explicit label always wins). Anything not matched is product and
+# releases as a patch. Read by .github/workflows/release.yml.
+# NOTE git semantics: a file can't be re-included if a parent DIRECTORY is excluded.
+#   docs/**  +  !docs/user/**   does NOT work (docs/user/ itself is excluded);
+#   docs/**  +  !docs/user/  +  !docs/user/**   does. File-level `!docs/openapi.yaml` works.
+
+# CI and repo plumbing. .github/actions/ (the validate-catalog composite action) is
+# consumed by other repos pinned to a release tag, so it is product.
+/.github/**
+!/.github/actions/
+!/.github/actions/**
+/.devcontainer/
+/.claude/
+
+# Agent / contributor docs (README* and examples/ are product on purpose).
+CLAUDE.md
+AGENTS.md
+CONTRIBUTING*
+
+# Tests and fixtures.
+*_test.go
+testdata/
+
+# Linter / formatter / VCS config.
+.golangci*
+.pre-commit-config.yaml
+.editorconfig
+.gitignore
+.markdownlint*
+.yamllint*
+
+# views/ is the Vite/TS build source (build-time only). What ships is the committed
+# internal/mcpserver/views/result.html, which is NOT under views/.
+/views/

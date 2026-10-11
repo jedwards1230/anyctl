@@ -1,8 +1,17 @@
-# Release anyctl on push to main. Opt-in via a semver:* label on the merged PR
-# (no label → no release). The detect job reads the label, the shared
-# ai-release.yml computes the version/tag and AI release notes (create_release:
-# false), then build cross-compiles static binaries from the tagged ref and the
-# release job publishes the GitHub Release with the binaries + AI body.
+# Release anyctl on push to main. Version bump rule for the merged PR:
+#   1. An explicit label wins: the highest of semver:major|minor|patch; semver:none
+#      skips only when it is the sole semver label.
+#   2. No label: patch UNLESS every changed file is dev-only (CI, docs for
+#      contributors, tests, linter config, view build sources -- see
+#      .github/.releaseignore, gitignore syntax), in which case no release is cut.
+#   3. No associated PR (direct push), or no label and the file list can't be
+#      fetched/classified: release as patch with a ::warning:: (a missed release
+#      is invisible; an extra one is harmless). semver:none is still honored when it is the sole semver label.
+# workflow_dispatch always releases. The detect job decides; the shared
+# ai-release.yml computes the version/tag and AI release notes
+# (create_release: false), then build/image/chart publish from the tagged ref and
+# the release job publishes the GitHub Release with the binaries + AI body.
+# Every publish job is gated on detect.outputs.release == 'true'.
 name: Release
 
 run-name: >-
@@ -46,6 +55,11 @@ jobs:
       release: ${{ steps.bump.outputs.release }}
       dry_run: ${{ steps.bump.outputs.dry_run }}
     steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          sparse-checkout: .github/.releaseignore
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
       - name: Determine bump type
         id: bump
         env:
@@ -60,31 +74,120 @@ jobs:
             } >> "$GITHUB_OUTPUT"
             exit 0
           fi
+          echo "dry_run=false" >> "$GITHUB_OUTPUT"
 
-          # push event: opt-in via the merged PR's semver:* label. No label → no release.
-          LABELS=""
+          # Find the merged PR for this commit (number + labels), with retries.
+          PR_JSON=""
           for attempt in 1 2 3; do
-            LABELS=$(gh pr list --state merged --base main --limit 100 \
-              --json labels,mergeCommit \
-              | jq -r --arg sha "$GITHUB_SHA" \
-                '.[] | select(.mergeCommit.oid == $sha) | .labels[].name' 2>/dev/null || echo "")
-            [ -n "$LABELS" ] && break
-            echo "Attempt ${attempt}: no labels for ${GITHUB_SHA}, retrying in 5s..."
+            PR_JSON=$(gh api "repos/${GH_REPO}/commits/${GITHUB_SHA}/pulls" 2>/dev/null \
+              | jq -c --arg sha "$GITHUB_SHA" \
+                  '[.[] | select(.merge_commit_sha == $sha)] | first // empty' 2>/dev/null || true)
+            [ -n "$PR_JSON" ] && break
+            echo "Attempt ${attempt}: no PR for ${GITHUB_SHA}, retrying in 5s..."
             sleep 5
           done
-          echo "Labels: ${LABELS:-<none>}"
 
-          if echo "$LABELS" | grep -q 'semver:major'; then
-            { echo "type=major"; echo "release=true"; } >> "$GITHUB_OUTPUT"
-          elif echo "$LABELS" | grep -q 'semver:minor'; then
-            { echo "type=minor"; echo "release=true"; } >> "$GITHUB_OUTPUT"
-          elif echo "$LABELS" | grep -q 'semver:patch'; then
+          if [ -z "$PR_JSON" ]; then
+            echo "::warning::No merged PR found for ${GITHUB_SHA} (direct push?) — cannot classify files, releasing as patch."
             { echo "type=patch"; echo "release=true"; } >> "$GITHUB_OUTPUT"
-          else
-            echo "::notice::No semver:* label — skipping release."
-            { echo "type=none"; echo "release=false"; } >> "$GITHUB_OUTPUT"
+            exit 0
           fi
-          echo "dry_run=false" >> "$GITHUB_OUTPUT"
+          N=$(jq -r '.number' <<<"$PR_JSON")
+          LABELS=$(jq -r '.labels[].name' <<<"$PR_JSON")
+          echo "PR #${N} labels: ${LABELS:-<none>}"
+
+          # Fetch the PR's changed files (plus previous_filename, so a rename OUT
+          # of a product path counts as product). Empty on API failure.
+          FILES=""
+          FILES_OK=true
+          if ! FILES=$(gh api "repos/${GH_REPO}/pulls/${N}/files" --paginate \
+                --jq '.[] | .filename, (.previous_filename // empty)') || [ -z "$FILES" ]; then
+            FILES_OK=false
+          fi
+
+          # Classify with git's own ignore engine against .github/.releaseignore
+          # (gitignore syntax; the single source of truth for what is dev-only).
+          # A missing/empty file means nothing is dev-only. Run in a throwaway
+          # repo so the checkout's own .gitignore can't leak in.
+          ALL_DEV=false
+          FIRST_PRODUCT=""
+          CLASSIFY_ERR=false
+          RELEASEIGNORE="${GITHUB_WORKSPACE}/.github/.releaseignore"
+          if [ "$FILES_OK" = true ]; then
+            FILE_LIST=()
+            mapfile -t FILE_LIST < <(grep . <<<"$FILES" | sort -u) || true
+            if ! grep -qv -e '^[[:space:]]*#' -e '^[[:space:]]*$' "$RELEASEIGNORE" 2>/dev/null; then
+              echo "::notice::.github/.releaseignore is missing or empty — nothing is dev-only."
+              FIRST_PRODUCT=${FILE_LIST[0]}
+            else
+              # Every step is guarded: under bash -e any failure here must route to
+              # the fallback (rc=2), never abort the job.
+              rc=0
+              SCRATCH=""
+              MATCHED=()
+              if SCRATCH=$(mktemp -d) && git init -q "$SCRATCH" \
+                  && printf '%s\0' "${FILE_LIST[@]}" > "$SCRATCH.paths"; then
+                git -C "$SCRATCH" -c core.excludesFile="$RELEASEIGNORE" \
+                  check-ignore --no-index -z --stdin < "$SCRATCH.paths" > "$SCRATCH.matched" || rc=$?
+                if [ "$rc" -le 1 ] && ! mapfile -d '' MATCHED < "$SCRATCH.matched"; then
+                  rc=2
+                fi
+              else
+                rc=2
+              fi
+              if [ "$rc" -gt 1 ]; then
+                CLASSIFY_ERR=true
+                FILES_OK=false
+              else
+                if [ "${#MATCHED[@]}" -eq "${#FILE_LIST[@]}" ]; then
+                  ALL_DEV=true
+                else
+                  declare -A IS_DEV=()
+                  for m in "${MATCHED[@]}"; do IS_DEV["$m"]=1; done
+                  for f in "${FILE_LIST[@]}"; do
+                    if [ -z "${IS_DEV[$f]:-}" ]; then FIRST_PRODUCT=$f; break; fi
+                  done
+                fi
+              fi
+              if [ -n "$SCRATCH" ]; then rm -rf "$SCRATCH" "$SCRATCH.paths" "$SCRATCH.matched" || true; fi
+            fi
+          fi
+
+          # 1. Explicit label always wins: highest bump (major > minor > patch); none
+          #    only applies when it is the sole semver label.
+          LABEL_BUMP=""
+          if grep -qx 'semver:major' <<<"$LABELS"; then LABEL_BUMP="major"
+          elif grep -qx 'semver:minor' <<<"$LABELS"; then LABEL_BUMP="minor"
+          elif grep -qx 'semver:patch' <<<"$LABELS"; then LABEL_BUMP="patch"
+          elif grep -qx 'semver:none' <<<"$LABELS"; then LABEL_BUMP="none"
+          fi
+
+          if [ -n "$LABEL_BUMP" ]; then
+            if [ "$LABEL_BUMP" = none ]; then
+              echo "::notice::semver:none label — skipping release."
+              { echo "type=none"; echo "release=false"; } >> "$GITHUB_OUTPUT"
+            else
+              if [ "$ALL_DEV" = true ]; then
+                echo "::warning::PR #${N} carries semver:${LABEL_BUMP} but every changed file is dev-only; semver:none (or no label) would skip the release."
+              fi
+              { echo "type=${LABEL_BUMP}"; echo "release=true"; } >> "$GITHUB_OUTPUT"
+            fi
+            exit 0
+          fi
+
+          # 2/3. No label.
+          if [ "$FILES_OK" != true ]; then
+            if [ "$CLASSIFY_ERR" = true ]; then WHY="git check-ignore failed (rc=${rc})"; else WHY="could not list files (API failure or empty list)"; fi
+            echo "::warning::No semver:* label and ${WHY} for PR #${N} — cannot classify, releasing as patch."
+            { echo "type=patch"; echo "release=true"; } >> "$GITHUB_OUTPUT"
+          elif [ "$ALL_DEV" = true ]; then
+            COUNT=$(grep -c . <<<"$FILES" || true)
+            echo "::notice::Dev-only rule: all ${COUNT} changed paths in PR #${N} are dev-only (first: $(grep . <<<"$FILES" | head -3 | paste -sd, -)) — skipping release."
+            { echo "type=none"; echo "release=false"; } >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::No semver:* label; ${FIRST_PRODUCT} is not dev-only — releasing as patch."
+            { echo "type=patch"; echo "release=true"; } >> "$GITHUB_OUTPUT"
+          fi
 
   prepare:
     name: Tag & Generate Notes
