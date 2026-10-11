@@ -94,4 +94,11 @@ Keep documentation current as part of the change, not as a follow-up — update 
 
 ## Releases
 
-Releases are opt-in. Before merging, add one of `semver:patch`, `semver:minor`, or `semver:major` to the PR to cut a release on merge; with no label, merging does not release. A release publishes a single immutable `vX.Y.Z` tag with AI-generated release notes and cross-compiled static binaries for Linux and macOS (amd64 + arm64).
+Releases are decided per merged PR:
+
+- An explicit `semver:major`, `semver:minor`, or `semver:patch` label always wins and sets the bump; `semver:none` always skips the release.
+- With no label, the PR releases as a **patch** unless every changed file is dev-only (CI workflows, `CLAUDE.md`/`AGENTS.md`, `CONTRIBUTING*`, tests, linter config, and the `views/` build sources). Edit the `DEV_ONLY` list in the detect step of `.github/workflows/release.yml` to change what counts. Dependabot bumps to GitHub Actions or `views/` therefore do not release; Go module and Docker base-image bumps do.
+- A direct push, or a PR whose file list can't be fetched, does not release (a `::warning::` is logged).
+- A `semver:*` bump label on a dev-only diff still releases but logs a warning suggesting `semver:none`.
+
+A release publishes a single immutable `vX.Y.Z` tag with AI-generated release notes and cross-compiled static binaries for Linux and macOS (amd64 + arm64).
