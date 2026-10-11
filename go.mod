@@ -3,10 +3,11 @@ module github.com/jedwards1230/anyctl
 go 1.26.0
 
 // github.com/pb33f/libopenapi v0.39 requires go 1.26. Pin the build toolchain
-// to a patched go1.26 (the stdlib CVEs GO-2026-5856/5972/6088-6091/6218 are all
-// fixed by go1.26.6) so GOTOOLCHAIN=auto contexts (release build, the CI
-// govulncheck scan, `go install` consumers) build with a patched stdlib.
-toolchain go1.26.8
+// to a patched go1.26 (the stdlib CVEs through GO-2026-6617, incl. the
+// html/template, net/http and crypto/tls fixes, are fixed by go1.26.9) so
+// GOTOOLCHAIN=auto contexts (release build, the CI govulncheck scan,
+// `go install` consumers) build with a patched stdlib.
+toolchain go1.26.9
 
 require (
 	github.com/coder/websocket v1.8.15
@@ -47,11 +48,11 @@ require (
 	go.opentelemetry.io/otel/metric v1.46.0 // indirect
 	go.opentelemetry.io/proto/otlp v1.11.0 // indirect
 	go.yaml.in/yaml/v4 v4.0.0-rc.6 // indirect
-	golang.org/x/net v0.58.0 // indirect
+	golang.org/x/net v0.60.0 // indirect
 	golang.org/x/oauth2 v0.36.0 // indirect
 	golang.org/x/sync v0.23.0 // indirect
-	golang.org/x/sys v0.47.0 // indirect
-	golang.org/x/text v0.41.0 // indirect
+	golang.org/x/sys v0.48.0 // indirect
+	golang.org/x/text v0.42.0 // indirect
 	golang.org/x/time v0.15.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20260819154853-08b0e4226688 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260819154853-08b0e4226688 // indirect
