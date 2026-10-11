@@ -114,16 +114,24 @@ jobs:
           CLASSIFY_ERR=false
           RELEASEIGNORE="${GITHUB_WORKSPACE}/.github/.releaseignore"
           if [ "$FILES_OK" = true ]; then
-            mapfile -t FILE_LIST < <(grep . <<<"$FILES" | sort -u)
+            FILE_LIST=()
+            mapfile -t FILE_LIST < <(grep . <<<"$FILES" | sort -u) || true
             if ! grep -qv -e '^[[:space:]]*#' -e '^[[:space:]]*$' "$RELEASEIGNORE" 2>/dev/null; then
               echo "::notice::.github/.releaseignore is missing or empty — nothing is dev-only."
               FIRST_PRODUCT=${FILE_LIST[0]}
             else
+              # Every step is guarded: under bash -e any failure here must route to
+              # the fallback (rc=2), never abort the job.
               rc=0
+              SCRATCH=""
+              MATCHED=()
               if SCRATCH=$(mktemp -d) && git init -q "$SCRATCH" \
                   && printf '%s\0' "${FILE_LIST[@]}" > "$SCRATCH.paths"; then
                 git -C "$SCRATCH" -c core.excludesFile="$RELEASEIGNORE" \
                   check-ignore --no-index -z --stdin < "$SCRATCH.paths" > "$SCRATCH.matched" || rc=$?
+                if [ "$rc" -le 1 ] && ! mapfile -d '' MATCHED < "$SCRATCH.matched"; then
+                  rc=2
+                fi
               else
                 rc=2
               fi
@@ -131,7 +139,6 @@ jobs:
                 CLASSIFY_ERR=true
                 FILES_OK=false
               else
-                mapfile -d '' MATCHED < "$SCRATCH.matched"
                 if [ "${#MATCHED[@]}" -eq "${#FILE_LIST[@]}" ]; then
                   ALL_DEV=true
                 else
@@ -142,7 +149,7 @@ jobs:
                   done
                 fi
               fi
-              rm -rf "$SCRATCH" "$SCRATCH.paths" "$SCRATCH.matched"
+              if [ -n "$SCRATCH" ]; then rm -rf "$SCRATCH" "$SCRATCH.paths" "$SCRATCH.matched" || true; fi
             fi
           fi
 
