@@ -179,11 +179,12 @@ jobs:
         run: |
           set -euo pipefail
           # Keyless: identity from the job's GitHub OIDC token, cert from Fulcio,
-          # transparency log entry in Rekor. Emits the detached signature and the
-          # signing certificate alongside SHA256SUMS; all three ship in the release.
+          # transparency log entry in Rekor. Writes a single Sigstore bundle
+          # (signature, Fulcio cert, Rekor entry) alongside SHA256SUMS; both ship in
+          # the release. cosign v3 ignores --output-signature/--output-certificate,
+          # so --bundle is required.
           cosign sign-blob \
-            --output-signature SHA256SUMS.sig \
-            --output-certificate SHA256SUMS.pem \
+            --bundle SHA256SUMS.sigstore.json \
             SHA256SUMS
 
       - name: Compose release body (install snippet + AI notes)
@@ -204,13 +205,12 @@ jobs:
             echo ""
             echo "## Verify"
             echo ""
-            echo "\`SHA256SUMS\` lists every binary's digest; \`SHA256SUMS.sig\` + \`SHA256SUMS.pem\` are a keyless [cosign](https://docs.sigstore.dev/) signature over it. To verify:"
+            echo "\`SHA256SUMS\` lists every binary's digest; \`SHA256SUMS.sigstore.json\` is a keyless [cosign](https://docs.sigstore.dev/) signature over it. To verify:"
             echo ""
             echo '```bash'
             echo "sha256sum -c SHA256SUMS --ignore-missing   # checksums"
             echo "cosign verify-blob \\"
-            echo "  --certificate SHA256SUMS.pem \\"
-            echo "  --signature SHA256SUMS.sig \\"
+            echo "  --bundle SHA256SUMS.sigstore.json \\"
             echo "  --certificate-identity-regexp '^https://github.com/jedwards1230/anyctl/' \\"
             echo "  --certificate-oidc-issuer https://token.actions.githubusercontent.com \\"
             echo "  SHA256SUMS"
