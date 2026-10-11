@@ -45,6 +45,8 @@ ANYCTL_CONFIG_DIR="$PWD/examples/full" ./anyctl --dry-run svc uptime status
 
 CI runs `gofmt`, `go vet`, `golangci-lint`, `go mod tidy` check, `go test -race` (with a 75% coverage floor), and `go build`. All checks must pass before a PR can merge.
 
+If you change `views/`, rebuild and commit `internal/mcpserver/views/result.html` in the same PR (`cd views && npm ci && npm run build`). `views/` is dev-only for releases, so the committed `result.html` is what ships; the `Views` workflow fails the PR if it is stale.
+
 ## Adding or authoring a service manifest
 
 anyctl ships no built-in manifests — a service is a local `services/<name>.yaml`

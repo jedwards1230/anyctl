@@ -1,0 +1,48 @@
+# Fails when the committed internal/mcpserver/views/result.html is not what a
+# fresh build of views/ produces. views/ is dev-only for releases
+# (.github/.releaseignore), so what ships is the committed result.html; this
+# keeps it from going stale after a views/ change.
+name: Views
+
+run-name: "Views: ${{ github.event.pull_request.title || github.event.head_commit.message || github.sha }}"
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "views/**"
+      - "internal/mcpserver/views/**"
+      - ".github/workflows/views.yml"
+  pull_request:
+    paths:
+      - "views/**"
+      - "internal/mcpserver/views/**"
+      - ".github/workflows/views.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  result-html-fresh:
+    name: result.html is fresh
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: views/package-lock.json
+
+      - name: Rebuild views/
+        working-directory: views
+        run: |
+          npm ci
+          npm run build
+
+      - name: Check result.html matches the build
+        run: |
+          if ! git diff --exit-code --stat internal/mcpserver/views/result.html; then
+            echo "::error file=internal/mcpserver/views/result.html::result.html is stale: run \`cd views && npm ci && npm run build\` and commit the output"
+            exit 1
+          fi

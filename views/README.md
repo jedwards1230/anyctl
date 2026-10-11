@@ -11,7 +11,7 @@ the Go side embeds and serves it, and the MCP section of the repo
 
 ```bash
 cd views
-npm install
+npm ci
 npm run build
 ```
 
@@ -26,6 +26,12 @@ internal/mcpserver/views/result.html
 (`vite.config.ts` sets `build.outDir` to that path and `emptyOutDir: false`
 so it never touches `views.go`/`views_test.go` living alongside it.) A plain
 `go build` never needs npm — the built `result.html` is committed.
+
+**Rebuild and commit `result.html` in the same change as any `views/` edit.**
+`views/` is dev-only for releases, so the committed `result.html` is what
+ships. The `Views` CI workflow rebuilds from `views/` (Node 24, `npm ci`) and
+fails if `result.html` differs; the build is deterministic, so a fresh
+rebuild always matches.
 
 ## Dev loop
 
