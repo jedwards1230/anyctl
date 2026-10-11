@@ -190,5 +190,5 @@ auto-detects by shape. A write-confirmation View is a later PR.
 - New auth strategy / transport / pagination style → wire it in its package + add
   a test; keep the manifest schema additive.
 - Release: `semver:*` label on the merged PR wins (`semver:none` skips); no label →
-  patch unless every changed file is dev-only (`DEV_ONLY` list in `release.yml`'s detect
-  step). Shared `ai-release.yml@v1`; ships cross-compiled static binaries.
+  patch unless every changed file is dev-only (list in `.github/.releaseignore`,
+  gitignore syntax). Shared `ai-release.yml@v1`; ships cross-compiled static binaries.

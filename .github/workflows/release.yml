@@ -1,8 +1,8 @@
 # Release anyctl on push to main. Version bump rule for the merged PR:
 #   1. An explicit semver:major|minor|patch label wins; semver:none skips.
 #   2. No label: patch UNLESS every changed file is dev-only (CI, docs for
-#      contributors, tests, linter config, view build sources -- see DEV_ONLY in
-#      the detect step), in which case no release is cut.
+#      contributors, tests, linter config, view build sources -- see
+#      .github/.releaseignore, gitignore syntax), in which case no release is cut.
 #   3. No associated PR (direct push) or the files API fails: no release, with
 #      a ::warning::.
 # workflow_dispatch always releases. The detect job decides; the shared
@@ -53,6 +53,11 @@ jobs:
       release: ${{ steps.bump.outputs.release }}
       dry_run: ${{ steps.bump.outputs.dry_run }}
     steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          sparse-checkout: .github/.releaseignore
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
       - name: Determine bump type
         id: bump
         env:
@@ -68,50 +73,6 @@ jobs:
             exit 0
           fi
           echo "dry_run=false" >> "$GITHUB_OUTPUT"
-
-          # Dev-only paths. A label always wins; with no semver:* label a merged
-          # PR releases as patch UNLESS every changed file matches one of these.
-          # Patterns are bash [[ == ]] globs, where `*` also matches `/` -- so
-          # 'views/*' covers the whole subtree and '*_test.go' matches at any
-          # depth. Anything not listed counts as product. (anyctl has no
-          # semver-label PR check, so this is the only copy.)
-          #
-          # Deliberately NOT listed (they ship or are consumed by tag):
-          #   - .github/actions/*  composite action consumed at a release tag
-          #   - .dockerignore, Dockerfile, go.mod/go.sum, deploy/* (image/chart)
-          #   - examples/*, README*  (user-facing docs; README is product)
-          # views/* is listed because it is build-time only: the shipped artifact
-          # is the committed internal/mcpserver/views/result.html, which is NOT
-          # under views/.
-          DEV_ONLY=(
-            '.github/workflows/*'
-            '.github/dependabot.yml'
-            '.devcontainer/*'
-            '.claude/*'
-            'CLAUDE.md'
-            'AGENTS.md'
-            '*/CLAUDE.md'
-            '*/AGENTS.md'
-            'CONTRIBUTING*'
-            '*_test.go'
-            'testdata/*'
-            '*/testdata/*'
-            '.golangci*'
-            '.pre-commit-config.yaml'
-            '.editorconfig'
-            '.gitignore'
-            '.markdownlint*'
-            '.yamllint*'
-            'views/*'
-          )
-          is_dev_only() {
-            local p
-            for p in "${DEV_ONLY[@]}"; do
-              # shellcheck disable=SC2053 # unquoted on purpose: $p is a glob
-              [[ $1 == $p ]] && return 0
-            done
-            return 1
-          }
 
           # Find the merged PR for this commit (number + labels), with retries.
           PR_JSON=""
@@ -142,18 +103,43 @@ jobs:
             FILES_OK=false
           fi
 
+          # Classify with git's own ignore engine against .github/.releaseignore
+          # (gitignore syntax; the single source of truth for what is dev-only).
+          # A missing/empty file means nothing is dev-only. Run in a throwaway
+          # repo so the checkout's own .gitignore can't leak in.
           ALL_DEV=false
           FIRST_PRODUCT=""
+          CLASSIFY_ERR=false
+          RELEASEIGNORE="${GITHUB_WORKSPACE}/.github/.releaseignore"
           if [ "$FILES_OK" = true ]; then
-            ALL_DEV=true
-            while IFS= read -r f; do
-              [ -n "$f" ] || continue
-              if ! is_dev_only "$f"; then
-                ALL_DEV=false
-                FIRST_PRODUCT=$f
-                break
+            mapfile -t FILE_LIST < <(grep . <<<"$FILES" | sort -u)
+            if ! grep -qv -e '^[[:space:]]*#' -e '^[[:space:]]*$' "$RELEASEIGNORE" 2>/dev/null; then
+              echo "::notice::.github/.releaseignore is missing or empty — nothing is dev-only."
+              FIRST_PRODUCT=${FILE_LIST[0]}
+            else
+              SCRATCH=$(mktemp -d)
+              git init -q "$SCRATCH"
+              printf '%s\0' "${FILE_LIST[@]}" > "$SCRATCH.paths"
+              rc=0
+              git -C "$SCRATCH" -c core.excludesFile="$RELEASEIGNORE" \
+                check-ignore --no-index -z --stdin < "$SCRATCH.paths" > "$SCRATCH.matched" || rc=$?
+              if [ "$rc" -gt 1 ]; then
+                CLASSIFY_ERR=true
+                FILES_OK=false
+              else
+                mapfile -d '' MATCHED < "$SCRATCH.matched"
+                if [ "${#MATCHED[@]}" -eq "${#FILE_LIST[@]}" ]; then
+                  ALL_DEV=true
+                else
+                  declare -A IS_DEV=()
+                  for m in "${MATCHED[@]}"; do IS_DEV["$m"]=1; done
+                  for f in "${FILE_LIST[@]}"; do
+                    if [ -z "${IS_DEV[$f]:-}" ]; then FIRST_PRODUCT=$f; break; fi
+                  done
+                fi
               fi
-            done <<<"$FILES"
+              rm -rf "$SCRATCH" "$SCRATCH.paths" "$SCRATCH.matched"
+            fi
           fi
 
           # 1. Explicit label always wins (semver:none -> no release).
@@ -179,7 +165,8 @@ jobs:
 
           # 2/3. No label.
           if [ "$FILES_OK" != true ]; then
-            echo "::warning::No semver:* label and could not list files for PR #${N} — skipping release (label-gated default)."
+            if [ "$CLASSIFY_ERR" = true ]; then WHY="git check-ignore failed (rc=${rc})"; else WHY="could not list files"; fi
+            echo "::warning::No semver:* label and ${WHY} for PR #${N} — skipping release (label-gated default)."
             { echo "type=none"; echo "release=false"; } >> "$GITHUB_OUTPUT"
           elif [ "$ALL_DEV" = true ]; then
             COUNT=$(grep -c . <<<"$FILES" || true)
