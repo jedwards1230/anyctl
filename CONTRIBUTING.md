@@ -96,9 +96,9 @@ Keep documentation current as part of the change, not as a follow-up — update 
 
 Releases are decided per merged PR:
 
-- An explicit `semver:major`, `semver:minor`, or `semver:patch` label always wins and sets the bump; `semver:none` always skips the release.
+- An explicit `semver:major`, `semver:minor`, or `semver:patch` label always wins and sets the bump; `semver:none` always skips the release, even alongside a bump label.
 - With no label, the PR releases as a **patch** unless every changed file is dev-only (CI workflows, `CLAUDE.md`/`AGENTS.md`, `CONTRIBUTING*`, tests and `testdata/` fixtures, linter config, and the `views/` build sources). The list lives in [`.github/.releaseignore`](.github/.releaseignore) in gitignore syntax (note git's rule: a file can't be re-included if a parent directory is excluded, so re-include a directory with `!dir/` before `!dir/**`); edit that file to change what counts. Dependabot bumps to GitHub Actions or `views/` therefore do not release; Go module and Docker base-image bumps do.
-- A direct push, or a PR whose file list can't be fetched, does not release (a `::warning::` is logged).
+- A direct push (no associated PR) does not release. With no label, a PR whose file list can't be fetched also does not release. Both log a `::warning::`.
 - A `semver:*` bump label on a dev-only diff still releases but logs a warning suggesting `semver:none`.
 
 A release publishes a single immutable `vX.Y.Z` tag with AI-generated release notes and cross-compiled static binaries for Linux and macOS (amd64 + arm64).

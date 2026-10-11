@@ -1,10 +1,11 @@
 # Release anyctl on push to main. Version bump rule for the merged PR:
-#   1. An explicit semver:major|minor|patch label wins; semver:none skips.
+#   1. An explicit semver:major|minor|patch label wins; semver:none always skips
+#      (even alongside a bump label).
 #   2. No label: patch UNLESS every changed file is dev-only (CI, docs for
 #      contributors, tests, linter config, view build sources -- see
 #      .github/.releaseignore, gitignore syntax), in which case no release is cut.
-#   3. No associated PR (direct push) or the files API fails: no release, with
-#      a ::warning::.
+#   3. No associated PR (direct push), or no label and the file list can't be
+#      fetched/classified: no release, with a ::warning::.
 # workflow_dispatch always releases. The detect job decides; the shared
 # ai-release.yml computes the version/tag and AI release notes
 # (create_release: false), then build/image/chart publish from the tagged ref and
@@ -142,12 +143,13 @@ jobs:
             fi
           fi
 
-          # 1. Explicit label always wins (semver:none -> no release).
+          # 1. Explicit label always wins; semver:none beats any bump label (an explicit
+          #    opt-out is always honored).
           LABEL_BUMP=""
-          if grep -qx 'semver:major' <<<"$LABELS"; then LABEL_BUMP="major"
+          if grep -qx 'semver:none' <<<"$LABELS"; then LABEL_BUMP="none"
+          elif grep -qx 'semver:major' <<<"$LABELS"; then LABEL_BUMP="major"
           elif grep -qx 'semver:minor' <<<"$LABELS"; then LABEL_BUMP="minor"
           elif grep -qx 'semver:patch' <<<"$LABELS"; then LABEL_BUMP="patch"
-          elif grep -qx 'semver:none' <<<"$LABELS"; then LABEL_BUMP="none"
           fi
 
           if [ -n "$LABEL_BUMP" ]; then
