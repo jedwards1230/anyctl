@@ -97,7 +97,7 @@ Keep documentation current as part of the change, not as a follow-up — update 
 Releases are decided per merged PR:
 
 - An explicit `semver:major`, `semver:minor`, or `semver:patch` label always wins and sets the bump; `semver:none` always skips the release.
-- With no label, the PR releases as a **patch** unless every changed file is dev-only (CI workflows, `CLAUDE.md`/`AGENTS.md`, `CONTRIBUTING*`, tests, linter config, and the `views/` build sources). Edit the `DEV_ONLY` list in the detect step of `.github/workflows/release.yml` to change what counts. Dependabot bumps to GitHub Actions or `views/` therefore do not release; Go module and Docker base-image bumps do.
+- With no label, the PR releases as a **patch** unless every changed file is dev-only (CI workflows, `CLAUDE.md`/`AGENTS.md`, `CONTRIBUTING*`, tests and `testdata/` fixtures, linter config, and the `views/` build sources). Edit the `DEV_ONLY` list in the detect step of `.github/workflows/release.yml` to change what counts. Dependabot bumps to GitHub Actions or `views/` therefore do not release; Go module and Docker base-image bumps do.
 - A direct push, or a PR whose file list can't be fetched, does not release (a `::warning::` is logged).
 - A `semver:*` bump label on a dev-only diff still releases but logs a warning suggesting `semver:none`.
 

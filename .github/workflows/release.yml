@@ -94,6 +94,8 @@ jobs:
             '*/AGENTS.md'
             'CONTRIBUTING*'
             '*_test.go'
+            'testdata/*'
+            '*/testdata/*'
             '.golangci*'
             '.pre-commit-config.yaml'
             '.editorconfig'
