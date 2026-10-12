@@ -138,6 +138,12 @@ func ConfigDir() string {
 // not an error (you get global defaults + whatever services exist). Returns an
 // error only on malformed YAML or a failed service validation.
 func Load(dir string) (*Loaded, error) {
+	return load(dir, os.Stderr)
+}
+
+// load is Load with its non-fatal load-time warnings (spec inference, unknown
+// keys, orphan profile bindings) written to warn instead of os.Stderr.
+func load(dir string, warn io.Writer) (*Loaded, error) {
 	if dir == "" {
 		dir = ConfigDir()
 	}
@@ -180,7 +186,7 @@ func Load(dir string) (*Loaded, error) {
 	// bare name becomes ambiguous. A missing catalogs/ dir is not an error. anyctl
 	// ships no built-in services: absent any installed catalog or local services/
 	// dir, a config resolves to ZERO services.
-	if err := loadInstalledCatalogs(l, profile); err != nil {
+	if err := loadInstalledCatalogs(l, profile, warn); err != nil {
 		return nil, err
 	}
 
@@ -192,7 +198,7 @@ func Load(dir string) (*Loaded, error) {
 	entries, err := os.ReadDir(svcDir)
 	if err != nil {
 		if os.IsNotExist(err) {
-			warnOrphanProfileBindings(profile, l.Services, os.Stderr)
+			warnOrphanProfileBindings(profile, l.Services, warn)
 			return l, nil
 		}
 		return nil, fmt.Errorf("read %s: %w", svcDir, err)
@@ -202,11 +208,11 @@ func Load(dir string) (*Loaded, error) {
 			continue
 		}
 		path := filepath.Join(svcDir, e.Name())
-		svc, err := loadService(path, dir, os.Stderr) // dir = config root; spec: paths resolve relative to it
+		svc, err := loadService(path, dir, warn) // dir = config root; spec: paths resolve relative to it
 		if err != nil {
 			return nil, err
 		}
-		warnUnknownKeys(svc, os.Stderr)
+		warnUnknownKeys(svc, warn)
 		if svc.Name == "" {
 			svc.Name = strings.TrimSuffix(strings.TrimSuffix(e.Name(), ".yaml"), ".yml")
 		}
@@ -230,7 +236,7 @@ func Load(dir string) (*Loaded, error) {
 	// A binding for a service that never loaded is most likely a typo or a stale
 	// entry — warn (non-fatal, mirroring loadService's spec-failure warning) so a
 	// partial config dir still loads while the mismatch is surfaced.
-	warnOrphanProfileBindings(profile, l.Services, os.Stderr)
+	warnOrphanProfileBindings(profile, l.Services, warn)
 	return l, nil
 }
 
@@ -247,7 +253,7 @@ func Load(dir string) (*Loaded, error) {
 // hard error, never a silent pick. A duplicate service name
 // within ONE catalog is still a hard error. A missing catalogs/ dir is not an
 // error; a malformed installed manifest fails Load (consistent with services/).
-func loadInstalledCatalogs(l *Loaded, profile *Profile) error {
+func loadInstalledCatalogs(l *Loaded, profile *Profile, warn io.Writer) error {
 	catalogsDir := CatalogsDir(l.Dir)
 	entries, err := os.ReadDir(catalogsDir)
 	if err != nil {
@@ -301,11 +307,11 @@ func loadInstalledCatalogs(l *Loaded, profile *Profile) error {
 			if err != nil {
 				return fmt.Errorf("read %s: %w", path, err)
 			}
-			svc, err := decodeService(b, fmt.Sprintf("catalogs/%s/%s", cat, fname), l.Dir, os.Stderr)
+			svc, err := decodeService(b, fmt.Sprintf("catalogs/%s/%s", cat, fname), l.Dir, warn)
 			if err != nil {
 				return err
 			}
-			warnUnknownKeys(svc, os.Stderr)
+			warnUnknownKeys(svc, warn)
 			if svc.Name == "" {
 				svc.Name = strings.TrimSuffix(strings.TrimSuffix(fname, ".yaml"), ".yml")
 			}

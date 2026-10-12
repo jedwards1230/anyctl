@@ -186,13 +186,12 @@ func TestLoadWarnsOnUnknownKeys(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			dir := t.TempDir()
 			writeManifest(t, dir, "svc.yaml", tc.body)
-			l, err := Load(dir)
+			var buf bytes.Buffer
+			l, err := load(dir, &buf)
 			if err != nil {
 				t.Fatalf("Load must not fail on unknown keys: %v", err)
 			}
 			svc := l.Services["svc"]
-			var buf bytes.Buffer
-			warnUnknownKeys(svc, &buf)
 			_, lintErr := LoadService(filepath.Join(dir, "services", "svc.yaml"), Config{})
 
 			if tc.wantKeys == nil {
