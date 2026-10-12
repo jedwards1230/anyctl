@@ -183,3 +183,35 @@ func providerTypeName(p Provider) string {
 		return "unknown"
 	}
 }
+
+// TestRegistryBuildsEveryProviderKind is the registry half of the drift guard:
+// manifest.ProviderKinds is the list ValidateConfig accepts, so every kind in it
+// must build its own provider here. A kind added there without a NewRegistry
+// case (it would silently fall through to exec) fails this test.
+func TestRegistryBuildsEveryProviderKind(t *testing.T) {
+	want := map[string]string{
+		manifest.ProviderKindOnePassword: "*secret.OnePassword",
+		manifest.ProviderKindExec:        "*secret.Exec",
+		manifest.ProviderKindFile:        "*secret.File",
+	}
+	for _, kind := range manifest.ProviderKinds {
+		wantType, ok := want[kind]
+		if !ok {
+			t.Fatalf("provider kind %q has no expected type: add a NewRegistry case and list it here", kind)
+		}
+		scheme := "x" + kind
+		if kind == manifest.ProviderKindOnePassword {
+			scheme = "op"
+		}
+		sc := manifest.SecretsConfig{Providers: map[string]manifest.ProviderConfig{
+			kind: {Type: kind, Scheme: scheme, Command: []string{"tool", "{ref}"}},
+		}}
+		p, ok := NewRegistry(sc, nil).For(scheme)
+		if !ok {
+			t.Fatalf("kind %q: no provider registered for scheme %q", kind, scheme)
+		}
+		if got := providerTypeName(p); got != wantType {
+			t.Errorf("kind %q built %s, want %s", kind, got, wantType)
+		}
+	}
+}

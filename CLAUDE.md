@@ -68,10 +68,12 @@ to stderr. It still gates nothing.
   sunshine execute fully).
 - **Auth**: none / header-key / bearer / basic / oauth2-client-credentials
   (on-disk token cache) / ws-login.
-- **Secrets**: scheme-dispatched providers (`op://` → 1Password, optional
-  service-account-token injected into the `op` subprocess only) + `<PREFIX>_<SECRET>`
-  env override. Adding a backend is three edits in `internal/secret/provider.go`
-  (new `Provider`, config block, `NewRegistry` case) — no engine/cli changes.
+- **Secrets**: scheme-dispatched providers — `onepassword` (`op://`, optional
+  service-account-token injected into the `op` subprocess only), `exec` (any
+  `{ref}`-templated command), `file` — + `<PREFIX>_<SECRET>` env override. Most
+  backends are config-only `exec`/`file` providers. A bespoke kind is three edits:
+  a new `Provider` in `internal/secret/`, its kind in `manifest.ProviderKinds` (the
+  one list `ValidateConfig` accepts), and a `NewRegistry` case — no engine/cli changes.
 - **Commands**: hand-written `commands:` or OpenAPI inference (`spec:` +
   `spec_filter:` via libopenapi); composed `steps:` pipelines
   (extract/when/confirm/on_error); gojq output.

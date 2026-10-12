@@ -246,3 +246,44 @@ func TestMCPUnknownServiceErrors(t *testing.T) {
 		t.Errorf("error should name the unknown service and list available; got: %s", errb.String())
 	}
 }
+
+// TestInitConfigTemplateProvidersLoad uncomments the exec/file provider examples
+// in the `anyctl init` config.yaml template and proves the result loads and
+// builds an exec and a file provider — the commented examples must be real.
+func TestInitConfigTemplateProvidersLoad(t *testing.T) {
+	var lines []string
+	for _, l := range strings.Split(defaultConfigYAML, "\n") {
+		if strings.HasPrefix(l, "    # ") && !strings.HasPrefix(l, "    # A ") {
+			l = "    " + strings.TrimPrefix(l, "    # ")
+		}
+		lines = append(lines, l)
+	}
+	cfg := strings.Join(lines, "\n")
+	for _, want := range []string{"\n    pass:\n", "\n    file:\n"} {
+		if !strings.Contains(cfg, want) {
+			t.Fatalf("uncommented template lacks %q:\n%s", want, cfg)
+		}
+	}
+
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "config.yaml"), []byte(cfg), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	loaded, err := manifest.Load(dir)
+	if err != nil {
+		t.Fatalf("Load(uncommented init template): %v\n%s", err, cfg)
+	}
+	for name, kind := range map[string]string{
+		"onepassword": manifest.ProviderKindOnePassword,
+		"pass":        manifest.ProviderKindExec,
+		"file":        manifest.ProviderKindFile,
+	} {
+		p, ok := loaded.Config.Secrets.Providers[name]
+		if !ok {
+			t.Fatalf("template lost provider %q", name)
+		}
+		if got := manifest.ProviderKind(p.Type, p.Scheme); got != kind {
+			t.Errorf("provider %q kind = %q, want %q", name, got, kind)
+		}
+	}
+}

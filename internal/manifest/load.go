@@ -477,6 +477,53 @@ var schemeAliases = map[string]string{
 	"op":          "op",
 }
 
+// Secrets provider kinds. ProviderKinds is the single source of truth for which
+// kinds exist: ValidateConfig accepts exactly these, and secret.NewRegistry
+// dispatches on ProviderKind, so validation and the registry cannot drift.
+// Adding a kind here without a NewRegistry case fails the secret package's
+// TestRegistryBuildsEveryProviderKind.
+const (
+	ProviderKindOnePassword = "onepassword"
+	ProviderKindExec        = "exec"
+	ProviderKindFile        = "file"
+)
+
+// ProviderKinds lists every provider kind the secret registry can build.
+var ProviderKinds = []string{ProviderKindOnePassword, ProviderKindExec, ProviderKindFile}
+
+// ProviderScheme returns the URI scheme the provider named name serves: its
+// explicit scheme, else the alias for its map key (onepassword → op), else the
+// key itself.
+func ProviderScheme(name string, p ProviderConfig) string {
+	if p.Scheme != "" {
+		return p.Scheme
+	}
+	if s, ok := schemeAliases[name]; ok {
+		return s
+	}
+	return name
+}
+
+// ProviderKind resolves a provider's kind from its explicit `type:` (when set)
+// or, failing that, its scheme: op/onepassword → onepassword, file → file,
+// anything else → exec. Keeping the inference here means an op-only config.yaml
+// needs no `type:` and a `pass`/`vault`-style provider works with just a scheme
+// + command. An explicit type is returned as-is; ValidateConfig rejects one not
+// in ProviderKinds.
+func ProviderKind(typ, scheme string) string {
+	if typ != "" {
+		return typ
+	}
+	switch scheme {
+	case "op", "onepassword":
+		return ProviderKindOnePassword
+	case "file":
+		return ProviderKindFile
+	default:
+		return ProviderKindExec
+	}
+}
+
 // NormalizeSecrets returns the effective scheme-dispatched secrets config. When
 // the new secrets.providers block is present it is returned with per-provider
 // defaults applied; otherwise the legacy `secret:` block is folded into a single
@@ -494,13 +541,7 @@ func NormalizeSecrets(cfg Config) SecretsConfig {
 	if len(cfg.Secrets.Providers) > 0 {
 		out.Providers = make(map[string]ProviderConfig, len(cfg.Secrets.Providers))
 		for name, p := range cfg.Secrets.Providers {
-			if p.Scheme == "" {
-				if s, ok := schemeAliases[name]; ok {
-					p.Scheme = s
-				} else {
-					p.Scheme = name
-				}
-			}
+			p.Scheme = ProviderScheme(name, p)
 			if len(p.Command) == 0 && p.Scheme == "op" {
 				p.Command = append([]string(nil), DefaultResolverCommand...)
 			}

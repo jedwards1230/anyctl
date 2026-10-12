@@ -291,6 +291,13 @@ secrets:
       type: file                          # a file:///run/secrets/token ref
 ```
 
+A provider's `type:` is `onepassword`, `exec` or `file`; omit it and it's
+inferred from the scheme (`op` → onepassword, `file` → file, anything else →
+exec). The scheme defaults to the provider's name (`pass:` serves `pass://`);
+set `scheme:` to override it. Config load rejects an unknown type, an `exec`
+provider without a `command`, two providers on one scheme, and a
+`service_account_token` on anything but onepassword.
+
 An op `service_account_token.file` and every `file://` path must be owner-only
 (`0600`/`0400`) or they're refused. If a provider's binary isn't on `PATH`, the
 error names the provider and points you at the `<PREFIX>_<SECRET>` env override.
