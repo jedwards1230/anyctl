@@ -455,6 +455,11 @@ func decodeService(b []byte, label, configDir string, warn io.Writer) (*Service,
 		svc.unknownKeys = &UnknownKeysError{Source: label, Keys: unknown}
 	}
 	if err := Validate(&svc); err != nil {
+		// A typo'd key often also trips a structural rule (`metod:` → "method
+		// required"); keep the key in the error so the real cause is named.
+		if svc.unknownKeys != nil {
+			return nil, fmt.Errorf("%s: %w; %w", label, err, svc.unknownKeys)
+		}
 		return nil, fmt.Errorf("%s: %w", label, err)
 	}
 	// Inject spec-derived commands (Phase 2). Explicit commands: entries win.
