@@ -131,7 +131,9 @@ secret classifies as usage (exit 2).
 | Provider | Behavior |
 |---|---|
 | `onepassword` (`op://`) | Runs `op read {ref}` by default, or `op item get` for the item idioms. An optional `service_account_token` (exactly one of `file\|value\|env`; a token file must be 0600/0400) is injected as `OP_SERVICE_ACCOUNT_TOKEN` into the subprocess only. `--dry-run` prints the resolved `op` path. |
-| `exec`, `file` | Implemented in `exec.go` and `file.go` (file must be owner-only), but **currently unreachable** because config validation rejects every non-`op` scheme (see §4). |
+| `exec` (`pass://`, `vault://`, any scheme) | Runs a `{ref}`-templated `command` and returns its stdout; `read` idiom only. A `command` is required. `exec.go`. |
+| `file` (`file://`) | Reads the value from an owner-only (0600/0400) file; `read` idiom only. `file.go`. |
+| Kind selection | `type: onepassword\|exec\|file`, inferred from the scheme when omitted (`op` → onepassword, `file` → file, else exec). `manifest.ProviderKinds` is the one list both `ValidateConfig` and `secret.NewRegistry` use; each scheme may have one provider, and `service_account_token` is onepassword-only. `TestValidateConfig`, `TestRegistryBuildsEveryProviderKind`. |
 | Legacy `secret:` block | Permanent alias, normalized into an op provider (`NormalizeSecrets`). |
 
 ### 3.5 Template grammar (`internal/template/template.go`)
@@ -233,7 +235,6 @@ Current-state facts, verified in source.
 | L6 | A local override replaces the whole manifest. No field-level merge. | `load.go` |
 | L7 | Pipeline steps are HTTP-only, even on a `jsonrpc-ws` service. Steps also ignore `path_rules`, pagination, `noauth`, and the request `codec` (body is always `application/json`). | `pipeline.go` `runStep` |
 | L8 | Local manifests and `lint` decode **leniently**, so an unknown key (for example `paginaton:`) is silently dropped. Only catalog ingest enforces the closed schema. README's "an unknown key fails `anyctl lint`" is false. | `load.go` `decodeService`; `schemacheck.go` callers |
-| L9 | The `exec` and `file` secret providers can't be configured: `ValidateConfig` accepts only scheme `op`, so the `pass:`/`file:` examples in README and the `init` template fail to load (exit 2) once uncommented. | `validate.go` `validSecretSchemes`; `TestValidateConfig` |
 | L10 | Accepted but unimplemented values: auth `login-flow`/`external-tool` (fail at call time), `codec.response: hujson` (decoded as plain JSON), `output.mode: table` (renders as json). | `auth.go`, `render.go`, schema enums |
 | L11 | `self-update` verifies against the release's own `.sha256` (integrity) but does not check the cosign signature (authenticity). | `selfupdate.go` |
 | L12 | The MCP audit record has no caller identity, and generic-verb calls log empty `params` (path and body are not recorded). | `mcpserver.go` `auditMutation`, `handleVerb` |

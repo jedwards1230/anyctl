@@ -10,10 +10,14 @@ package secret
 // provider covers it. When a backend needs bespoke behavior:
 //
 //  1. Implement Provider (a new Scheme() + Resolve()) in its own file.
-//  2. Add a `secrets.providers.<name>` block to config.yaml.
-//  3. Register its constructor in NewRegistry's kind switch.
+//  2. Add its kind to manifest.ProviderKinds — the one list config validation
+//     accepts and this registry dispatches on.
+//  3. Register its constructor in NewRegistry's kind switch
+//     (TestRegistryBuildsEveryProviderKind fails until it is).
 //
-// No engine or cli changes are required — dispatch is by URI scheme.
+// Users then select it with a `secrets.providers.<name>` block (`type: <kind>`)
+// in config.yaml. No engine or cli changes are required — dispatch is by URI
+// scheme.
 
 import (
 	"context"
@@ -49,42 +53,20 @@ type Registry struct {
 func NewRegistry(cfg manifest.SecretsConfig, runner Runner) *Registry {
 	reg := &Registry{providers: map[string]Provider{}}
 	for name, pc := range cfg.Providers {
-		scheme := pc.Scheme
-		if scheme == "" {
-			scheme = name
-		}
-		switch providerKind(pc.Type, scheme) {
-		case "onepassword":
+		scheme := manifest.ProviderScheme(name, pc)
+		switch manifest.ProviderKind(pc.Type, scheme) {
+		case manifest.ProviderKindOnePassword:
 			p := newOnePassword(pc, runner)
 			reg.providers[p.Scheme()] = p
-		case "file":
+		case manifest.ProviderKindFile:
 			p := newFile(scheme)
 			reg.providers[p.Scheme()] = p
-		default: // "exec"
+		default: // manifest.ProviderKindExec (ValidateConfig rejects any other kind)
 			p := newExec(scheme, pc, runner)
 			reg.providers[p.Scheme()] = p
 		}
 	}
 	return reg
-}
-
-// providerKind resolves a provider's kind from its explicit `type:` (when set)
-// or, failing that, its scheme: op/onepassword → onepassword, file → file,
-// anything else → the generic exec provider. Keeping the inference here means an
-// op-only config.yaml needs no `type:` and a `pass`/`vault`-style provider works
-// with just a scheme + command.
-func providerKind(typ, scheme string) string {
-	if typ != "" {
-		return typ
-	}
-	switch scheme {
-	case "op", "onepassword":
-		return "onepassword"
-	case "file":
-		return "file"
-	default:
-		return "exec"
-	}
 }
 
 // For returns the provider registered for scheme, if any.

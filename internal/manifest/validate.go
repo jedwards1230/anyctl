@@ -3,7 +3,9 @@ package manifest
 import (
 	"encoding/json"
 	"fmt"
+	"maps"
 	"regexp"
+	"slices"
 	"strings"
 
 	"github.com/jedwards1230/anyctl/internal/filter"
@@ -370,10 +372,10 @@ func validateSpec(s *Service) error {
 	return nil
 }
 
-// validSecretSchemes is the set of URI schemes a secrets provider can serve.
-var validSecretSchemes = map[string]bool{
-	"op": true,
-}
+// uriSchemeRe is RFC 3986's scheme grammar: ALPHA *( ALPHA / DIGIT / "+" / "-" / "." ).
+// A ref is dispatched on the text before "://", so a provider scheme outside it
+// could never match a ref.
+var uriSchemeRe = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9+.-]*$`)
 
 // ConfigError marks a global-config validation problem (exit 2). It mirrors
 // secret.ConfigError on the resolve path so that load-time config-validation
@@ -393,22 +395,56 @@ func (e *DecodeError) Error() string { return e.Err.Error() }
 func (e *DecodeError) Unwrap() error { return e.Err }
 
 // ValidateConfig checks the global config's secrets providers for consistency:
-// each provider's scheme must be known, and a service_account_token (if set)
-// must name exactly one of file|value|env. Structural only — it runs no tools
-// and reads no token files. Safe to call on a normalized or raw Config.
+// each provider's kind must be one manifest.ProviderKinds lists (the same list
+// secret.NewRegistry dispatches on), its scheme must be a URI scheme no other
+// provider claims, an exec provider must name a command, and a
+// service_account_token (onepassword only) must name exactly one of
+// file|value|env. Structural only — it runs no tools and reads no token files.
+// Safe to call on a normalized or raw Config.
 func ValidateConfig(c *Config) error {
-	for name, p := range c.Secrets.Providers {
-		scheme := p.Scheme
-		if scheme == "" {
-			scheme = name
+	owners := map[string]string{} // scheme → first provider name serving it
+	// Sorted for a deterministic first error and duplicate-scheme owner.
+	for _, name := range slices.Sorted(maps.Keys(c.Secrets.Providers)) {
+		p := c.Secrets.Providers[name]
+		scheme := ProviderScheme(name, p)
+		if err := validateProvider(p, scheme); err != nil {
+			return &ConfigError{Err: fmt.Errorf("secrets provider %q: %w", name, err)}
 		}
-		if !validSecretSchemes[scheme] {
-			return &ConfigError{Err: fmt.Errorf("secrets provider %q: unknown scheme %q (want op)", name, scheme)}
+		if prev, ok := owners[scheme]; ok {
+			return &ConfigError{Err: fmt.Errorf("secrets providers %q and %q both serve scheme %q", prev, name, scheme)}
 		}
-		if tok := p.Auth.ServiceAccountToken; tok != nil {
-			if err := validateSecretSource(*tok); err != nil {
-				return &ConfigError{Err: fmt.Errorf("secrets provider %q: service_account_token: %w", name, err)}
-			}
+		owners[scheme] = name
+	}
+	return nil
+}
+
+// validateProvider checks one provider against the kind it resolves to.
+func validateProvider(p ProviderConfig, scheme string) error {
+	kind := ProviderKind(p.Type, scheme)
+	if !slices.Contains(ProviderKinds, kind) {
+		return fmt.Errorf("unknown type %q (want %s)", p.Type, strings.Join(ProviderKinds, "|"))
+	}
+	if !uriSchemeRe.MatchString(scheme) {
+		return fmt.Errorf("invalid scheme %q (want a URI scheme: a letter, then letters, digits, +, - or .)", scheme)
+	}
+	switch kind {
+	case ProviderKindOnePassword:
+		// The op provider always registers under op://; any other scheme would
+		// silently route nothing to it.
+		if scheme != "op" {
+			return fmt.Errorf("type %s serves only scheme op, not %q", kind, scheme)
+		}
+	case ProviderKindExec:
+		if len(p.Command) == 0 || p.Command[0] == "" {
+			return fmt.Errorf("type exec needs a command, e.g. [\"pass\", \"show\", \"{ref}\"]")
+		}
+	}
+	if tok := p.Auth.ServiceAccountToken; tok != nil {
+		if kind != ProviderKindOnePassword {
+			return fmt.Errorf("auth.service_account_token applies only to type %s, not %s", ProviderKindOnePassword, kind)
+		}
+		if err := validateSecretSource(*tok); err != nil {
+			return fmt.Errorf("service_account_token: %w", err)
 		}
 	}
 	return nil
