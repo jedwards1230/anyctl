@@ -1,9 +1,12 @@
 package manifest
 
 import (
+	"bytes"
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
+	"strings"
 	"testing"
 )
 
@@ -157,5 +160,71 @@ func TestSecretRefsExtraction(t *testing.T) {
 	got := secretRefs(`{secret.username}:{secret.password}`)
 	if len(got) != 2 || got[0] != "username" || got[1] != "password" {
 		t.Fatalf("got %v", got)
+	}
+}
+
+// TestLoadWarnsOnUnknownKeys: the runtime load (svc/list/doctor/mcp) must not
+// hard-fail on a manifest carrying an unknown key — that would brick every
+// command after an upgrade. It loads, records the keys, and warns once; only
+// LoadService (lint <file>) rejects them, as a *ConfigError.
+func TestLoadWarnsOnUnknownKeys(t *testing.T) {
+	cases := []struct {
+		name     string
+		body     string
+		wantKeys []string
+	}{
+		{"clean", "name: svc\ncommands:\n  list:\n    method: GET\n    path: /x\n", nil},
+		{"annotations", "name: svc\nannotations: {x: {y: [1]}}\ncommands:\n  list:\n    method: GET\n    path: /x\n    annotations: {z: 1}\n", nil},
+		{"top-level", "name: svc\ndescripton: typo\n", []string{`line 2: "descripton"`}},
+		{
+			"command and step",
+			"name: svc\ncommands:\n  list:\n    method: GET\n    ouput: {mode: json}\n    steps:\n      - path: /a\n        extrct: {x: .x}\n",
+			[]string{`line 5: "ouput"`, `line 8: "extrct"`},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			writeManifest(t, dir, "svc.yaml", tc.body)
+			l, err := Load(dir)
+			if err != nil {
+				t.Fatalf("Load must not fail on unknown keys: %v", err)
+			}
+			svc := l.Services["svc"]
+			var buf bytes.Buffer
+			warnUnknownKeys(svc, &buf)
+			_, lintErr := LoadService(filepath.Join(dir, "services", "svc.yaml"), Config{})
+
+			if tc.wantKeys == nil {
+				if svc.UnknownKeys() != nil || buf.Len() != 0 || lintErr != nil {
+					t.Fatalf("clean manifest flagged: keys=%v warn=%q lint=%v", svc.UnknownKeys(), buf.String(), lintErr)
+				}
+				return
+			}
+			var uk *UnknownKeysError
+			if !errors.As(svc.UnknownKeys(), &uk) || !slices.Equal(uk.Keys, tc.wantKeys) {
+				t.Fatalf("UnknownKeys = %v, want keys %v", svc.UnknownKeys(), tc.wantKeys)
+			}
+			if got := buf.String(); strings.Count(got, "\n") != 1 || !strings.Contains(got, "warning") {
+				t.Fatalf("warning = %q, want exactly one warning line", got)
+			}
+			var ce *ConfigError
+			if !errors.As(lintErr, &ce) || !errors.As(lintErr, &uk) {
+				t.Fatalf("LoadService err = %v, want *ConfigError wrapping *UnknownKeysError", lintErr)
+			}
+		})
+	}
+}
+
+// TestDecodeManifestKeepsTypeErrors: a non-key decode failure (a type mismatch)
+// is still a hard parse error, not reclassified as an unknown key.
+func TestDecodeManifestKeepsTypeErrors(t *testing.T) {
+	_, err := DecodeManifest([]byte("name: svc\ncommands: [not, a, map]\nbogus: 1\n"))
+	var ce *ConfigError
+	if !errors.As(err, &ce) || !strings.Contains(err.Error(), "parse manifest") {
+		t.Fatalf("err = %v, want a parse *ConfigError", err)
+	}
+	if svc, err := DecodeManifest(nil); err != nil || svc == nil {
+		t.Fatalf("empty manifest: svc=%v err=%v, want zero Service", svc, err)
 	}
 }

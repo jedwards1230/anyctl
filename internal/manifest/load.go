@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 	"time"
@@ -205,6 +206,7 @@ func Load(dir string) (*Loaded, error) {
 		if err != nil {
 			return nil, err
 		}
+		warnUnknownKeys(svc, os.Stderr)
 		if svc.Name == "" {
 			svc.Name = strings.TrimSuffix(strings.TrimSuffix(e.Name(), ".yaml"), ".yml")
 		}
@@ -303,6 +305,7 @@ func loadInstalledCatalogs(l *Loaded, profile *Profile) error {
 			if err != nil {
 				return err
 			}
+			warnUnknownKeys(svc, os.Stderr)
 			if svc.Name == "" {
 				svc.Name = strings.TrimSuffix(strings.TrimSuffix(fname, ".yaml"), ".yml")
 			}
@@ -374,12 +377,16 @@ func warnOrphanProfileBindings(profile *Profile, services map[string]*Service, w
 }
 
 // LoadService reads a single manifest file (used by `anyctl lint <file>`),
-// applying global config defaults. Relative spec: paths resolve from the same
+// applying global config defaults. Unlike Load it is strict: an unknown key is
+// a *ConfigError (exit 2). Relative spec: paths resolve from the same
 // directory as the manifest file (since there is no separate config root here).
 func LoadService(path string, cfg Config) (*Service, error) {
 	svc, err := loadService(path, filepath.Dir(path), os.Stderr)
 	if err != nil {
 		return nil, err
+	}
+	if uk := svc.UnknownKeys(); uk != nil {
+		return nil, &ConfigError{Err: uk}
 	}
 	if svc.Name == "" {
 		base := filepath.Base(path)
@@ -427,10 +434,19 @@ func loadService(path, configDir string, warn io.Writer) (*Service, error) {
 // raw bytes. label names the source in errors/warnings (a file path for a local
 // manifest, "catalogs/<cat>/<file>" for an installed-catalog one). configDir
 // resolves relative spec: paths; pass "" when there is no config root.
+//
+// An unknown key does NOT fail the decode: it is recorded on the service
+// (Service.UnknownKeys) for `anyctl lint` to reject, and the runtime loaders
+// warn about it via warnUnknownKeys. Failing the runtime load instead would
+// brick every command after an upgrade over one stray key.
 func decodeService(b []byte, label, configDir string, warn io.Writer) (*Service, error) {
 	var svc Service
-	if err := yaml.Unmarshal(b, &svc); err != nil {
+	unknown, err := decodeManifest(b, &svc)
+	if err != nil {
 		return nil, fmt.Errorf("parse %s: %w", label, err)
+	}
+	if len(unknown) > 0 {
+		svc.unknownKeys = &UnknownKeysError{Source: label, Keys: unknown}
 	}
 	if err := Validate(&svc); err != nil {
 		return nil, fmt.Errorf("%s: %w", label, err)
@@ -447,6 +463,87 @@ func decodeService(b []byte, label, configDir string, warn io.Writer) (*Service,
 		_, _ = fmt.Fprintf(warn, "%s: service %q: spec inference failed: %v (using static commands only)\n", brand.Name, l, err)
 	}
 	return &svc, nil
+}
+
+// unknownFieldRe matches yaml.v3's KnownFields diagnostic for one unknown key.
+var unknownFieldRe = regexp.MustCompile(`^line (\d+): field (.+) not found in type \S+$`)
+
+// decodeManifest is the one manifest decoder: it decodes b into svc with
+// KnownFields, so an unknown key at any depth is caught — the same closure the
+// JSON Schema enforces with additionalProperties: false. annotations: is a
+// map[string]any, so its free-form keys never trip it. Unknown keys come back
+// as `line N: "key"` entries rather than an error, so each caller picks its own
+// policy (lint/catalog ingest reject, runtime load warns). svc is still fully
+// decoded around them. Any other decode error (malformed YAML, a type
+// mismatch) is returned as err, exactly as plain yaml.Unmarshal would.
+func decodeManifest(b []byte, svc *Service) (unknown []string, err error) {
+	dec := yaml.NewDecoder(bytes.NewReader(b))
+	dec.KnownFields(true)
+	err = dec.Decode(svc)
+	if err == nil || errors.Is(err, io.EOF) { // an empty file decodes to the zero Service
+		return nil, nil
+	}
+	var te *yaml.TypeError
+	if !errors.As(err, &te) {
+		return nil, err
+	}
+	var other []string
+	for _, msg := range te.Errors {
+		if m := unknownFieldRe.FindStringSubmatch(msg); m != nil {
+			unknown = append(unknown, fmt.Sprintf("line %s: %q", m[1], m[2]))
+			continue
+		}
+		other = append(other, msg)
+	}
+	if len(other) > 0 {
+		return unknown, &yaml.TypeError{Errors: other}
+	}
+	return unknown, nil
+}
+
+// DecodeManifest strictly decodes one manifest's raw bytes, without validating
+// it: an unknown key at any depth is a *ConfigError wrapping *UnknownKeysError.
+// It is the Go-side counterpart of SchemaValidate's additionalProperties check.
+func DecodeManifest(b []byte) (*Service, error) {
+	var svc Service
+	unknown, err := decodeManifest(b, &svc)
+	if err != nil {
+		return nil, &ConfigError{Err: fmt.Errorf("parse manifest: %w", err)}
+	}
+	if len(unknown) > 0 {
+		return nil, &ConfigError{Err: &UnknownKeysError{Source: "manifest", Keys: unknown}}
+	}
+	return &svc, nil
+}
+
+// UnknownKeysError reports manifest keys the closed schema does not define —
+// most often a typo (`ouput:`, `extrct:`) that would otherwise be silently
+// dropped. Keys are `line N: "key"` entries in document order.
+type UnknownKeysError struct {
+	Source string
+	Keys   []string
+}
+
+func (e *UnknownKeysError) Error() string {
+	return fmt.Sprintf("%s: unknown key(s): %s", e.Source, strings.Join(e.Keys, ", "))
+}
+
+// UnknownKeys reports the unknown keys found when the manifest was decoded, or
+// nil. A runtime load only warns about them; `anyctl lint` rejects them.
+func (s *Service) UnknownKeys() error {
+	if s.unknownKeys == nil {
+		return nil
+	}
+	return s.unknownKeys
+}
+
+// warnUnknownKeys emits the one-line, non-fatal load-time warning for a
+// manifest carrying unknown keys (mirroring the spec-inference warning).
+func warnUnknownKeys(svc *Service, warn io.Writer) {
+	if svc.unknownKeys == nil || warn == nil {
+		return
+	}
+	_, _ = fmt.Fprintf(warn, "%s: warning: %v (ignored; `%s lint` rejects them)\n", brand.Name, svc.unknownKeys, brand.Name)
 }
 
 func applyConfigDefaults(c *Config) {

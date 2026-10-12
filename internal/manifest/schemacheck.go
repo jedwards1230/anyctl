@@ -75,11 +75,11 @@ func ValidatePortableManifest(data []byte) (name string, err error) {
 	if err := SchemaValidate(data); err != nil {
 		return "", err
 	}
-	var svc Service
-	if err := yaml.Unmarshal(data, &svc); err != nil {
-		return "", &ConfigError{Err: fmt.Errorf("parse manifest: %w", err)}
+	svc, err := DecodeManifest(data)
+	if err != nil {
+		return "", err
 	}
-	if err := Validate(&svc); err != nil {
+	if err := Validate(svc); err != nil {
 		return "", err
 	}
 	return svc.Name, nil

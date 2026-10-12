@@ -46,14 +46,14 @@ func schemaValidate(sch *jsonschema.Schema, src []byte) error {
 
 // goValidate decodes a manifest into manifest.Service and runs the structural
 // Validate — the Go-side counterpart of the schema check, used by the agreement
-// test. Note: decodeService uses plain yaml.Unmarshal (not KnownFields), so this
-// mirrors how manifests actually load.
+// test. It decodes strictly (KnownFields) via manifest.DecodeManifest, the same
+// decoder lint and catalog ingest use.
 func goValidate(src []byte) error {
-	var svc manifest.Service
-	if err := yaml.Unmarshal(src, &svc); err != nil {
+	svc, err := manifest.DecodeManifest(src)
+	if err != nil {
 		return err
 	}
-	return manifest.Validate(&svc)
+	return manifest.Validate(svc)
 }
 
 // TestCatalogManifestsConformToSchema is the no-false-positives guarantee: every
@@ -202,9 +202,10 @@ func TestKnownInvalidManifestsFailSchema(t *testing.T) {
 // on the overlapping rules.
 //
 // Known, intentional divergences NOT covered here (the test would flap on them):
-//   - The schema is additively stricter: it rejects unknown keys, bad codec
-//     values, and type mismatches that Go's non-strict yaml.Unmarshal silently
-//     drops (decodeService does NOT use KnownFields).
+//   - The schema is additively stricter on values: it rejects bad codec values
+//     and some type mismatches the Go model accepts. Unknown KEYS are in the
+//     overlap, though: Go decodes with KnownFields (manifest.DecodeManifest), so
+//     both engines close every object except annotations:.
 //   - Validate is stricter on semantic rules the schema cannot express:
 //     undeclared secret references, jq validity, spec reachability, and the
 //     transport-dependent path requirement.
@@ -353,6 +354,58 @@ func TestSchemaAndValidateAgree(t *testing.T) {
 			yaml: "name: x\nannotations:\n  owner: platform-team\n  meta:\n    tier: gold\n    critical: true\n" +
 				"  tags: [a, b, c]\ncommands:\n  list:\n    method: GET\n    path: /list\n",
 			wantValid: true,
+		},
+		// Unknown keys at every depth: the schema's additionalProperties: false
+		// and Go's KnownFields decode must close the same objects.
+		{
+			name:      "unknown top-level key (both reject)",
+			yaml:      "name: x\npaginaton:\n  style: cursor\n",
+			wantValid: false,
+		},
+		{
+			name:      "unknown command key (both reject)",
+			yaml:      "name: x\ncommands:\n  list:\n    method: GET\n    path: /l\n    ouput:\n      mode: json\n",
+			wantValid: false,
+		},
+		{
+			name:      "unknown step key (both reject)",
+			yaml:      "name: x\ncommands:\n  list:\n    method: GET\n    steps:\n      - path: /a\n        extrct:\n          v: .v\n",
+			wantValid: false,
+		},
+		{
+			name:      "unknown on_error key (both reject)",
+			yaml:      "name: x\ncommands:\n  list:\n    method: GET\n    steps:\n      - path: /a\n        on_error:\n          path: /b\n          methd: POST\n",
+			wantValid: false,
+		},
+		{
+			name:      "unknown auth key (both reject)",
+			yaml:      "name: x\nauth:\n  strategy: none\n  hedaer: X\n",
+			wantValid: false,
+		},
+		{
+			name:      "unknown endpoint key (both reject)",
+			yaml:      "name: x\nendpoints:\n  alt:\n    descripton: typo\n",
+			wantValid: false,
+		},
+		{
+			name:      "unknown secret key (both reject)",
+			yaml:      "name: x\nsecrets:\n  k:\n    env: X_K\n    idom: item-get\n",
+			wantValid: false,
+		},
+		{
+			name:      "unknown pagination key (both reject)",
+			yaml:      "name: x\npagination:\n  style: cursor\n  nxt: .next\n",
+			wantValid: false,
+		},
+		{
+			name:      "unknown output key (both reject)",
+			yaml:      "name: x\noutput:\n  mode: json\n  fitler: .\n",
+			wantValid: false,
+		},
+		{
+			name:      "unknown ui key (both reject)",
+			yaml:      "name: x\ncommands:\n  list:\n    method: GET\n    path: /l\n    ui:\n      veiw: table\n",
+			wantValid: false,
 		},
 		{
 			name: "command-level annotations (both accept)",
