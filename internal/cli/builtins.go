@@ -90,7 +90,9 @@ func (r *runner) cmdLint(loaded *manifest.Loaded, loadErr error) *cobra.Command 
 	cmd := &cobra.Command{
 		Use:   "lint [service|path.yaml]",
 		Short: "validate manifest schema",
-		Long: "Validate manifest schema (structural).\n\n" +
+		Long: "Validate manifest schema (structural). Every manifest key is closed:\n" +
+			"an unknown key (a typo such as `ouput:`) fails lint with exit 2, except\n" +
+			"under the free-form annotations: map.\n\n" +
 			"--strict also requires completeness: a base_url/endpoint and a bound\n" +
 			"ref/env for every declared secret (post profile-merge for a configured\n" +
 			"service, or the file as-is for a path argument). A portable manifest\n" +
@@ -137,6 +139,9 @@ func (r *runner) cmdLint(loaded *manifest.Loaded, loadErr error) *cobra.Command 
 				if err != nil {
 					return err
 				}
+				if uk := svc.UnknownKeys(); uk != nil {
+					return &manifest.ConfigError{Err: uk}
+				}
 				if strict {
 					if err := manifest.ValidateComplete(svc); err != nil {
 						return fmt.Errorf("%s: %w", args[0], err)
@@ -158,21 +163,29 @@ func (r *runner) cmdLint(loaded *manifest.Loaded, loadErr error) *cobra.Command 
 			// who has bound only one service sees which others are still unbound
 			// rather than a single error about an unrelated alphabetically-first
 			// service. It exits 2 if any service is incomplete.
+			//
+			// Unknown keys only warned at load time; lint rejects them, in both
+			// modes, reported per service like --strict's completeness check.
 			names := loaded.CanonicalNames()
-			if !strict {
-				for _, name := range names {
-					_, _ = fmt.Fprintf(r.stdout, "ok %s\n", name)
-				}
-				return nil
-			}
-			var incomplete int
+			var unknown, incomplete int
 			for _, name := range names {
-				if err := manifest.ValidateComplete(loaded.Services[name]); err != nil {
-					_, _ = fmt.Fprintf(r.stdout, "FAIL %s: %s\n", name, err)
-					incomplete++
+				svc := loaded.Services[name]
+				if uk := svc.UnknownKeys(); uk != nil {
+					_, _ = fmt.Fprintf(r.stdout, "FAIL %s: %s\n", name, uk)
+					unknown++
 					continue
 				}
+				if strict {
+					if err := manifest.ValidateComplete(svc); err != nil {
+						_, _ = fmt.Fprintf(r.stdout, "FAIL %s: %s\n", name, err)
+						incomplete++
+						continue
+					}
+				}
 				_, _ = fmt.Fprintf(r.stdout, "ok %s\n", name)
+			}
+			if unknown > 0 {
+				return &manifest.ConfigError{Err: fmt.Errorf("%d of %d service(s) have unknown manifest keys", unknown, len(names))}
 			}
 			if incomplete > 0 {
 				return agentsafety.NewUsageError(fmt.Sprintf("%d of %d service(s) incomplete; bind them in profile.yaml", incomplete, len(names)))

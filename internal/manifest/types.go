@@ -98,6 +98,10 @@ type Service struct {
 
 	// timeout resolved from global defaults at load time (not a YAML field).
 	Timeout string `yaml:"-"`
+
+	// unknownKeys records keys the closed schema does not define, found at
+	// decode time (see UnknownKeys). Not a YAML field.
+	unknownKeys *UnknownKeysError
 }
 
 // Endpoint is an additional named endpoint for multi-endpoint services.

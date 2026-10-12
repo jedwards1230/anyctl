@@ -207,3 +207,105 @@ func TestProbeReachableUnreachable(t *testing.T) {
 		t.Fatalf("unreachable probe = %q, want 'unreachable: ...'", got)
 	}
 }
+
+// TestLintRejectsUnknownKeys: every manifest key is closed, so a typo'd key at
+// any depth fails lint (exit 2, naming the key) in every lint mode — while the
+// runtime load (`list`) only warns and still succeeds. annotations: is the one
+// free-form map and must never trip it.
+func TestLintRejectsUnknownKeys(t *testing.T) {
+	cases := []struct {
+		name    string
+		body    string
+		badKey  string // "" = the manifest is clean
+		wantErr bool
+	}{
+		{
+			name:    "unknown top-level key",
+			body:    "name: svc\npaginaton:\n  style: cursor\ncommands:\n  list:\n    method: GET\n    path: /x\n",
+			badKey:  "paginaton",
+			wantErr: true,
+		},
+		{
+			name:    "unknown command key",
+			body:    "name: svc\ncommands:\n  list:\n    method: GET\n    path: /x\n    ouput:\n      mode: json\n",
+			badKey:  "ouput",
+			wantErr: true,
+		},
+		{
+			name: "unknown step key",
+			body: "name: svc\ncommands:\n  list:\n    method: GET\n    steps:\n" +
+				"      - id: a\n        path: /a\n        extrct:\n          x: .x\n",
+			badKey:  "extrct",
+			wantErr: true,
+		},
+		{
+			name:    "unknown on_error step key",
+			body:    "name: svc\ncommands:\n  list:\n    method: GET\n    steps:\n      - path: /a\n        on_error:\n          path: /b\n          methd: POST\n",
+			badKey:  "methd",
+			wantErr: true,
+		},
+		{
+			name:    "unknown auth key",
+			body:    "name: svc\nauth:\n  strategy: none\n  hedaer: X\ncommands:\n  list:\n    method: GET\n    path: /x\n",
+			badKey:  "hedaer",
+			wantErr: true,
+		},
+		{
+			name: "annotations stay free-form",
+			body: "name: svc\nannotations:\n  owner: me\n  meta: {tier: gold, tags: [a, b]}\n" +
+				"commands:\n  list:\n    method: GET\n    path: /x\n    annotations:\n      anything: [1, 2]\n",
+		},
+	}
+	modes := []struct {
+		name string
+		args func(path string) []string
+	}{
+		{"all", func(string) []string { return []string{"lint"} }},
+		{"selector", func(string) []string { return []string{"lint", "svc"} }},
+		{"file", func(path string) []string { return []string{"lint", path} }},
+		{"strict file", func(path string) []string { return []string{"lint", "--strict", path} }},
+		{"strict all", func(string) []string { return []string{"lint", "--strict"} }},
+	}
+	for _, tc := range cases {
+		for _, m := range modes {
+			t.Run(tc.name+"/"+m.name, func(t *testing.T) {
+				dir := t.TempDir()
+				writeService(t, dir, "svc", tc.body)
+				t.Setenv("ANYCTL_CONFIG_DIR", dir)
+				path := filepath.Join(dir, "services", "svc.yaml")
+
+				var out, errb bytes.Buffer
+				code := Run(m.args(path), &out, &errb)
+				combined := out.String() + errb.String()
+				if !tc.wantErr {
+					// --strict on an unbound portable manifest fails completeness
+					// (exit 2) regardless; the point is it never cites a key.
+					if strings.Contains(combined, "unknown key") {
+						t.Fatalf("clean manifest reported unknown keys: %s", combined)
+					}
+					if !strings.HasPrefix(m.name, "strict") && code != agentsafety.ExitOK {
+						t.Fatalf("exit = %d, want 0 (out: %s)", code, combined)
+					}
+					return
+				}
+				if code != agentsafety.ExitUsage {
+					t.Fatalf("exit = %d, want %d (out: %s)", code, agentsafety.ExitUsage, combined)
+				}
+				if !strings.Contains(combined, `"`+tc.badKey+`"`) {
+					t.Fatalf("output = %q, want it to name key %q", combined, tc.badKey)
+				}
+			})
+		}
+
+		// Runtime load stays lenient: the same manifest lists fine.
+		t.Run(tc.name+"/list", func(t *testing.T) {
+			dir := t.TempDir()
+			writeService(t, dir, "svc", tc.body)
+			t.Setenv("ANYCTL_CONFIG_DIR", dir)
+			var out, errb bytes.Buffer
+			if code := Run([]string{"list"}, &out, &errb); code != agentsafety.ExitOK {
+				t.Fatalf("list exit = %d, want 0 (stderr: %s)", code, errb.String())
+			}
+		})
+	}
+}

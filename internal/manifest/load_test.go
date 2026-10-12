@@ -1,9 +1,12 @@
 package manifest
 
 import (
+	"bytes"
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
+	"strings"
 	"testing"
 )
 
@@ -157,5 +160,109 @@ func TestSecretRefsExtraction(t *testing.T) {
 	got := secretRefs(`{secret.username}:{secret.password}`)
 	if len(got) != 2 || got[0] != "username" || got[1] != "password" {
 		t.Fatalf("got %v", got)
+	}
+}
+
+// TestLoadWarnsOnUnknownKeys: the runtime load (svc/list/doctor/mcp) must not
+// hard-fail on a manifest carrying an unknown key — that would brick every
+// command after an upgrade. It loads, records the keys, and warns once; only
+// LoadService (lint <file>) rejects them, as a *ConfigError.
+func TestLoadWarnsOnUnknownKeys(t *testing.T) {
+	cases := []struct {
+		name     string
+		body     string
+		wantKeys []string
+	}{
+		{"clean", "name: svc\ncommands:\n  list:\n    method: GET\n    path: /x\n", nil},
+		{"annotations", "name: svc\nannotations: {x: {y: [1]}}\ncommands:\n  list:\n    method: GET\n    path: /x\n    annotations: {z: 1}\n", nil},
+		{"top-level", "name: svc\ndescripton: typo\n", []string{`line 2: "descripton"`}},
+		{
+			"command and step",
+			"name: svc\ncommands:\n  list:\n    method: GET\n    ouput: {mode: json}\n    steps:\n      - path: /a\n        extrct: {x: .x}\n",
+			[]string{`line 5: "ouput"`, `line 8: "extrct"`},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			writeManifest(t, dir, "svc.yaml", tc.body)
+			var buf bytes.Buffer
+			l, err := load(dir, &buf)
+			if err != nil {
+				t.Fatalf("Load must not fail on unknown keys: %v", err)
+			}
+			svc := l.Services["svc"]
+			_, lintErr := LoadService(filepath.Join(dir, "services", "svc.yaml"), Config{})
+
+			if tc.wantKeys == nil {
+				if svc.UnknownKeys() != nil || buf.Len() != 0 || lintErr != nil {
+					t.Fatalf("clean manifest flagged: keys=%v warn=%q lint=%v", svc.UnknownKeys(), buf.String(), lintErr)
+				}
+				return
+			}
+			var uk *UnknownKeysError
+			if !errors.As(svc.UnknownKeys(), &uk) || !slices.Equal(uk.Keys, tc.wantKeys) {
+				t.Fatalf("UnknownKeys = %v, want keys %v", svc.UnknownKeys(), tc.wantKeys)
+			}
+			if got := buf.String(); strings.Count(got, "\n") != 1 || !strings.Contains(got, "warning") {
+				t.Fatalf("warning = %q, want exactly one warning line", got)
+			}
+			var ce *ConfigError
+			if !errors.As(lintErr, &ce) || !errors.As(lintErr, &uk) {
+				t.Fatalf("LoadService err = %v, want *ConfigError wrapping *UnknownKeysError", lintErr)
+			}
+		})
+	}
+}
+
+// TestDecodeManifestKeepsTypeErrors: a non-key decode failure (a type mismatch)
+// is still a hard parse error, not reclassified as an unknown key.
+func TestDecodeManifestKeepsTypeErrors(t *testing.T) {
+	_, err := DecodeManifest([]byte("name: svc\ncommands: [not, a, map]\nbogus: 1\n"))
+	var ce *ConfigError
+	if !errors.As(err, &ce) || !strings.Contains(err.Error(), "parse manifest") {
+		t.Fatalf("err = %v, want a parse *ConfigError", err)
+	}
+	if svc, err := DecodeManifest(nil); err != nil || svc == nil {
+		t.Fatalf("empty manifest: svc=%v err=%v, want zero Service", svc, err)
+	}
+}
+
+// TestLoadWarnsOnUnknownKeysInstalledCatalog: an installed-catalog manifest takes
+// the same lenient path as a local one — Load succeeds and warns exactly once.
+func TestLoadWarnsOnUnknownKeysInstalledCatalog(t *testing.T) {
+	dir := t.TempDir()
+	catDir := filepath.Join(CatalogsDir(dir), "acme")
+	if err := os.MkdirAll(catDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	body := "name: svc\ndescripton: typo\ncommands:\n  list:\n    method: GET\n    path: /x\n"
+	if err := os.WriteFile(filepath.Join(catDir, "svc.yaml"), []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	var buf bytes.Buffer
+	l, err := load(dir, &buf)
+	if err != nil {
+		t.Fatalf("Load must not fail on unknown keys: %v", err)
+	}
+	if l.Services["acme:svc"].UnknownKeys() == nil {
+		t.Fatal("UnknownKeys = nil, want the typo recorded")
+	}
+	if got := buf.String(); strings.Count(got, "\n") != 1 || !strings.Contains(got, `catalogs/acme/svc.yaml: unknown key(s): line 2: "descripton"`) {
+		t.Fatalf("warning = %q, want exactly one line naming the catalog file and key", got)
+	}
+}
+
+// TestUnknownKeyNamedWhenValidateFails: a typo that also breaks a structural
+// rule (`metod:` leaves method unset) must still name the unknown key, and stay
+// classifiable as both *ConfigError and *UnknownKeysError.
+func TestUnknownKeyNamedWhenValidateFails(t *testing.T) {
+	dir := t.TempDir()
+	writeManifest(t, dir, "svc.yaml", "name: svc\ncommands:\n  list:\n    metod: GET\n    path: /x\n")
+	_, err := LoadService(filepath.Join(dir, "services", "svc.yaml"), Config{})
+	var ce *ConfigError
+	var uk *UnknownKeysError
+	if !errors.As(err, &ce) || !errors.As(err, &uk) || !strings.Contains(err.Error(), `"metod"`) {
+		t.Fatalf("err = %v, want a *ConfigError that also names \"metod\"", err)
 	}
 }

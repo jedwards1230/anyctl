@@ -76,8 +76,8 @@ stderr, `errors.go`), `-y/--yes`.
 | `$ANYCTL_CONFIG_DIR` > `--config-dir` peek > `$XDG_CONFIG_HOME/anyctl` > `~/.config/anyctl` | Config root (`ConfigDir`, `load.go`) | — |
 | `config.yaml` | Defaults (`timeout` 60s, `output` json, `max_response_bytes` 64 MiB) and secrets providers | strict (`KnownFields`) |
 | `profile.yaml` | Per-service `base_url`, `tls_insecure`, `vars`, `endpoints.<n>.{base_url,tls_insecure}`, `secrets.<n>.{ref,env}`. Per-key merge over the manifest. Binding an unknown service produces a warning. | strict (`profile.go`) |
-| `services/*.yaml` | Local manifests | **lenient** (`yaml.Unmarshal`, see §4) |
-| `catalogs/<name>/*.yaml` + `.anyctl-catalog.json` | Installed catalogs. Dot-dirs are skipped. | lenient |
+| `services/*.yaml` | Local manifests | strict keys (`KnownFields`): an unknown key warns at load, fails `lint` (§3.7) |
+| `catalogs/<name>/*.yaml` + `.anyctl-catalog.json` | Installed catalogs. Dot-dirs are skipped. | same as `services/*.yaml` |
 
 Precedence when two sources define the same service: a local file beats an installed
 catalog (origin `override`). Two local files with the same name is an error. Two catalogs
@@ -170,6 +170,7 @@ There is no pipeline example in `examples/`. A real single-service example (suns
 
 | Tier | Runs on | Checks |
 |---|---|---|
+| Closed keys (`decodeManifest`, `KnownFields`) | Every load, `lint`, catalog ingest | An unknown key at any depth (except under `annotations:`). Load prints a one-line stderr warning and keeps going, so an upgrade never bricks an existing manifest; `lint` (any mode) and catalog ingest fail with exit 2 |
 | Structural `Validate` | Every load and `lint` | No in-manifest binding (P2), transport, strategy, required auth fields, `{secret.X}` declared, idiom, output mode, pagination style, endpoint references, step targets, jq compiles, ws `params` is an array, `ui` enums |
 | `ValidateComplete` | Execute (including dry-run), `doctor`, `lint --strict` | `base_url` or endpoints bound, every declared secret bound |
 | JSON Schema (`SchemaValidate`) | **Only** `catalog add`, `catalog validate`, `catalog add --openapi` (`ValidatePortableManifest`) | Closed schema: unknown keys fail |
@@ -232,7 +233,6 @@ Current-state facts, verified in source.
 | L5 | A step `body` cannot be `@file`: it is template-expanded literally. The schema description says "Inline JSON or @file". | `pipeline.go` `runStep` vs `engine.go` `resolveBody` |
 | L6 | A local override replaces the whole manifest. No field-level merge. | `load.go` |
 | L7 | Pipeline steps are HTTP-only, even on a `jsonrpc-ws` service. Steps also ignore `path_rules`, pagination, `noauth`, and the request `codec` (body is always `application/json`). | `pipeline.go` `runStep` |
-| L8 | Local manifests and `lint` decode **leniently**, so an unknown key (for example `paginaton:`) is silently dropped. Only catalog ingest enforces the closed schema. README's "an unknown key fails `anyctl lint`" is false. | `load.go` `decodeService`; `schemacheck.go` callers |
 | L9 | The `exec` and `file` secret providers can't be configured: `ValidateConfig` accepts only scheme `op`, so the `pass:`/`file:` examples in README and the `init` template fail to load (exit 2) once uncommented. | `validate.go` `validSecretSchemes`; `TestValidateConfig` |
 | L10 | Accepted but unimplemented values: auth `login-flow`/`external-tool` (fail at call time), `codec.response: hujson` (decoded as plain JSON), `output.mode: table` (renders as json). | `auth.go`, `render.go`, schema enums |
 | L11 | `self-update` verifies against the release's own `.sha256` (integrity) but does not check the cosign signature (authenticity). | `selfupdate.go` |
