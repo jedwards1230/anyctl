@@ -10,13 +10,13 @@
     "dev": "vite"
   },
   "dependencies": {
-    "@modelcontextprotocol/ext-apps": "^2.0.0"
+    "@modelcontextprotocol/ext-apps": "^2.0.3"
   },
   "devDependencies": {
-    "@modelcontextprotocol/client": "^2.1.0",
-    "@types/node": "^26.6.2",
+    "@modelcontextprotocol/client": "^2.3.1",
+    "@types/node": "^26.6.5",
     "typescript": "^7.0.2",
-    "vite": "^8.3.1",
+    "vite": "^8.3.4",
     "vite-plugin-singlefile": "^2.3.0"
   }
 }
