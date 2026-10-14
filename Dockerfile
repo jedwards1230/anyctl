@@ -21,7 +21,7 @@ RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
 
 # Pinned to a digest (not the mutable trixie-slim tag) so rebuilds are
 # reproducible and don't silently drift onto a different base.
-FROM debian:trixie-slim@sha256:3a39a0592364683e6bab97937b72cad5a8fa6dcbbee90edb3bb48c7f8e94f258
+FROM debian:trixie-slim@sha256:a29215f6a35e51e22adffa17f89e9d2ef06214e64a2bad10d765c46aea49f11f
 # Install the 1Password CLI (op) from 1Password's official GPG-signed APT repo.
 # The signed repo gives supply-chain integrity verification (CWE-494) without
 # pinning brittle per-arch checksums that break on every op bump. arch is
