@@ -228,6 +228,51 @@ func TestHTTPLegacyCallWithProtocolMetaIsAccepted(t *testing.T) {
 	assertPingResult(t, call.resultOf(t, "tools/call@"+legacyProtocol+" with _meta protocolVersion"))
 }
 
+// TestHTTPHandlerIsStateless pins the transport posture the docs promise:
+// `initialize` issues no Mcp-Session-Id, and GET/DELETE /mcp answer 405 with
+// `Allow: POST`. It is separate from the legacy-flow test above, which forwards
+// a session id when one is issued so that a stateful handler fails there on
+// -32022 rather than on this check.
+func TestHTTPHandlerIsStateless(t *testing.T) {
+	ts := newProtocolTestServer(t)
+
+	t.Run("initialize issues no Mcp-Session-Id", func(t *testing.T) {
+		reply := postMCP(t, ts, mcpCall{
+			method: "initialize",
+			params: map[string]any{
+				"protocolVersion": legacyProtocol,
+				"capabilities":    map[string]any{},
+				"clientInfo":      map[string]any{"name": "anyctl-protocol-test", "version": "0.0.0"},
+			},
+		})
+		reply.resultOf(t, "initialize@"+legacyProtocol)
+		if sid := reply.header.Get("Mcp-Session-Id"); sid != "" {
+			t.Fatalf("initialize issued Mcp-Session-Id %q, want none from a stateless handler", sid)
+		}
+	})
+
+	for _, method := range []string{http.MethodGet, http.MethodDelete} {
+		t.Run(method+" /mcp answers 405", func(t *testing.T) {
+			req, err := http.NewRequestWithContext(t.Context(), method, ts.URL+"/mcp", nil)
+			if err != nil {
+				t.Fatalf("new request: %v", err)
+			}
+			req.Header.Set("Accept", "application/json, text/event-stream")
+			resp, err := ts.Client().Do(req)
+			if err != nil {
+				t.Fatalf("%s /mcp: %v", method, err)
+			}
+			defer func() { _ = resp.Body.Close() }()
+			if resp.StatusCode != http.StatusMethodNotAllowed {
+				t.Fatalf("%s /mcp: status = %d, want 405", method, resp.StatusCode)
+			}
+			if allow := resp.Header.Get("Allow"); allow != http.MethodPost {
+				t.Fatalf("%s /mcp: Allow = %q, want %q", method, allow, http.MethodPost)
+			}
+		})
+	}
+}
+
 // TestHTTPModernProtocolIsServed drives the sessionless 2026-07-28 revision:
 // no initialize, the MCP-Protocol-Version header matched by the per-request
 // `_meta` triple, plus the Mcp-Method / Mcp-Name headers that revision
