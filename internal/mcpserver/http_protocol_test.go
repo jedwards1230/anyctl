@@ -251,6 +251,21 @@ func TestHTTPHandlerIsStateless(t *testing.T) {
 		}
 	})
 
+	// ContextForge keeps its upstream session across an anyctl-mcp rollout, so
+	// the first calls after a redeploy carry a session id the old stateful pod
+	// issued. A stateful handler 404s an unknown id; the stateless one ignores it.
+	t.Run("stale Mcp-Session-Id is ignored", func(t *testing.T) {
+		call := postMCP(t, ts, mcpCall{
+			method: "tools/call",
+			params: map[string]any{"name": "testsvc_ping", "arguments": map[string]any{}},
+			header: http.Header{
+				"Mcp-Protocol-Version": {legacyProtocol},
+				"Mcp-Session-Id":       {"STALE-SESSION-FROM-OLD-POD"},
+			},
+		})
+		assertPingResult(t, call.resultOf(t, "tools/call with a stale Mcp-Session-Id"))
+	})
+
 	for _, method := range []string{http.MethodGet, http.MethodDelete} {
 		t.Run(method+" /mcp answers 405", func(t *testing.T) {
 			req, err := http.NewRequestWithContext(t.Context(), method, ts.URL+"/mcp", nil)
