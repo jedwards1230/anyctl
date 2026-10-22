@@ -153,7 +153,9 @@ never collide with a built-in like `list` or `doctor`.
 
 `anyctl mcp` exposes every command as a tool over stdio (default) or
 streamable-HTTP (`anyctl mcp --http :9000`, endpoint `/mcp`, `GET /healthz`
-probe). It also exposes the generic verbs (`<svc>_get/_post/…`, `<svc>_call`)
+probe). The HTTP transport is stateless: `/mcp` takes POST only (GET/DELETE
+answer 405), issues no `Mcp-Session-Id`, and serves both legacy
+`initialize`-negotiated clients and the sessionless 2026-07-28 revision. It also exposes the generic verbs (`<svc>_get/_post/…`, `<svc>_call`)
 so an agent gets the full write surface; `--read-only` drops the write verbs and
 `--service` restricts to named services.
 

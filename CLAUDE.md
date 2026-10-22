@@ -78,7 +78,9 @@ to stderr. It still gates nothing.
 - **Builtins**: `list`/`lint`/`doctor`/`schema`/`init`/`self-update` (sha256-verified
   in-place update from the GitHub release).
 - **MCP server** (`anyctl mcp`, stdio or `--http :9000` with `/mcp` + `GET /healthz`):
-  a non-loopback `--http` bind refuses to start without a bearer token
+  the HTTP handler is **stateless** (`StreamableHTTPOptions{Stateless: true}`, POST
+  only) — required, since a stateful handler rejects ContextForge's forwarded `_meta`
+  protocolVersion with -32022 (`http_protocol_test.go` guards it). A non-loopback `--http` bind refuses to start without a bearer token
   (`ANYCTL_MCP_AUTH_TOKEN` / `--auth-token-file`) unless `--allow-unauthenticated`;
   loopback needs none.
 

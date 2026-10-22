@@ -3,11 +3,12 @@ module github.com/jedwards1230/anyctl
 go 1.26.0
 
 // github.com/pb33f/libopenapi v0.39 requires go 1.26. Pin the build toolchain
-// to a patched go1.26 (the stdlib CVEs through GO-2026-6617, incl. the
-// html/template, net/http and crypto/tls fixes, are fixed by go1.26.9) so
+// to a patched go1.26 (the stdlib CVEs through GO-2026-6809, incl. the
+// html/template, net/http, crypto/tls and crypto/x509 fixes, are fixed by
+// go1.26.10) so
 // GOTOOLCHAIN=auto contexts (release build, the CI govulncheck scan,
 // `go install` consumers) build with a patched stdlib.
-toolchain go1.26.9
+toolchain go1.26.10
 
 require (
 	github.com/coder/websocket v1.8.15

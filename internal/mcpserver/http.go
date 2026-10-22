@@ -23,9 +23,10 @@ const (
 
 // NewHTTPHandler builds the MCP server from the loaded manifests and returns an
 // http.Handler exposing it as a streamable-HTTP MCP endpoint at /mcp plus a
-// GET /healthz liveness probe. The tool set is process-wide: every session
-// reuses the single prebuilt server. It reuses BuildServer, so the tool
-// registration (and thus behaviour) is identical to the stdio transport.
+// GET /healthz liveness probe. The handler is stateless: every request reuses
+// the single prebuilt server, with no Mcp-Session-Id. It reuses BuildServer,
+// so the tool registration (and thus behaviour) is identical to the stdio
+// transport.
 //
 // authToken is transport-layer access control: when non-empty, the /mcp
 // handler is wrapped with a bearer-token middleware that requires an
@@ -45,11 +46,18 @@ func NewHTTPHandler(
 ) http.Handler {
 	srv := BuildServer(loaded, cfg, version, tracer, stderr, opts)
 
-	// getServer returns the single prebuilt server for every session — the tool
+	// getServer returns the single prebuilt server for every request — the tool
 	// set is process-wide, not per-request.
+	//
+	// Stateless is required, not optional: a stateful handler rejects any call
+	// carrying a forwarded _meta io.modelcontextprotocol/protocolVersion (as
+	// ContextForge sends) with HTTP 400 / -32022, and only a stateless handler
+	// serves protocol 2026-07-28. Stateless means POST only (GET/DELETE answer
+	// 405) and no server→client requests, none of which this server uses.
+	// http_protocol_test.go guards this.
 	var mcpHandler http.Handler = mcp.NewStreamableHTTPHandler(
 		func(*http.Request) *mcp.Server { return srv },
-		nil,
+		&mcp.StreamableHTTPOptions{Stateless: true},
 	)
 
 	// Wrap /mcp with bearer-token middleware when a token is configured.
@@ -74,8 +82,8 @@ func NewHTTPHandler(
 // Timeout rationale:
 //   - ReadHeaderTimeout (10s): bounds slow-header (Slowloris) attacks.
 //   - ReadTimeout (60s): bounds the full request read. Streamable-HTTP MCP
-//     requests are small, quick JSON-RPC POST bodies (and bodyless GETs for the
-//     server→client SSE listen stream), so 60s is generous headroom even for
+//     requests are small, quick JSON-RPC POST bodies (the stateless handler
+//     answers GET/DELETE with 405), so 60s is generous headroom even for
 //     slow clients or congestion while still adding resource-exhaustion
 //     protection. The long-lived stream is the RESPONSE (governed by
 //     WriteTimeout below), not the request read.

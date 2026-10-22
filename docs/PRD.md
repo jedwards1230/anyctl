@@ -207,7 +207,7 @@ gojq is used everywhere. `json` mode is pretty-printed with HTML escaping off, m
 | Audit | One JSON line on stderr per **write** call (ok/error/dry-run). `{secret.X}` tokens are masked; `caller` is `"unknown"`. `TestMutationAuditRecordEmittedOnWrite`. |
 | Secret scrubbing | Resolved values are scrubbed from verbose output and error strings (`agentsafety.NewScrubber`). Response bodies are returned unmodified. |
 | Result View | Read tools get `_meta.ui.resourceUri = ui://<FederationName>/result` and `StructuredContent {result, <FederationName>: {service, command, title, ui}}`. One embedded HTML file (`views/result.html`; `ANYCTL_VIEWS_DIR` overrides). Write tools get neither. A dry-run result carries no StructuredContent. |
-| Transports | stdio (default). `--http addr` serves `/mcp` and `GET /healthz`. A non-loopback bind refuses to start without `ANYCTL_MCP_AUTH_TOKEN` / `--auth-token-file` (constant-time bearer) unless `--allow-unauthenticated` is passed. |
+| Transports | stdio (default). `--http addr` serves `/mcp` and `GET /healthz`. `/mcp` is stateless (POST only, no `Mcp-Session-Id`; GET/DELETE answer 405) and serves protocol 2026-07-28 alongside legacy `initialize`. A non-loopback bind refuses to start without `ANYCTL_MCP_AUTH_TOKEN` / `--auth-token-file` (constant-time bearer) unless `--allow-unauthenticated` is passed. |
 
 ### 3.11 Distribution and telemetry
 
