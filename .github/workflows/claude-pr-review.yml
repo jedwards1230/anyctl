@@ -55,6 +55,6 @@ jobs:
     if: github.event.action == 'closed'
     permissions:
       actions: write
-    uses: jedwards1230/release-workflows/.github/workflows/claude-pr-review-cancel.yml@9a48fc8ec1985081e7337e4ae6669a2753f847ef # v1
+    uses: jedwards1230/release-workflows/.github/workflows/claude-pr-review-cancel.yml@ee298c3d42e14dbaf71bafcb20558ae27da0f140 # v1
     with:
       review_workflow: "PR Review"
