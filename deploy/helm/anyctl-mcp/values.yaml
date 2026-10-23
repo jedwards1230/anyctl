@@ -93,6 +93,21 @@ auth:
     # Key within the synced secret holding the token value.
     key: token
 
+# Extra environment variables for the MCP server container, as raw Kubernetes
+# EnvVar entries (name + value or valueFrom), appended after the chart-managed
+# env. Use it for OpenTelemetry tracing: anyctl emits one span per MCP tool call
+# when OTEL_EXPORTER_OTLP_ENDPOINT is set, e.g.
+#   extraEnv:
+#     - name: OTEL_EXPORTER_OTLP_ENDPOINT
+#       value: http://tempo.monitoring.svc:4317
+#     - name: OTEL_EXPORTER_OTLP_PROTOCOL   # grpc | http/protobuf
+#       value: grpc
+#     - name: OTEL_SERVICE_NAME
+#       value: anyctl-mcp
+# Setting a name the chart already manages (auth.env, ANYCTL_MCP_AUTH_TOKEN) is
+# a render error: configure those through auth.* / mcp.auth.* instead.
+extraEnv: []
+
 service:
   type: ClusterIP
   port: 9000

@@ -38,6 +38,7 @@ helm install anyctl-mcp oci://ghcr.io/jedwards1230/charts/anyctl-mcp \
 | `config.servicesYaml` | `{}` | map of service-name → **unindented** manifest YAML; each entry mounts as `/config/services/<name>.yaml`. REQUIRED for the pod to expose any tools (anyctl ships no built-in services; empty ⇒ zero tools) unless an installed catalog supplies them. Values must be unindented — the template indents them for the ConfigMap. Example: `servicesYaml: {radarr: "name: radarr\n..."}` |
 | `auth.existingSecret.name` | `""` | secret holding the op service-account token |
 | `auth.onePasswordItem.itemPath` | `""` | render a OnePasswordItem CRD instead (1Password operator) |
+| `extraEnv` | `[]` | raw Kubernetes `EnvVar` entries (`name` + `value` or `valueFrom`) appended after the chart-managed env on the MCP container, e.g. `OTEL_*` for tracing (see [OpenTelemetry tracing](#opentelemetry-tracing)). Naming `auth.env` (default `OP_SERVICE_ACCOUNT_TOKEN`) or `ANYCTL_MCP_AUTH_TOKEN` is a render error |
 | `ingress.enabled` | `false` | expose via Ingress |
 | `networkPolicy.enabled` | `false` | render a NetworkPolicy selecting the MCP pod |
 | `networkPolicy.ingress.from` | `[]` | NetworkPolicyPeer entries allowed to reach the MCP port (empty = default-deny ingress) |
@@ -160,6 +161,33 @@ mcp:
 Enabling `mcp.auth.enabled` without a token source is a hard render error
 (fail-closed) rather than a silently-unauthenticated deploy. The token is
 injected as the `ANYCTL_MCP_AUTH_TOKEN` env var — never passed on argv.
+
+## OpenTelemetry tracing
+
+`anyctl` emits one span per MCP tool call (named `<svc>_<command>`), but only
+when `OTEL_EXPORTER_OTLP_ENDPOINT` (or `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT`) is
+set; it also honours `OTEL_SERVICE_NAME` and `OTEL_EXPORTER_OTLP_PROTOCOL`
+(`grpc` or `http/protobuf`). Pass them with `extraEnv`:
+
+```yaml
+extraEnv:
+  - name: OTEL_EXPORTER_OTLP_ENDPOINT
+    value: http://tempo.monitoring.svc:4317
+  - name: OTEL_EXPORTER_OTLP_PROTOCOL
+    value: grpc
+  - name: OTEL_SERVICE_NAME
+    value: anyctl-mcp
+```
+
+Entries are rendered as-is, so `valueFrom` (e.g. a `secretKeyRef` for OTLP auth
+headers) works too. `extraEnv` may not set `auth.env` (default
+`OP_SERVICE_ACCOUNT_TOKEN`) or `ANYCTL_MCP_AUTH_TOKEN`: those carry credentials
+and are managed by `auth.*` / `mcp.auth.*`, so a duplicate is a hard render
+error rather than a silent override. Only traces are covered; the server has no
+`/metrics` endpoint.
+
+If you restrict egress (`networkPolicy.egress.enabled`), add a rule for the
+collector as well, or the spans are silently dropped.
 
 ## Federating into ContextForge
 

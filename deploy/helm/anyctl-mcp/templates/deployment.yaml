@@ -75,6 +75,14 @@ spec:
                   name: {{ $mcpAuthSecret }}
                   key: {{ include "anyctl-mcp.mcpAuthSecretKey" . }}
             {{- end }}
+            {{- with .Values.extraEnv }}
+            {{- range . }}
+            {{- if has (get . "name") (list $.Values.auth.env "ANYCTL_MCP_AUTH_TOKEN") }}
+            {{- fail (printf "extraEnv must not set %q: it is a chart-managed credential variable (see auth.* and mcp.auth.*)" (get . "name")) }}
+            {{- end }}
+            {{- end }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
           livenessProbe:
             httpGet:
               path: /healthz
