@@ -17,7 +17,7 @@ permissions:
 jobs:
   review:
     if: github.event.action != 'closed'
-    uses: jedwards1230/release-workflows/.github/workflows/claude-pr-review.yml@b185a6e7822f9c36822ed8e89e77b3d0fe229f96 # v1.12.0
+    uses: jedwards1230/release-workflows/.github/workflows/claude-pr-review.yml@008952b986af79ab5d14ec5a1c22d4cfa861a7a8 # v1.13.0
     secrets:
       CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }} # preferred (subscription)
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
@@ -28,7 +28,6 @@ jobs:
       LITELLM_CI_BASE_URL: ${{ secrets.LITELLM_CI_BASE_URL }}
       LENS_CI_OTLP_ENDPOINT: ${{ secrets.LENS_CI_OTLP_ENDPOINT }}
     with:
-      draft_on_blocking: true
       # go-quality's skill feeds the reviewer's inline Go review; its
       # go-reviewer agent handles escalated reviews on large/high-stakes diffs.
       extra_plugins: |
