@@ -28,7 +28,6 @@ jobs:
       LITELLM_CI_BASE_URL: ${{ secrets.LITELLM_CI_BASE_URL }}
       LENS_CI_OTLP_ENDPOINT: ${{ secrets.LENS_CI_OTLP_ENDPOINT }}
     with:
-      draft_on_blocking: true
       # go-quality's skill feeds the reviewer's inline Go review; its
       # go-reviewer agent handles escalated reviews on large/high-stakes diffs.
       extra_plugins: |
