@@ -17,7 +17,7 @@ permissions:
 jobs:
   review:
     if: github.event.action != 'closed'
-    uses: jedwards1230/release-workflows/.github/workflows/claude-pr-review.yml@ba35e100f83d7276cf4cf519ae89bb0597fca04c # v1.13.1
+    uses: jedwards1230/release-workflows/.github/workflows/claude-pr-review.yml@9f6e82e1035f04e19bce5c78bbd750edac3b6ff5 # v1.13.2
     secrets:
       CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }} # preferred (subscription)
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
@@ -54,6 +54,6 @@ jobs:
     if: github.event.action == 'closed'
     permissions:
       actions: write
-    uses: jedwards1230/release-workflows/.github/workflows/claude-pr-review-cancel.yml@9a48fc8ec1985081e7337e4ae6669a2753f847ef # v1
+    uses: jedwards1230/release-workflows/.github/workflows/claude-pr-review-cancel.yml@9f6e82e1035f04e19bce5c78bbd750edac3b6ff5 # v1
     with:
       review_workflow: "PR Review"
